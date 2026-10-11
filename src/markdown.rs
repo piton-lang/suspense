@@ -100,6 +100,7 @@ fn closing_run(text: &str, ticks: usize) -> Option<usize> {
     None
 }
 
+#[cfg(test)]
 /// `markdown` split into its blocks, each markdown of its own, so a long
 /// document can be shown a block at a time: it breaks at blank lines, but
 /// never inside a fenced code block, nor before a line indented beneath the
@@ -271,9 +272,6 @@ pub enum MarkdownKind {
     Prompt,
     /// The spec slices a sliced prompt was sent with, shown beneath it.
     Slices,
-    /// A block of the prompt the latest task was sent as, in its header,
-    /// where the prompt is drawn a block at a time; `row` is the block.
-    PromptBlock,
     /// A notice in a task's output, which changes height as it opens and
     /// closes; it holds no markdown, but is told apart the same way.
     Notice,

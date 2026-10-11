@@ -1,0 +1,6 @@
+- [The ribbon's tabs are, in order, Project, Code, Spec, and Application; the window opens on Project](.claude/reference/ui/components/ribbon/index.md#description)
+- [Alt+1 onward opens each tab in order, a number past the last doing nothing](.claude/reference/ui/components/ribbon/index.md#keyboard)
+- [An open tab with no commands adds nothing; "No commands yet" shows only when no open tab has any](.claude/reference/ui/components/ribbon/index.md#opening-several-tabs)
+- [Only tabs working on a chat input mode take that mode's colour](.claude/reference/ui/components/ribbon/index.md#description)
+- [Each tab is a ui-component with a pitch, description, and groups](.claude/reference/ui/components/ribbon/code-tab/index.md#ribbon-code-tab-scope)
+- [A Planning tab sits between Project and Code, with no commands yet and no mode colour](.claude/reference/ui/components/ribbon/planning-tab/index.md#ribbon-planning-tab-scope)

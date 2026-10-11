@@ -1,0 +1,4 @@
+- [Every feature and component is named without a Scope suffix, as Body or TasksTab](.claude/reference/scope/application/Body.md#body)
+- [The table component is Table, its abstract keyword's anchor TableBase](.claude/reference/ui/components/table/TableComponent.md#table)
+- [The sidebar keyword's abstract is SidebarBase; the Sidebar component keeps the name](.claude/reference/ui/components/sidebar/index.md#sidebar)
+- [The build-scope skill keeps its BuildScope name](.claude/skills/build-application/SKILL.md)

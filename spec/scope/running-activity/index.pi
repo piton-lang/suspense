@@ -1,41 +1,35 @@
 use /lib
-from /scope/divergence import DivergenceScope
-from /scope/open-projects import OpenProjectsScope
+from /scope/divergence import Divergence
+from /scope/open-projects import OpenProjects
 from /scope/prompt-mode import PromptEditor
-from /scope/prompt-mode/chat-input import ChatInputScope
-from /scope/rescope import RescopeScope
-from /scope/run-targets import RunTargetsScope
-from /scope/spec-build import SpecBuildScope
-from /ui/components/minimizable-panel import MinimizablePanelScope
+from /scope/prompt-mode/chat-input import ChatInput
+from /scope/rescope import Rescope
+from /scope/run-targets import RunTargets
+from /scope/spec-build import SpecBuild
+from /ui/components/minimizable-panel import MinimizablePanel
 
-export scope RunningActivityScope:
-    concept: {RunningActivityConcept}
-
-concept RunningActivityConcept:
+export feature RunningActivity:
     pitch:
         What the application is still working on, where to see it and get back
         to it, and what makes quitting ask first.
 
-    shape: {RunningActivityShape}
-
-shape RunningActivityShape:
     description:
         What counts as work still running in the application, and how each is
         listed, newest last.
 
     running:
         - each task the harness is working on, from the @{PromptEditor}, one in each lane at most, headed "Task" with the first line of its prompt
-        - each question still running, from the @{ChatInputScope}'s Ask tab, headed "Question" with its first line
-        - a spec build run on its own, as the @{SpecBuildScope} says, "Building the spec"
-        - a divergence analysis in the @{DivergenceScope}, "Analyzing divergence"
-        - a search for concepts to rescope in the @{RescopeScope}, "Finding scopes to extract"
-        - a run target of the @{RunTargetsScope} running, "Running" then its name, or its targets being found, "Finding how to run"
+        - each question still running, from the @{ChatInput}'s Ask tab, headed "Question" with its first line
+        - a spec build run on its own, as the @{SpecBuild} says, "Building the spec"
+        - a divergence analysis in the @{Divergence}, "Analyzing divergence"
+        - a search for concepts to rescope in the @{Rescope}, "Finding scopes to extract"
+        - a run target of the @{RunTargets} running, "Running" then its name, or its targets being found, "Finding how to run"
 
         Prompts waiting in the queue don't count as running, since they are
         saved with the project, and neither does a panel whose work is over.
 
         Everything running counts in every open project of the
-        @{OpenProjectsScope}, not only the one on screen. Those of the project
+        @{OpenProjects}, not only the one on screen. Those of the project
         on screen come first, then each other project's, its rows headed with
         that project's folder name after the kind, such as
         "Task · my-project".
@@ -53,7 +47,7 @@ shape RunningActivityShape:
         its project when it belongs to another:
         - the latest task selects it and brings back its output, closing the previous tasks and any inset panel over it, and scrolls it to the end; a task running in the other lane, in the header beside it, closes the previous tasks and any inset panel the same way and selects it, showing its output in full
         - a question selects the chat input's Ask tab and closes any inset panel, scrolling the Ask conversation to it
-        - a divergence analysis, a rescope search, or a run target brings its @{MinimizablePanelScope} back
+        - a divergence analysis, a rescope search, or a run target brings its @{MinimizablePanel} back
         - a spec build has nothing to show, so its row only closes the list
 
         Pressing the mouse outside the list, or <Escape>, closes it too, as
@@ -70,3 +64,4 @@ shape RunningActivityShape:
         projects. "Quit" exits, and "Keep Running" or <Escape> dismisses
         it. Asking to quit again while it is open doesn't open a second one,
         and an open palette closes first.
+

@@ -1,28 +1,22 @@
 use /lib
 use /ui
-from /ui/components/right-sidebar import TasksTabScope
-from /scope/project-data import ProjectDataScope
-from /scope/prompt-mode/chat-input import ChatInputScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/prompt-mode/sending import PromptSendingScope
+from /ui/components/right-sidebar import TasksTab
+from /scope/project-data import ProjectData
+from /scope/prompt-mode/chat-input import ChatInput
+from /scope/prompt-mode/modes import PromptModes
+from /scope/prompt-mode/sending import PromptSending
 from /ui/behaviours/drag-reorder import DragReorderBehaviour
-from /ui/components/scrollbar import ScrollbarScope
+from /ui/components/scrollbar import Scrollbar
 
-export ui-component QueueListScope:
-    concept: {QueueListConcept}
-
-concept QueueListConcept:
+export ui-component QueueList:
     pitch:
         The tasks waiting their turn while their lane is busy, listed above the
         chat input, where they can be reordered, edited, or cancelled before
         they are sent.
 
-    shape: {QueueListShape}
-
-shape QueueListShape:
     description:
         The queue holds the tasks sent while their lane is busy, as the
-        @{PromptSendingScope} says, in the order they were sent unless they
+        @{PromptSending} says, in the order they were sent unless they
         have been moved since. It is one list holding both lanes' queues: the
         code lane's and the spec lane's prompts together, in one order. Each
         lane sends its own prompts one at a time, first to last in that order,
@@ -36,7 +30,7 @@ shape QueueListShape:
     lanes:
         Each queued prompt's row shows which lane it waits for: a small label
         just before its text reading its mode, "Code", "Spec", or "Freeform",
-        tinted that mode's colour, as the @{PromptModesScope} colours it. A
+        tinted that mode's colour, as the @{PromptModes} colours it. A
         prompt sent from the Chain tab waits in the spec lane, as its first
         step writes the spec, and reads "Chain" in the Chain colour; a chain's
         later step waiting for its lane reads what it is, "Code" or "Spec
@@ -44,12 +38,12 @@ shape QueueListShape:
 
     placement:
         The queue sits in the right sidebar's Tasks tab, its Queued group,
-        as the @{TasksTabScope} says, never above the chat input or in the
+        as the @{TasksTab} says, never above the chat input or in the
         message list. Its heading says how many prompts are queued, and
         lists each queued prompt in order, one line each,
         with a button to cancel it. Each prompt in the list is numbered, with
         its number, text, and cancel button vertically centred in its row,
-        and the list scrolls once it gets tall, with a @{ScrollbarScope}.
+        and the list scrolls once it gets tall, with a @{Scrollbar}.
 
         Every row is one line, 28 pixels tall, whatever its prompt holds: the
         prompt's first line of text, the first that isn't blank, in small
@@ -71,7 +65,7 @@ shape QueueListShape:
         button.
 
         Editing a queued prompt from the chat input's <Up>, as the
-        @{ChatInputScope} says, expands the list while the queue holds more
+        @{ChatInput} says, expands the list while the queue holds more
         than one prompt, scrolled so the prompt being edited is in view,
         following it as <Up> and <Down> move the edit along the queue. Once
         the edit is saved or cancelled, a list it expanded collapses again;
@@ -87,7 +81,7 @@ shape QueueListShape:
         Each queued prompt in the list has a small toggle switch, a slider,
         first of its controls, switched on while the prompt will start a new
         conversation rather than carry on the tasks', as its hidden anchor
-        records, as the @{ChatInputScope} says. Clicking it switches between
+        records, as the @{ChatInput} says. Clicking it switches between
         the two, saving the prompt again with the project. Its tooltip says
         which the prompt does, and that clicking does the other instead. The
         choice stays with the prompt wherever it is moved in the queue.
@@ -129,7 +123,7 @@ shape QueueListShape:
         Each queued prompt in the list also has a button with a pencil icon,
         after its move buttons and before its cancel button, whose tooltip
         says it edits the prompt. Clicking it edits the prompt in the
-        @{ChatInputScope}, as it says, and its row is highlighted while it is
+        @{ChatInput}, as it says, and its row is highlighted while it is
         being edited. While it is, it is held where it is: it is never sent,
         and its lane, waiting on it, waits, even with auto-send on; the other
         lane carries on. Saving the
@@ -158,8 +152,9 @@ shape QueueListShape:
 
     persistence:
         Queued prompts are saved with the project's data as they are queued,
-        as the @{ProjectDataScope} says. The queue is restored the first time
+        as the @{ProjectData} says. The queue is restored the first time
         the project is opened in a launch; a restored queue waits for "Send
         next" rather than sending on its own. A queued prompt's file is
         removed when it is cancelled, or when it is sent, at which point it is
         saved to the prompt history like any other prompt.
+

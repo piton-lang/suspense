@@ -2,7 +2,7 @@ use @piton/belay
 
 from @piton/belay import BELAY_COMPILED_SHAPE
 
-from ../../Scope import Scope
+from ../../Feature import Feature
 
 export abstract skill BuildScope as build-scope:
     description: build or change the ${self.scope} scope
@@ -33,4 +33,4 @@ export abstract skill BuildScope as build-scope:
         of the application.  The only guidance you should look at for
         structure/organization is ${BELAY_COMPILED_SHAPE}.
 
-    scope:: extends Scope
+    scope:: extends Feature

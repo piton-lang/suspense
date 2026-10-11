@@ -1,7 +1,41 @@
 use /lib
+from /scope/prompt-mode/modes import PromptModes
+from /scope/prompt-mode/sending import PromptSending
+from /ui/components/right-sidebar import TasksTab
 
-export shape MessageListSentPromptShape:
+export anchor MessageListSentPrompt:
     description:
-        A task's header shows the compiled markdown that was actually sent to
-        the harness, rendered as markdown, once it has compiled, along with the
-        name of the hidden anchor it was compiled from.
+        A task's header is one slim line, 32 pixels tall, across the view's
+        full width, and nothing more: it never shows the prompt, the compiled
+        markdown, or the hidden anchor's name. From left to right, 8 pixels
+        in, come a bar 4 pixels wide with corners rounded 2 pixels, inset 6 pixels
+        from the header's top and bottom, in the colour of the mode the task
+        was sent in, as the @{PromptModes} colours it, the step's mode
+        for a step of a chain, telling where it came from; its status, a
+        spinner while it is under way and its status label, with its elapsed
+        time beside it, as the status says; then its summary, in small text,
+        cut off with an ellipsis; then, at its right, its buttons. The header
+        is on the tab bar's background, faintly tinted the mode's colour, a
+        sixth of its strength, never the stronger tint it had.
+
+    summary:
+        The summary is a short line saying what the task is for: its title,
+        the words its hidden anchor was named from, as "Chat titles from the
+        agent", or, where it was named at random or not yet named, the first
+        line of its prompt as typed. For a step of a chain, the step's label,
+        "Spec", "Code", or "Spec follow-up", comes first, in its mode's
+        colour, then the chain's summary. Hovering the summary shows the
+        prompt's first lines as its tooltip.
+
+    buttons:
+        At the header's right, small ghost buttons, 24 pixels tall, 4
+        pixels apart. "Pause", with a pause icon, while the task is running,
+        pauses it, and "Resume", with a play icon, in its place while it is
+        paused, resumes it, as the @{PromptSending} says. "Stop", with a stop icon, while the task is building,
+        compiling, running, or paused, cancels it as Cancel does, as the
+        @{PromptSending} says, and is gone once it is over. "View all",
+        with a list icon, opens the task in the right sidebar's Tasks tab, as
+        the @{TasksTab} opens a task, where its prompt, steps, details,
+        parameters, and the rest of its actions are, opening the sidebar
+        first if it is closed. The header has no Resend, no Send to Spec or
+        Send to Code, and no other button: those are in the Tasks tab.

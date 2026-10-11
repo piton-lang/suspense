@@ -1,0 +1,6 @@
+- [A chain's rows share one Chain-purple bar in place of each row's own bar](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [The bar is 4px wide with corners rounded 2px, unbroken down the chain's row and every step row beneath it](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [It runs from 6px below the top of the chain's row to 6px above the bottom of its last step's, across the gaps between rows](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [Steps' own modes show only in their labels' colours, never in a bar of their own](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [It is drawn the same in a chain's Steps section once opened, growing or shrinking as steps are added](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [The Chain colour is purple](.claude/reference/scope/prompt-mode/modes/index.md#colours)

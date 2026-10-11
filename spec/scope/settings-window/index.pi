@@ -1,35 +1,29 @@
 use /lib
 use /ui
-from /scope/project-data import ProjectDataScope
-from ../container-environment import ContainerEnvironmentScope
-from ../harness-integration import HarnessIntegrationScope
-from ../no-project import NoProjectStateScope
-from ../project-data import ProjectDataScope
-from ../project-directory import ProjectDirectoryScope
-from ../prompt-mode/chat-input import ChatInputScope
-from ../prompt-mode/mode-system-prompts import ModeSystemPromptsScope
-from ../prompt-mode/modes import PromptModesScope
-from ../self-update import SelfUpdateScope
-from ../user-preferences import UserPreferencesScope
-from /ui/components/growing-text-input import GrowingTextInputScope
-from /ui/components/inset-panel import InsetPanelScope
-from /ui/components/scrollbar import ScrollbarScope
+from /scope/project-data import ProjectData
+from ../container-environment import ContainerEnvironment
+from ../harness-integration import HarnessIntegration
+from ../no-project import NoProjectState
+from ../project-data import ProjectData
+from ../project-directory import ProjectDirectory
+from ../prompt-mode/chat-input import ChatInput
+from ../prompt-mode/mode-system-prompts import ModeSystemPrompts
+from ../prompt-mode/modes import PromptModes
+from ../self-update import SelfUpdate
+from ../user-preferences import UserPreferences
+from /ui/components/growing-text-input import GrowingTextInput
+from /ui/components/inset-panel import InsetPanel
+from /ui/components/scrollbar import Scrollbar
 
-export ui-component SettingsWindowScope:
-    concept: {SettingsWindowConcept}
-
-concept SettingsWindowConcept:
+export ui-component SettingsWindow:
     pitch:
         The application's settings, in sections picked from a sidebar: the
-        system prompts each tab of the @{ChatInputScope} sends, the prompts
+        system prompts each tab of the @{ChatInput} sends, the prompts
         injected into them, the harness runs go to, the containers they run
         in, and the application's updates.
 
-    shape: {SettingsWindowShape}
-
-shape SettingsWindowShape:
     description:
-        Shown in an @{InsetPanelScope} over the main window, not a window of its
+        Shown in an @{InsetPanel} over the main window, not a window of its
         own. It is headed "Settings", with a close button whose tooltip says it
         closes the settings; closing the panel any way an inset panel closes
         closes them too.
@@ -37,7 +31,7 @@ shape SettingsWindowShape:
     sidebar:
         Beneath the heading, down its left, a sidebar of vertical tabs, one
         per section, in order: "System prompts", "Injected prompts", "Agent",
-        "Containers", and "Updates", as the @{SelfUpdateScope} says. Each
+        "Containers", and "Updates", as the @{SelfUpdate} says. Each
         tab is a row across the sidebar's width reading the section's name,
         and the one picked is marked with the theme's accent. Clicking a tab
         picks its section, and the page beside the sidebar shows only that
@@ -48,7 +42,7 @@ shape SettingsWindowShape:
         again.
 
         The page fills the rest of the width, and scrolls with a
-        @{ScrollbarScope}.
+        @{Scrollbar}.
 
     opening:
         It opens with Ctrl+, (Cmd+, on macOS) from anywhere in the application,
@@ -65,21 +59,21 @@ shape SettingsWindowShape:
         PITON_FLUENCY_FILE for the path of the file the project's Piton
         fluency is written to, which only the Spec and Chain prompts point
         at, and SUSPENSE_FLUENCY_FILE for the path of the Suspense fluency,
-        which every tab but Freeform points at, as the @{ModeSystemPromptsScope} says.
+        which every tab but Freeform points at, as the @{ModeSystemPrompts} says.
 
         Then, for each tab but Freeform, which sends no system prompt, in the
-        order of the @{PromptModesScope}: its name,
+        order of the @{PromptModes}: its name,
         the muted path of the file its prompt is saved in, and a
         "Reset to default" button, disabled while the prompt is already the
         default, which puts the default back and saves it. Beneath them, an
         editor for the prompt, highlighting it as Piton, with soft wrapping and
         no line numbers or folding. The editor grows to fit the prompt, as a
-        @{GrowingTextInputScope} does, with no most, so it never scrolls on its
+        @{GrowingTextInput} does, with no most, so it never scrolls on its
         own: the whole prompt is always in it, and the page scrolls instead,
         the mouse wheel over an editor scrolling the page. A prompt that can't
         be read or saved says why beneath its editor.
 
-        Without a project open, as the @{NoProjectStateScope} says, in place of
+        Without a project open, as the @{NoProjectState} says, in place of
         the prompts it reads "Open a project to edit its system prompts."
 
     injectedPrompts:
@@ -88,7 +82,7 @@ shape SettingsWindowShape:
         prompts wherever their placeholder is written, that they are saved
         with the project as they are edited, and that HARNESS_DIRECTORY
         stands for the directory of the harness in use, as the
-        @{ModeSystemPromptsScope} says.
+        @{ModeSystemPrompts} says.
 
         Then the spec-reading prompt, laid out as each tab's system prompt is:
         its name, "Spec reading", the muted path of the file it is saved in, a
@@ -113,9 +107,9 @@ shape SettingsWindowShape:
         OpenCode, each a radio button reading its name, with the command it
         runs muted beside it, `claude`, `codex`, or `opencode`, and "Not
         installed" muted after that when the command can't be found. Exactly
-        one is picked, the harness in use, as the @{HarnessIntegrationScope}
+        one is picked, the harness in use, as the @{HarnessIntegration}
         says. Clicking one picks it; it is used from the next run on, and
-        saved with the project straight away, as the @{ProjectDataScope}
+        saved with the project straight away, as the @{ProjectData}
         says. With no project open, the section says the harness is chosen
         for each project, and offers none to pick. One that isn't installed can still be picked,
         and its runs fail saying why.
@@ -125,7 +119,7 @@ shape SettingsWindowShape:
         beneath saying that Spec tasks, a Chain prompt's spec steps, and
         questions always run in a container holding only what their mode may
         use, and that Code tasks always run on the host, as the
-        @{ContainerEnvironmentScope} says.
+        @{ContainerEnvironment} says.
 
         Beneath it, for the open project, a checkbox reading "Let Spec tasks
         read the code", unchecked to start with, and muted beneath it that
@@ -144,21 +138,21 @@ shape SettingsWindowShape:
         "Not installed" with the link to its installation instructions for
         the platform, and on macOS and Windows, whether its machine is
         running, with the button that sets it up or starts it, as the
-        @{ContainerEnvironmentScope} says.
+        @{ContainerEnvironment} says.
 
         Then a row for each harness, in the order of the Agent section: its
         name, and muted beside it whether it is logged in in its container,
         "Logged in" or "Not logged in", read from its volume each time the
         settings open, and a "Log in again" button, which runs its login in a
         container and shows the login view, as the
-        @{ContainerEnvironmentScope} says, whether it is logged in or not.
+        @{ContainerEnvironment} says, whether it is logged in or not.
         These are the user's, not the project's, so they are the same with or
         without a project open.
 
     saving:
         The prompts, the system prompts and the injected ones, belong to the
-        project opened through the @{ProjectDirectoryScope}, each saved with
-        the project's data, as the @{ProjectDataScope} says. Every edit is
+        project opened through the @{ProjectDirectory}, each saved with
+        the project's data, as the @{ProjectData} says. Every edit is
         saved straight away. When the window loads the prompts, any prompt
         with no file yet has its default saved, so every prompt can also be found and
         edited by hand. The prompts are read again each time the settings open
@@ -167,5 +161,6 @@ shape SettingsWindowShape:
         cursor stays put.
 
     templates:
-        A prompt is a template, as the @{ModeSystemPromptsScope} says, and a
+        A prompt is a template, as the @{ModeSystemPrompts} says, and a
         reset puts back its default.
+

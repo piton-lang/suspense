@@ -1,10 +1,10 @@
 use /lib
 use /ui
 use /ui/components/sidebar/Panel
-from .. import RightSidebarScope
-from /scope/harness-integration import HarnessIntegrationScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /ui/components/task-table import TaskTableScope
+from /ui/components/left-sidebar import LeftSidebar
+from /scope/harness-integration import HarnessIntegration
+from /scope/prompt-mode/modes import PromptModes
+from /ui/components/task-table import TaskTable
 export panel SubagentsPanel:
     title: Subagents and commands
     counted: false
@@ -12,22 +12,16 @@ export panel SubagentsPanel:
     scrolls: true
     scrollbar: overflowing
 
-    concept: {SubagentsConcept}
-
-concept SubagentsConcept:
     pitch:
-        The bottom panel of the @{RightSidebarScope}, beneath the referenced
+        The bottom panel of the @{LeftSidebar}'s Run view, beneath the referenced
         files and the understanding: the subagents and background commands
         the harness started for the running task, each shown in the colour of
         the mode that started it, with how long it has been running, so one
         that seems stuck can be seen and stopped.
 
-    shape: {SubagentsShape}
-
-shape SubagentsShape:
     description:
         It lists the background tasks the harness started for the run, as the
-        @{HarnessIntegrationScope} keeps them: its subagents, the agents it
+        @{HarnessIntegration} keeps them: its subagents, the agents it
         started, and its background commands, the shell commands it ran in the
         background, such as a long build. A background task of any other kind
         isn't shown.
@@ -46,7 +40,7 @@ shape SubagentsShape:
         appears at all, not even for a moment, and neither does a command a
         subagent runs, which is part of that subagent's work, nor any other
         tool call. All of them are still rows of the task's output, as the
-        @{TaskTableScope} says; this panel only leaves them out.
+        @{TaskTable} says; this panel only leaves them out.
 
         A long command the main thread waits on isn't a background task: it
         doesn't hold the run open, and it ends when its tool call's result
@@ -88,7 +82,7 @@ shape SubagentsShape:
         with a stop icon, 18 pixels square, which takes the place of its
         running time while the row is hovered, whose tooltip reads "Stop this
         subagent" or "Stop this command". Clicking it stops only that
-        background task, as the @{HarnessIntegrationScope} says: the task the
+        background task, as the @{HarnessIntegration} says: the task the
         run is for and every other background task carry on, and nothing else
         in the panel or the task's output changes. Once clicked, the button
         is disabled and the row's spinner stays until the harness notifies its
@@ -99,7 +93,7 @@ shape SubagentsShape:
 
     byMode:
         Each background task is shown according to the mode of the task that
-        started it, as the @{PromptModesScope} colours modes: its row has a
+        started it, as the @{PromptModes} colours modes: its row has a
         bar 2 pixels wide down its left edge in that mode's colour, and its
         spinner and tick are drawn in it too, while a cross or dash keeps its
         own colour. A background task's mode is the mode its task was sent
@@ -118,5 +112,6 @@ shape SubagentsShape:
         the order the steps ran, each group headed by a small label in its
         mode's colour, "Spec", "Code", or "Spec follow-up", with the step
         running last. A task that isn't part of a chain has one group, and no
-        label. Once the run is over, the sidebar slides back with them all,
-        as it says.
+        label. Once the run is over, the panel keeps them all, each showing how it
+        ended, until the next task starts, as the Run view says.
+

@@ -1,66 +1,60 @@
 use /lib
 use /ui
-from ../about import AboutScope
-from ../divergence import DivergenceScope
-from ../editor import EditorScope
-from ../harness-integration/catalog import HarnessCatalogScope
-from ../import-project import ImportProjectScope
-from ../new-project import NewProjectScope
-from ../open-file import OpenFileScope
-from ../palette import PaletteScope
-from ../project/open-project import OpenProjectScope
+from ../about import About
+from ../divergence import Divergence
+from ../editor import Editor
+from ../harness-integration/catalog import HarnessCatalog
+from ../import-project import ImportProject
+from ../new-project import NewProject
+from ../open-file import OpenFile
+from ../palette import Palette
+from ../project/open-project import OpenProject
 from ../prompt-mode import PromptEditor
-from ../prompt-mode/chat-input import ChatInputScope
-from ../prompt-mode/sending import PromptSendingScope
-from ../rescope import RescopeScope
-from ../run-targets import RunTargetsScope
-from ../running-activity import RunningActivityScope
-from ../settings-window import SettingsWindowScope
-from ../user-preferences import UserPreferencesScope
-from ./Body import BodyScope
-from /ui/components/diff-view import DiffViewScope
-from /ui/components/file-tree import FileTreeScope
-from /ui/components/inset-panel import InsetPanelScope
-from /ui/components/minimizable-panel import MinimizablePanelScope
-from /ui/components/project-sidebar import ProjectSidebarScope
-from /ui/components/ribbon import RibbonScope
-from /ui/theme import ThemeScope
+from ../prompt-mode/chat-input import ChatInput
+from ../prompt-mode/sending import PromptSending
+from ../rescope import Rescope
+from ../run-targets import RunTargets
+from ../running-activity import RunningActivity
+from ../settings-window import SettingsWindow
+from ../user-preferences import UserPreferences
+from ./Body import Body
+from /ui/components/diff-view import DiffView
+from /ui/components/file-tree import FileTree
+from /ui/components/inset-panel import InsetPanel
+from /ui/components/minimizable-panel import MinimizablePanel
+from /ui/components/left-sidebar import LeftSidebar
+from /ui/components/ribbon import Ribbon
+from /ui/theme import Theme
 
-export ui-component MainWindowScope:
-    concept: {MainWindowConcept}
-
-concept MainWindowConcept:
+export ui-component MainWindow:
     pitch:
         The main window of the application allowing you interact with all main
         functionality.
 
-    shape: {MainWindowShape}
-
-shape MainWindowShape:
     description:
         Maximized window.
 
     darkMode:
         The whole window, including popups and notifications, is drawn in the
-        @{ThemeScope}, in its dark or its light mode.
+        @{Theme}, in its dark or its light mode.
 
         The Brightness slider in the ribbon's Application tab runs through
         both, and the palette's "Dark mode" or "Light mode" toggles between
         them.
 
-        The choice is one of the @{UserPreferencesScope}, so until a choice has
+        The choice is one of the @{UserPreferences}, so until a choice has
         been made, the window follows the operating system's light or dark
         appearance.
 
     escape:
         Pressing Esc closes whatever it dismisses, such as a completion menu, a
         popup, the palette, or an inset panel, and otherwise does what it does
-        where the keyboard is. It never moves focus to the @{ChatInputScope}.
+        where the keyboard is. It never moves focus to the @{ChatInput}.
 
     focusingTheChat:
         Pressing <Ctrl+Enter> (<Cmd+Enter> on macOS) while the
-        @{ChatInputScope} doesn't have the keyboard, such as in an
-        @{EditorScope}, the @{FileTreeScope}, or the Git panel, moves focus to it,
+        @{ChatInput} doesn't have the keyboard, such as in an
+        @{Editor}, the @{FileTree}, or the Git panel, moves focus to it,
         with its cursor where it was, and sends nothing. While it has the
         keyboard, it sends as the chat input says. Wherever else it already
         means something, it keeps that meaning: in the palette, in a dialog,
@@ -85,81 +79,82 @@ shape MainWindowShape:
 
     quitting:
         The application quits with Ctrl+Q (Cmd+Q on macOS), Quit in the
-        @{PaletteScope}, or the window's close button. Any of them asks first
-        while work is running, as the @{RunningActivityScope} says.
+        @{Palette}, or the window's close button. Any of them asks first
+        while work is running, as the @{RunningActivity} says.
 
     palette:
-        Ctrl+P (Cmd+P on macOS) opens the @{PaletteScope} over the window, for
+        Ctrl+P (Cmd+P on macOS) opens the @{Palette} over the window, for
         fuzzy searching the project's files, the application's own commands, and
-        the commands, skills, and agents of the @{HarnessCatalogScope}.
+        the commands, skills, and agents of the @{HarnessCatalog}.
 
     header:
-        ribbon: @{RibbonScope}
+        ribbon: @{Ribbon}
 
     layout:
-        sidebar: @{ProjectSidebarScope}
+        sidebar: @{LeftSidebar}
 
-        body: @{BodyScope}
+        body: @{Body}
 
         openDiff:
-            A file's @{DiffViewScope}, opened from the @{FileTreeScope}, opens
-            in an @{InsetPanelScope}. It leaves the body's tabs alone: every
+            A file's @{DiffView}, opened from the @{FileTree}, opens
+            in an @{InsetPanel}. It leaves the body's tabs alone: every
             file open in them stays open, unsaved changes and all. Opening another file's
             diff replaces the one in the panel, as does opening one while a new
             project is being set up. Opening the file from the diff closes the
-            panel and opens the file, as the @{OpenFileScope} says.
+            panel and opens the file, as the @{OpenFile} says.
 
         analyzeDivergence:
-            The ribbon's Analyze Divergence command opens the @{DivergenceScope}
-            as a @{MinimizablePanelScope}, to analyze, in place of whatever else
+            The ribbon's Analyze Divergence command opens the @{Divergence}
+            as a @{MinimizablePanel}, to analyze, in place of whatever else
             is open there, or brings back one that was minimized.
 
         rescope:
-            The ribbon's Rescope command opens the @{RescopeScope} as a
-            @{MinimizablePanelScope}, in place of whatever else is open there,
+            The ribbon's Rescope command opens the @{Rescope} as a
+            @{MinimizablePanel}, in place of whatever else is open there,
             or brings back one that was minimized. Its Refactor sends its prompt
             to the prompt mode on the application's behalf, as the
-            @{PromptSendingScope} says.
+            @{PromptSending} says.
 
         run:
-            The Code tab's run commands open the @{RunTargetsScope}'s panel as a
-            @{MinimizablePanelScope}, in place of whatever else is open there,
+            The Code tab's run commands open the @{RunTargets}'s panel as a
+            @{MinimizablePanel}, in place of whatever else is open there,
             or bring back one that was minimized, as it says.
 
         viewDivergenceReports:
             The ribbon's View Divergence Reports command opens the
-            @{DivergenceScope} the same way, to view the reports, without
+            @{Divergence} the same way, to view the reports, without
             starting an analysis.
 
         newProject:
-            The ribbon's New Project command opens the @{NewProjectScope} in an
-            @{InsetPanelScope}, fresh each time, in place of any diff open
+            The ribbon's New Project command opens the @{NewProject} in an
+            @{InsetPanel}, fresh each time, in place of any diff open
             there. Once the project is created, the panel closes and the new
             project is open.
 
         importProject:
-            The ribbon's Import Project command opens the @{ImportProjectScope}
-            in an @{InsetPanelScope} the same way, fresh each time, in place of
+            The ribbon's Import Project command opens the @{ImportProject}
+            in an @{InsetPanel} the same way, fresh each time, in place of
             any diff or New Project form open there, as opening New Project
             replaces an Import Project form. Once the folder is imported, the
             panel closes and the project is open.
 
         openProject:
             The Open Project commands, from the ribbon or the palette, show the
-            @{OpenProjectScope} in an @{InsetPanelScope}, in place of whatever
+            @{OpenProject} in an @{InsetPanel}, in place of whatever
             else is open there.
 
         settings:
             The settings, opened with Ctrl+, (Cmd+, on macOS), the ribbon's
-            Settings command, or the palette, show the @{SettingsWindowScope}
-            in an @{InsetPanelScope}, in place of whatever else is open there.
+            Settings command, or the palette, show the @{SettingsWindow}
+            in an @{InsetPanel}, in place of whatever else is open there.
 
         about:
             The ribbon's About command, or the palette's "About Suspense",
-            shows the @{AboutScope} in an @{InsetPanelScope}, in place of
+            shows the @{About} in an @{InsetPanel}, in place of
             whatever else is open there, as the settings are shown.
 
         promptMode:
             The @{PromptEditor} fills the rest of the window, to the right of
-            the @{ProjectSidebarScope}: the @{BodyScope}, with the chat input
+            the @{LeftSidebar}: the @{Body}, with the chat input
             along its bottom, within it.
+

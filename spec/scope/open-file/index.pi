@@ -1,37 +1,32 @@
 use /lib
-from /scope/application/Body import BodyScope
-from /scope/editor import EditorScope
-from /scope/palette import PaletteScope
+from /scope/application/Body import Body
+from /scope/editor import Editor
+from /scope/palette import Palette
 from /scope/prompt-mode/message-list import MessageList
-from /ui/components/diff-view import DiffViewScope
-from /ui/components/file-tree import FileTreeScope
+from /ui/components/diff-view import DiffView
+from /ui/components/file-tree import FileTree
 
-export scope OpenFileScope:
-    concept: {OpenFileConcept}
-
-concept OpenFileConcept:
+export feature OpenFile:
     pitch:
         Opens one of the project's files to read or edit, from wherever the
         file is named, always in the same place.
 
-    shape: {OpenFileShape}
-
-shape OpenFileShape:
     description:
-        A file opens in an @{EditorScope}, in a tab of its own in the
-        @{BodyScope}, which is selected. Any number of files can be open at
+        A file opens in an @{Editor}, in a tab of its own in the
+        @{Body}, which is selected. Any number of files can be open at
         once, each in its own tab, and opening one leaves the others open as
         they are. Opening a file that is already open selects its tab rather
         than opening it again.
 
     openedFrom:
         A file opens this way, however it is opened:
-        - clicking it in the @{FileTreeScope}
-        - picking it in the @{PaletteScope}, or its search for a file finding just that one, which closes the palette
+        - clicking it in the @{FileTree}
+        - picking it in the @{Palette}, or its search for a file finding just that one, which closes the palette
         - clicking a link to it in a task's compiled prompt or reply text, or its path on a row of the @{MessageList}
-        - the button for opening it in a @{DiffViewScope}'s header, which closes the diff first
+        - the button for opening it in a @{DiffView}'s header, which closes the diff first
         - going to a definition in another file from the editor, which opens that file at the definition, in its own tab or the one it already has
 
     missing:
         A link to a file that doesn't exist shows an error notification, and
         opens nothing.
+

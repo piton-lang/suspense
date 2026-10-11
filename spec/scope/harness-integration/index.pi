@@ -1,37 +1,31 @@
 use /lib
-from /scope/project-data import ProjectDataScope
-from ../project-data import ProjectDataScope
-from ../project-directory import ProjectDirectoryScope
-from ../prompt-mode/ask-conversation import AskConversationScope
-from ../prompt-mode/mode-system-prompts import ModeSystemPromptsScope
-from ../prompt-mode/sending import PromptSendingScope
-from ../settings-window import SettingsWindowScope
-from ../user-preferences import UserPreferencesScope
-from ./baked-prompts import BakedSystemPromptsScope
-from ./catalog import HarnessCatalogScope
-from ./one-off-run import OneOffAgentRunScope
-from /scope/container-environment import ContainerEnvironmentScope
-from /scope/prompt-mode/chat-input import ChatInputScope
-from /ui/components/task-table import TaskTableScope
+from /scope/project-data import ProjectData
+from ../project-data import ProjectData
+from ../project-directory import ProjectDirectory
+from ../prompt-mode/ask-conversation import AskConversation
+from ../prompt-mode/mode-system-prompts import ModeSystemPrompts
+from ../prompt-mode/sending import PromptSending
+from ../settings-window import SettingsWindow
+from ../user-preferences import UserPreferences
+from ./baked-prompts import BakedSystemPrompts
+from ./catalog import HarnessCatalog
+from ./one-off-run import OneOffAgentRun
+from /scope/container-environment import ContainerEnvironment
+from /scope/prompt-mode/chat-input import ChatInput
+from /ui/components/task-table import TaskTable
 
-export scope HarnessIntegrationScope:
-    concept: {HarnessIntegrationConcept}
-
-concept HarnessIntegrationConcept:
+export feature HarnessIntegration:
     pitch:
         Uses the one-off version of a coding harness for the selected
-        ${ProjectDirectoryScope}: `claude -p`, `codex exec`, or `opencode run`,
+        ${ProjectDirectory}: `claude -p`, `codex exec`, or `opencode run`,
         whichever the user chose. Each run carries on a conversation, so the
         harness keeps its context between requests.
 
-    shape: {HarnessIntegrationShape}
-
-shape HarnessIntegrationShape:
     description:
         Should always run in auto mode.
 
         The project's system prompt, its system template filled in, as the
-        @{ModeSystemPromptsScope} says, is appended to the harness's own
+        @{ModeSystemPrompts} says, is appended to the harness's own
         system prompt, for example with `--append-system-prompt`, the same for
         every prompt of a conversation whatever its mode. The compiled
         systemPrompt of a prompt's hidden anchor, its mode's instructions,
@@ -47,7 +41,7 @@ shape HarnessIntegrationShape:
 
         Spec tasks, a Chain prompt's spec steps and spec follow-up, and
         questions always run the harness in a container the application owns,
-        as the @{ContainerEnvironmentScope} says, which holds only what their
+        as the @{ContainerEnvironment} says, which holds only what their
         mode may use. Every other run, Code tasks and a Chain prompt's code
         step, always, with their protected locations, Freeform, and the
         application's own, runs the harness on the host, in the project directory. Either
@@ -56,8 +50,8 @@ shape HarnessIntegrationShape:
     harnesses:
         The harness in use is the project's: Claude Code, Codex, or OpenCode,
         a setting of each project, saved with its data, as the
-        @{ProjectDataScope} says, picked when the project is created or
-        imported and changed in the @{SettingsWindowScope}. Each open project
+        @{ProjectData} says, picked when the project is created or
+        imported and changed in the @{SettingsWindow}. Each open project
         runs with its own, so two projects open side by side can use different
         harnesses. A project with no harness saved, as one made before this or
         opened from elsewhere, uses the first harness its piton.config.pi
@@ -104,18 +98,18 @@ shape HarnessIntegrationShape:
         shown in a task's output, a question's answer, or anywhere else. MCP
         servers the project itself configures for a run on the host are left
         as they are; a run in a container has none, as the
-        @{ContainerEnvironmentScope} says.
+        @{ContainerEnvironment} says.
 
         When the harness picked isn't installed, a run on the host fails
         saying that it can't be run, as any run that can't be started does. A
         run in a container uses the harness in its image instead, and fails,
         where Podman isn't installed or can't run, as the
-        @{ContainerEnvironmentScope} says.
+        @{ContainerEnvironment} says.
 
     protectedLocations:
         Only a run on the host has protected locations. A run in a container
         has none, since nothing it mustn't touch is mounted there, as the
-        @{ContainerEnvironmentScope} says: it isn't guarded, and its harness is
+        @{ContainerEnvironment} says: it isn't guarded, and its harness is
         given no rule against reading or editing anything. The container is
         the only enforcement there is; nothing is guarded by watching files.
 
@@ -123,14 +117,14 @@ shape HarnessIntegrationShape:
         only nudged. Where the harness takes rules for what its tools may do,
         as Claude Code does with `--disallowedTools`, a Code task is told it
         may not edit the spec location, and may not read it, so it reads the
-        compiled reference instead, as the @{ModeSystemPromptsScope} says.
+        compiled reference instead, as the @{ModeSystemPrompts} says.
         This rule doesn't enforce anything, since a shell command can still
         reach the files. Nothing is put back: the application never reverts,
         restores, or deletes any file a run changed, on the host or in a
         container, and never watches a location to undo what happens in it.
         Where a Code task's tool calls report changing a file in the spec
         location all the same, its output says so as a passive notice, never
-        an error, as the @{TaskTableScope} says, naming the files, which are
+        an error, as the @{TaskTable} says, naming the files, which are
         left as the task left them, so the user can keep or undo them, as
         from the files it changed. A harness that takes no such rules is
         told nothing. A question from the Ask tab always runs in a container,
@@ -143,7 +137,7 @@ shape HarnessIntegrationShape:
         JSON on the harness's standard input, which stays open for as long as
         the run lasts. The run's first message is the task's compiled prompt,
         as ever, and each message sent to the task after it, from the
-        @{ChatInputScope}, is written as another.
+        @{ChatInput}, is written as another.
 
         A message reaches the harness when it finishes what it is doing rather
         than interrupting it, so a run that is mid-tool-call takes it once that
@@ -224,7 +218,7 @@ shape HarnessIntegrationShape:
         commit messages, and prompt titles each take a single prompt, as ever.
 
     images:
-        Images attached to a prompt, as the @{ChatInputScope} says, are given
+        Images attached to a prompt, as the @{ChatInput} says, are given
         to the harness as it takes them: to Claude Code as image content blocks,
         base64-encoded with their media type, in the same stream-json user
         message as the prompt's text, after it; to Codex with an `--image`
@@ -237,7 +231,7 @@ shape HarnessIntegrationShape:
 
     context:
         The harness keeps its context between requests instead of starting fresh
-        each time. Each lane of the @{PromptSendingScope} carries on a
+        each time. Each lane of the @{PromptSending} carries on a
         conversation of its own, so nothing a task of one lane read reaches a
         task of the other: the spec lane's, carried on by Spec tasks and a
         Chain prompt's spec steps, and the code lane's, carried on by Code
@@ -245,7 +239,7 @@ shape HarnessIntegrationShape:
         carries on its own lane's, and since a lane runs one task at a time,
         two tasks never carry on the same conversation at once. A Chain
         prompt's steps hand on to each other as text, the prompt and what the
-        step before replied, as the @{ModeSystemPromptsScope} says, so the
+        step before replied, as the @{ModeSystemPrompts} says, so the
         handoff crosses lanes whatever each lane's conversation holds. When
         the project is opened, each lane carries on the latest conversation
         among its own tasks in the history, a Chain task by the lane of the
@@ -255,7 +249,7 @@ shape HarnessIntegrationShape:
         code lane always on the host, so each conversation is only ever
         carried on where it began. A run in a container keeps its
         conversation's sessions in the project, in its own folder of
-        `.suspense/sessions/`, as the @{ContainerEnvironmentScope} says, so
+        `.suspense/sessions/`, as the @{ContainerEnvironment} says, so
         it carries on across runs, restarts of the application, and moves of
         the project; a run on the host keeps them where the harness keeps
         them on the host.
@@ -276,22 +270,54 @@ shape HarnessIntegrationShape:
         A request whose conversation can't be carried on, because the
         harness says it has no such session, as Claude Code's "No
         conversation found", or because it was begun elsewhere, is never
-        failed for it, and never retried on the same conversation: it is
-        sent again at once as a new conversation, the same prompt, with no
+        failed for it. Its session is first put back from the project's
+        copy, as above, and the request carried on with it; only where there
+        is no copy, or it still can't be carried on, is it never retried on
+        the same conversation: it is sent again at once as a new
+        conversation, the same prompt, with no
         context, and the conversation it couldn't carry on is not tried
         again by any later request, the project's history included. A
         question sent again so is recorded and shown as starting a new
-        conversation, as the @{AskConversationScope} marks one. Each run applies
+        conversation, as the @{AskConversation} marks one. Each run applies
         its own prompt's systemPrompt, even when it carries on a conversation
         begun in a different mode. The palette's file search always starts
         fresh.
 
+        A conversation the application carries on never expires on its own.
+        Every Claude Code run the application starts, on the host or in a
+        container, is run with its transcript cleanup turned off, as its
+        `cleanupPeriodDays` setting given so that no session is ever old
+        enough to be deleted, passed with the run rather than written to the
+        user's own settings, so Claude Code never deletes a session for its
+        age.
+
+        When a run is over, however it ended, the application copies the
+        harness's session for its conversation, its transcript and whatever
+        the harness needs to resume it, into the project's data, beside the
+        run's history record, as the @{ProjectData} says, replacing the
+        copy an earlier run of the same conversation left. Before carrying on
+        a conversation whose session the harness no longer has, as when it
+        was cleaned up, the machine changed, or the session was kept on the
+        host and the harness's own folder was cleared, it puts the latest
+        copy back where the harness looks for it, under the same session id,
+        so the conversation carries on with its context rather than starting
+        a new one. Only where no copy of it exists, or it can't be put back,
+        is the request sent again as a new conversation, as below, and a
+        conversation the user left for a new one is never restored.
+
+        Codex and OpenCode sessions are kept and restored the same way,
+        wherever each harness keeps them: Codex's under its sessions folder,
+        and OpenCode's in its data directory, each copied after a run and put
+        back before one that needs it. A run in a container restores into the
+        conversation's sessions folder it mounts; a run on the host into the
+        harness's own folder on the host.
+
         A conversation can be left for a new one, from the chat input's New
-        conversation button, as the @{ChatInputScope} says, which leaves the
+        conversation button, as the @{ChatInput} says, which leaves the
         conversation of the lane it is used for: the next request in it
         starts a new conversation with no context, and the one left is not
         carried on again, not by a run of it still going, nor by the project's
-        history. Leaving it is kept with the project, as the @{ProjectDataScope}
+        history. Leaving it is kept with the project, as the @{ProjectData}
         says, so a project opened after a lane's or the questions' conversation
         was left starts a new one there too, rather than carrying on the latest
         conversation in its history, until a run after the reset begins one of
@@ -310,12 +336,13 @@ shape HarnessIntegrationShape:
         leaves the cause unnamed; a generic line is only ever a heading
         above what the harness said. A run that couldn't be started says
         why it couldn't, and one Podman couldn't run says so, as the
-        @{ContainerEnvironmentScope} says.
+        @{ContainerEnvironment} says.
 
-    bakedPrompts: @{BakedSystemPromptsScope}
+    bakedPrompts: @{BakedSystemPrompts}
 
-    oneOffRuns: @{OneOffAgentRunScope}
+    oneOffRuns: @{OneOffAgentRun}
 
-    catalog: @{HarnessCatalogScope}
+    catalog: @{HarnessCatalog}
 
-    modeSystemPrompts: @{ModeSystemPromptsScope}
+    modeSystemPrompts: @{ModeSystemPrompts}
+

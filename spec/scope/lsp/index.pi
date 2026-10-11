@@ -1,24 +1,18 @@
 use /lib
-from /scope/project-directory import ProjectDirectoryScope
+from /scope/project-directory import ProjectDirectory
 
-export scope LSP:
-    concept: {LSPConcept}
-
-concept LSPConcept:
+export feature LSP:
     pitch:
         LSP-based autocompleting for the chat input, and language support for
         the editor, will be provided via the `piton lsp`
 
-    shape: {LSPShape}
-
-shape LSPShape:
     description:
         Completions and auto-imports for the Piton typed into the chat input,
         and the server the editor's Piton files are edited with.
 
     server:
         One `piton lsp` is started as a child process in the selected
-        ${ProjectDirectoryScope}, speaking JSON-RPC over stdio, shared by the
+        ${ProjectDirectory}, speaking JSON-RPC over stdio, shared by the
         chat input and the editor, and restarted whenever the project
         directory changes. That includes the project opened as the application
         starts, which gets its server straight away like any other. The client sends `initialize` and `initialized`,
@@ -74,3 +68,4 @@ shape LSPShape:
         completion sits beside the list when both fit across the window, and
         is otherwise stacked with the list, on the side away from the
         cursor.
+

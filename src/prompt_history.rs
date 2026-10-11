@@ -63,6 +63,18 @@ pub struct RunRecord {
     /// The task was cancelled, whatever its output says.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub cancelled: bool,
+    /// Paused to be resumed, as the PromptSendingScope's pausing says.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paused: bool,
+    /// How long it was paused, all told, in milliseconds: its time counts
+    /// only while it runs.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub paused_ms: u64,
+    /// How long the run spent writing, as the application measured it, in
+    /// milliseconds: from each turn's start to the usage reported at its
+    /// end, tool calls left out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub writing_ms: Option<u64>,
     /// The task has been marked done by hand for sending to the other mode,
     /// as though it had been sent there and finished. Records saved before
     /// this was kept load as not marked.
@@ -196,6 +208,15 @@ pub struct SavedPrompt {
     pub sent_at: u64,
     /// When its record was last written, when it has one.
     pub recorded_at: Option<std::time::SystemTime>,
+}
+
+fn is_zero(ms: &u64) -> bool {
+    *ms == 0
+}
+
+/// The record saved beside `prompt_file`, if it has one that reads back.
+pub fn load_record(prompt_file: &Path) -> Option<RunRecord> {
+    serde_json::from_str(&fs::read_to_string(record_path(prompt_file)).ok()?).ok()
 }
 
 /// The record file saved beside `prompt_file`.

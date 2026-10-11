@@ -1,25 +1,19 @@
 use /lib
 use /ui
-from /scope/application/Body import BodyScope
+from /scope/application/Body import Body
 from /scope/lsp import LSP
-from /scope/open-file import OpenFileScope
-from /ui/components/diff-view import DiffViewScope
-from /ui/components/file-tree import FileTreeScope
-from /ui/components/selection-popover import SelectionPopoverScope
+from /scope/open-file import OpenFile
+from /ui/components/diff-view import DiffView
+from /ui/components/file-tree import FileTree
+from /ui/components/selection-popover import SelectionPopover
 
-export ui-component EditorScope:
-    concept: {EditorConcept}
-
-concept EditorConcept:
+export ui-component Editor:
     pitch:
-        An editor for a file opened from the @{FileTreeScope}, or anywhere else
-        the @{OpenFileScope} says, with language support for Piton files.
+        An editor for a file opened from the @{FileTree}, or anywhere else
+        the @{OpenFile} says, with language support for Piton files.
 
-    shape: {EditorShape}
-
-shape EditorShape:
     description:
-        Editable and syntax highlighted, in its own tab of the @{BodyScope},
+        Editable and syntax highlighted, in its own tab of the @{Body},
         under a header with the file's path in the project, a dot while it has
         unsaved changes, a save button, and a close button.
 
@@ -68,7 +62,7 @@ shape EditorShape:
 
     selectingText:
         Selecting text in the editor by dragging across it shows a
-        @{SelectionPopoverScope} with four buttons:
+        @{SelectionPopover} with four buttons:
         - Cut, with a scissors icon, which puts the selected text on the clipboard and removes it from the file
         - Copy, with a copy icon, which puts the selected text on the clipboard
         - Paste, with a clipboard icon, which puts what is on the clipboard in place of the selected text
@@ -253,7 +247,7 @@ shape EditorShape:
         watching:
             The editor watches its file on disk while it is open, whether or
             not its tab is selected, and notices when something else edits or
-            renames it: another program, a task, or the @{FileTreeScope}. Its
+            renames it: another program, a task, or the @{FileTree}. Its
             own saves, the formatting a Piton file gets as it is saved
             included, are never taken for a change on disk.
 
@@ -304,7 +298,7 @@ shape EditorShape:
 
         merging:
             "Merge" shows, in place of the editor in the file's tab, a
-            @{DiffViewScope} that merges, as its merging says: the file as it
+            @{DiffView} that merges, as its merging says: the file as it
             now is on disk on its left, and the editor's unsaved text on its
             right. Applying the merge puts the merged text in the editor as
             its text, still unsaved, with the cursor and view kept as when
@@ -323,3 +317,4 @@ shape EditorShape:
         The close button above the file, or the one on its tab, closes it.
         While there are unsaved changes, it first asks whether to discard
         them.
+

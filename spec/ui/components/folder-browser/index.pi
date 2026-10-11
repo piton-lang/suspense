@@ -1,21 +1,12 @@
 use /lib
 use /ui
-from /ui/components/fs-browser import
-    FsBrowserConcept,
-    FsBrowserScope,
-    FsBrowserShape
+from /ui/components/fs-browser import FsBrowser
 
-export ui-component FolderBrowserScope extends FsBrowserScope:
-    concept: {FolderBrowserConcept}
-
-concept FolderBrowserConcept extends FsBrowserConcept:
+export ui-component FolderBrowser extends FsBrowser:
     pitch:
-        An @{FsBrowserScope} for choosing a folder.
+        An @{FsBrowser} for choosing a folder.
 
-    shape: {FolderBrowserShape}
-
-shape FolderBrowserShape extends FsBrowserShape:
-    description: {FsBrowserShape.description}
+    description: {FsBrowser.description}
 
     listed:
         Only the current folder's folders are listed, never its files. A folder
@@ -28,3 +19,4 @@ shape FolderBrowserShape extends FsBrowserShape:
         and its tooltip says it chooses this folder. <Enter> with no folder
         selected chooses the current folder. A folder just created is selected,
         so pressing Choose chooses it straight away.
+

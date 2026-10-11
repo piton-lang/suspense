@@ -1,22 +1,19 @@
 use /lib
 use /ui
-from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
-from /scope/harness-integration/one-off-run import OneOffAgentRunScope
-from /scope/open-projects import OpenProjectsScope
-from /scope/project-data import ProjectDataScope
-from /scope/project-locations import ProjectLocationsScope
-from /scope/running-activity import RunningActivityScope
-from /scope/spec-build import SpecBuildScope
-from /ui/components/minimizable-panel import MinimizablePanelScope
-from /ui/components/ranked-selection-list import RankedSelectionListScope
-from /ui/components/scrollbar import ScrollbarScope
-from /ui/components/task-table import TaskTableScope
-from /ui/theme import ThemeScope
+from /scope/harness-integration/baked-prompts import BakedSystemPrompts
+from /scope/harness-integration/one-off-run import OneOffAgentRun
+from /scope/open-projects import OpenProjects
+from /scope/project-data import ProjectData
+from /scope/project-locations import ProjectLocations
+from /scope/running-activity import RunningActivity
+from /scope/spec-build import SpecBuild
+from /ui/components/minimizable-panel import MinimizablePanel
+from /ui/components/ranked-selection-list import RankedSelectionList
+from /ui/components/scrollbar import Scrollbar
+from /ui/components/task-table import TaskTable
+from /ui/theme import Theme
 
-export ui-component DivergenceScope:
-    concept: {DivergenceConcept}
-
-concept DivergenceConcept:
+export ui-component Divergence:
     pitch:
         Shows how far the code and the spec have drifted apart: which parts of
         the spec drove each source file, and how strongly, how far each side
@@ -25,11 +22,8 @@ concept DivergenceConcept:
         assessment and score for the whole project. Analyses are costly, so
         each one is saved with the project and can be looked at again later.
 
-    shape: {DivergenceShape}
-
-shape DivergenceShape:
     description:
-        An analysis of the open project, shown in a @{MinimizablePanelScope}
+        An analysis of the open project, shown in a @{MinimizablePanel}
         titled "Divergence". It opens in one of two ways: to analyze, which
         starts a fresh analysis straight away, or to view the reports, which
         starts nothing and shows the project's latest saved report on the Report
@@ -41,14 +35,14 @@ shape DivergenceShape:
         starts another.
 
     switchingProjects:
-        An analysis belongs to its project, as the @{OpenProjectsScope} says:
+        An analysis belongs to its project, as the @{OpenProjects} says:
         switching to another project minimizes the panel, the analysis
         carrying on in the background, and switching back brings it back
         minimized, just as it was left.
 
     minimizing:
         Its minimize button's tooltip says the analysis keeps running. While it
-        runs, it is listed among the @{RunningActivityScope} as
+        runs, it is listed among the @{RunningActivity} as
         "Analyzing divergence". Either command brings back a minimized panel:
         to analyze, it then starts an analysis unless one is already running;
         to view the reports, it shows the Report tab of the latest report
@@ -56,14 +50,14 @@ shape DivergenceShape:
 
     files:
         The source files and the spec files are those the
-        @{ProjectLocationsScope} lists, leaving out source files that aren't
+        @{ProjectLocations} lists, leaving out source files that aren't
         text. Each side is capped at 400 files, and the panel says when a side
         was cut short.
 
     analyzing:
         steps:
             The analysis first builds the spec ahead of itself, as the
-            @{SpecBuildScope} says; a build that fails is noted in the panel.
+            @{SpecBuild} says; a build that fails is noted in the panel.
             Then two agents run at the same time: one analyzes the code, one
             analyzes the spec. While it runs, the panel shows
             "Building the spec" along the top, with a spinner while it runs, a
@@ -77,13 +71,13 @@ shape DivergenceShape:
             a cross and why if it failed, and before its agent starts, muted.
 
             Beneath its heading, each shows its agent's output in its
-            @{TaskTableScope}. Once both agents
+            @{TaskTable}. Once both agents
             are over and there are results, the results take their place; when
             neither agent got anywhere, the tables stay, with what went wrong.
 
         agents:
-            Each agent is a @{OneOffAgentRunScope}, whose prompt is
-            divergence.pi, of the @{BakedSystemPromptsScope}. It is given both
+            Each agent is a @{OneOffAgentRun}, whose prompt is
+            divergence.pi, of the @{BakedSystemPrompts}. It is given both
             lists of files, the code and spec locations, and that the compiled
             spec is in the agent directory's reference folder. The code agent
             goes through every source file, and for each says which spec files
@@ -127,7 +121,7 @@ shape DivergenceShape:
             it. The header reads as the alignment, after a thin divider beside
             the panel's title, a little larger and bolder than the title: for a
             divergence score of 8%, "92% aligned". It is coloured by what the
-            score means, in the @{ThemeScope}'s status colours: green while the
+            score means, in the @{Theme}'s status colours: green while the
             score is below 20%, aligned; amber from 20% up to 50%, drifting;
             and red from 50%, diverged. Beside
             it, muted, how long ago the report was made. The header is the same
@@ -143,7 +137,7 @@ shape DivergenceShape:
 
         report:
             The Report tab is an overall assessment, scrolling with a
-            @{ScrollbarScope}. Its sections are headed a little larger than its
+            @{Scrollbar}. Its sections are headed a little larger than its
             text, and their parts by small, muted labels; everything lines up
             along its left edge, and from the assessment on, it is laid out in
             two columns of equal width, top aligned:
@@ -179,10 +173,10 @@ shape DivergenceShape:
             "Not analyzed" in their place, and a spec file whose definition its
             agent didn't give, as in reports made before definition was
             measured, reads "No definition". The tree scrolls with a
-            @{ScrollbarScope}.
+            @{Scrollbar}.
 
             Clicking a file selects it, and beside the tree, the selected file's
-            details show, as in a @{RankedSelectionListScope}, though the tree
+            details show, as in a @{RankedSelectionList}, though the tree
             has no checkboxes or action. The details are its path and summary,
             then its measures, each with a bar:
             - influence, as "Influence"
@@ -206,7 +200,7 @@ shape DivergenceShape:
     saving:
         Each analysis that gets results, even with one agent failed, is saved
         as soon as it is over as a report among the project's data, as the
-        @{ProjectDataScope} says, with everything the
+        @{ProjectData} says, with everything the
         report shows: its files and their measures, the connections, the
         assessments and areas, and its notes. So they survive a restart of the
         application. A saved report that can't be read is left out.

@@ -1,25 +1,19 @@
 use /lib
-from ./MainWindow import MainWindowScope
-from /scope/container-environment import ContainerEnvironmentScope
-from /scope/debug-log import DebugLogScope
-from /scope/edge-releases import EdgeReleasesScope
-from /scope/project-data import ProjectDataScope
-from /scope/self-update import SelfUpdateScope
-from /scope/user-preferences import UserPreferencesScope
-from /ui/theme import ThemeScope
+from ./MainWindow import MainWindow
+from /scope/container-environment import ContainerEnvironment
+from /scope/debug-log import DebugLog
+from /scope/edge-releases import EdgeReleases
+from /scope/project-data import ProjectData
+from /scope/self-update import SelfUpdate
+from /scope/user-preferences import UserPreferences
+from /ui/theme import Theme
 
-export scope ApplicationScope:
-    concept: {ApplicationConcept}
-
-concept ApplicationConcept:
+export feature Application:
     pitch:
         A REPL and sort of notebook for [Piton](https://piton-lang.org/spec.md)
         that allows you write prompts that references the spec and also allows
         you to build up a history of prompts saved as files.
 
-    shape: {ApplicationShape}
-
-shape ApplicationShape:
     description: desktop application
 
     stack:
@@ -45,7 +39,7 @@ shape ApplicationShape:
 
         What these programs print is still read as ever, and the login
         view's command, run under a pseudo-terminal, still works as the
-        @{ContainerEnvironmentScope} says. On macOS and Linux, nothing
+        @{ContainerEnvironment} says. On macOS and Linux, nothing
         changes in how a program is started.
 
     memoryPressure:
@@ -115,8 +109,7 @@ shape ApplicationShape:
         each time the Welcome checks or Check again run, so a program
         installed while Suspense runs is found without restarting it.
 
-
-    debugLog: @{DebugLogScope}
+    debugLog: @{DebugLog}
 
     fileOwnership:
         Every file and folder the application creates belongs to the user
@@ -145,11 +138,12 @@ shape ApplicationShape:
     name:
         The application is called Suspense.
 
-    projectFiles: @{ProjectDataScope}
+    projectFiles: @{ProjectData}
 
-    theme: @{ThemeScope}
+    theme: @{Theme}
 
-    mainWindow: @{MainWindowScope}
-    userPreferences: @{UserPreferencesScope}
-    edgeReleases: @{EdgeReleasesScope}
-    selfUpdate: @{SelfUpdateScope}
+    mainWindow: @{MainWindow}
+    userPreferences: @{UserPreferences}
+    edgeReleases: @{EdgeReleases}
+    selfUpdate: @{SelfUpdate}
+

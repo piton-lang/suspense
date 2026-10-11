@@ -1,18 +1,12 @@
 use /lib
-from /scope/application import ApplicationScope
+from /scope/application import Application
 
-export scope EdgeReleasesScope:
-    concept: {EdgeReleasesConcept}
-
-concept EdgeReleasesConcept:
+export feature EdgeReleases:
     pitch:
         Every commit that lands on main is built for Linux, Windows, and
         macOS, and published on GitHub as an edge release anyone can
         download, so the newest Suspense is always one download away.
 
-    shape: {EdgeReleasesShape}
-
-shape EdgeReleasesShape:
     description:
         A GitHub Actions workflow in this application's own repository,
         `.github/workflows/edge.yml`, builds and publishes an edge release
@@ -64,7 +58,7 @@ shape EdgeReleasesShape:
         repository as it is at that commit, the default prompts in
         `.suspense/system-prompts` included, as the application's build
         needs them. The Windows binary is a GUI application, opening no
-        console of its own, as the @{ApplicationScope} says.
+        console of its own, as the @{Application} says.
 
         The code compiles, its tests included, on each of the three
         platforms, with no compiler warnings on any of them. What differs
@@ -117,3 +111,4 @@ shape EdgeReleasesShape:
         permission it needs to publish, writing the repository's contents,
         and uses the token GitHub gives each run, needing no secrets of its
         own.
+

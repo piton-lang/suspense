@@ -1,19 +1,13 @@
 use /lib
-from /ui/theme import ThemeScope
+from /ui/theme import Theme
 
-export scope RiseInAnimation:
-    concept: {RiseInAnimationConcept}
-
-concept RiseInAnimationConcept:
+export feature RiseInAnimation:
     pitch:
         How something that floats over the window, holding the user's attention
         while it's there, comes in and goes away: rising gently into place over
         a dimming window, and sinking away again. Anything shown that way can
         use it.
 
-    shape: {RiseInAnimationShape}
-
-shape RiseInAnimationShape:
     description:
         Two parts move together: the surface, which is whatever comes in, and
         the dimming, which darkens everything behind it. Both follow one quick
@@ -24,7 +18,7 @@ shape RiseInAnimationShape:
 
     comingIn:
         The dimming darkens the window behind from not at all to the
-        @{ThemeScope}'s dimming for its mode. The
+        @{Theme}'s dimming for its mode. The
         surface fades in from transparent as it rises into place from about 28
         pixels below, easing to a stop, as though tipping up towards the
         viewer. It comes in afresh each time what uses it opens.
@@ -39,3 +33,4 @@ shape RiseInAnimationShape:
     swapping:
         Changing what the surface holds while it's in swaps it in place without
         animating: only coming in and going away animate.
+

@@ -1,51 +1,45 @@
 use /lib
 
-from /scope/prompt-mode/chat-input import ChatInputScope
-from /scope/container-environment import ContainerEnvironmentScope
-from /scope/harness-integration import HarnessIntegrationScope
-from /scope/project-directory import ProjectDirectoryScope
-from /scope/project-locations import ProjectLocationsScope
-from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
-from /scope/run-targets import RunTargetsScope
+from /scope/prompt-mode/chat-input import ChatInput
+from /scope/container-environment import ContainerEnvironment
+from /scope/harness-integration import HarnessIntegration
+from /scope/project-directory import ProjectDirectory
+from /scope/project-locations import ProjectLocations
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPrompts
+from /scope/run-targets import RunTargets
 
-export scope ProjectDataScope:
-    concept: {ProjectDataConcept}
-
-concept ProjectDataConcept:
+export feature ProjectData:
     pitch:
         What the application keeps for a project, kept in the project itself so
         it survives a restart and travels with the project.
 
-    shape: {ProjectDataShape}
-
-shape ProjectDataShape:
     description:
         Everything the application keeps for a project lives in a `.suspense`
-        directory inside the @{ProjectDirectoryScope}, created as it is needed.
+        directory inside the @{ProjectDirectory}, created as it is needed.
         Nothing about a project is kept anywhere else, apart from the draft.
 
     contents:
-        - `history/`: every task sent, as its hidden anchor's source, named by the second it was sent and the anchor's name, and beside it, once its run is over, a `.json` record of the same name holding the compiled userPrompt the harness received, the system prompt as it received it and the harness it went to, whether it has been marked done by hand for sending to the other mode, each line the harness printed, each message sent to the task while it ran, in its place among those lines, any error, when the task was sent and when it ended, and when each of its phases began and ended, as the debug log names them, to the millisecond, and, in a git repository, the hashes of the two snapshots of the working tree taken as it started and ended, as the task snapshots below say
+        - `history/`: every task sent, as its hidden anchor's source, named by the second it was sent and the anchor's name, and beside it, once its run is over, a `.json` record of the same name holding the compiled userPrompt the harness received, the system prompt as it received it and the harness it went to, whether it has been marked done by hand for sending to the other mode, each line the harness printed, each message sent to the task while it ran, in its place among those lines, any error, when the task was sent and when it ended, and beside it the harness's session for its conversation as the run left it, a `.session` folder of the same name, as the @{HarnessIntegration} says, and when each of its phases began and ended, as the debug log names them, to the millisecond, and, in a git repository, the hashes of the two snapshots of the working tree taken as it started and ended, as the task snapshots below say
         - `snapshot-index`: in a git repository, the private index the task snapshots are built with, as they say
         - `images/`: every image attached to a task or question, saved when it is sent or queued, named by the second it was saved and a short hash of its content, with its own extension, so the same image attached twice is saved once
-        - `attachments/`: every file other than an image attached to a task or question, saved when it is sent or queued, under its own name, in a folder named by the second it was saved and a short hash of its content, so the same file attached twice is saved once, as the @{ChatInputScope} says
+        - `attachments/`: every file other than an image attached to a task or question, saved when it is sent or queued, under its own name, in a folder named by the second it was saved and a short hash of its content, so the same file attached twice is saved once, as the @{ChatInput} says
         - `asks/`: every question asked from the Ask tab, saved the same way as a task but apart from them
         - `queue/`: each queued prompt, as its hidden anchor's source, imports included, named so they list in the order they were queued, marked when each was queued rather than when it was saved, so prompts queued one straight after another keep their order however long each takes to save, and a chain's step marked when its chain was sent, so it lists in the place the chain's steps take in its lane's queue
         - `divergence/`: each divergence report, a JSON file named by when it was made
-        - `system-prompts/`: each mode's system prompt template, a Markdown file named after its mode, code.md, combined.md for Chain, spec.md, and ask.md, and the spec-reading prompt injected into them, spec-reading.md
+        - `system-prompts/`: each mode's system prompt template, a Markdown file named after its mode, code.md, combined.md for Chain, spec.md, and ask.md, and the spec-reading prompt injected into them, spec-reading.md, and the resume prompt given to a resumed task, resume.md
         - `commit-notes.json`: the Git panel's commit notes
-        - `run.json`: the project's run targets, as the @{RunTargetsScope} says
-        - `settings.json`: the project's own settings, as the harness its runs go to, as the @{HarnessIntegrationScope} says, whether its Spec runs may read the code, and whether they may read the whole project, as the @{ContainerEnvironmentScope} says
+        - `run.json`: the project's run targets, as the @{RunTargets} says
+        - `settings.json`: the project's own settings, as the harness its runs go to, as the @{HarnessIntegration} says, whether its Spec runs may read the code, and whether they may read the whole project, as the @{ContainerEnvironment} says
         - `harness.json`: the last report the harness gave of the skills and agents it has
-        - `fluency.md`: the project's Piton fluency, as `piton agent --print-fluency` printed it at the last spec build, generated rather than edited, for the Spec and Chain prompts to point at, as the @{ModeSystemPromptsScope} says
-        - `suspense-fluency.md`: the Suspense fluency, as this application ships it, generated rather than edited, for the Code, Chain, Spec, and Ask prompts to point at, as the @{ModeSystemPromptsScope} says
-        - `conversations.json`: which conversation of each lane's tasks, the spec lane's and the code lane's, and of the questions, was last left for a new one, as the @{HarnessIntegrationScope} says, so it isn't carried on again once the project is reopened
-        - `sessions/`: the harness's sessions for each conversation run in a container, a folder per conversation, `spec` for the spec lane's and `questions` for the questions', each mounted into that conversation's runs only, as the @{ContainerEnvironmentScope} says, so a conversation carries on across runs, restarts, and moves of the project
-        - `Containerfile`: written by hand, when the project has one, built FROM the application's default image to add what the project's runs need, such as its toolchains, as the @{ContainerEnvironmentScope} says
+        - `fluency.md`: the project's Piton fluency, as `piton agent --print-fluency` printed it at the last spec build, generated rather than edited, for the Spec and Chain prompts to point at, as the @{ModeSystemPrompts} says
+        - `suspense-fluency.md`: the Suspense fluency, as this application ships it, generated rather than edited, for the Code, Chain, Spec, and Ask prompts to point at, as the @{ModeSystemPrompts} says
+        - `conversations.json`: which conversation of each lane's tasks, the spec lane's and the code lane's, and of the questions, was last left for a new one, as the @{HarnessIntegration} says, so it isn't carried on again once the project is reopened
+        - `sessions/`: the harness's sessions for each conversation run in a container, a folder per conversation, `spec` for the spec lane's and `questions` for the questions', each mounted into that conversation's runs only, as the @{ContainerEnvironment} says, so a conversation carries on across runs, restarts, and moves of the project
+        - `Containerfile`: written by hand, when the project has one, built FROM the application's default image to add what the project's runs need, such as its toolchains, as the @{ContainerEnvironment} says
 
         The draft, `.suspense-draft.pi`, isn't in `.suspense`: it is the prompt
         being written, as `piton lsp` is shown it, a document named as if it
-        were in the spec location, as the @{ProjectLocationsScope} says, so the
+        were in the spec location, as the @{ProjectLocations} says, so the
         server resolves its imports.
 
     machineOnly:
@@ -68,7 +62,7 @@ shape ProjectDataShape:
         The containers' images and volumes and the harnesses' logins belong
         to this machine and to the application, never to the project, and
         aren't in `.suspense` at all: Podman keeps them, as the
-        @{ContainerEnvironmentScope} says. Losing them costs a login, never
+        @{ContainerEnvironment} says. Losing them costs a login, never
         anything of the project's. The harnesses' sessions are in
         `.suspense`, in `.suspense/sessions/`, kept on this machine only.
 
@@ -110,6 +104,7 @@ shape ProjectDataShape:
 
     lastProject:
         When the application starts, it opens the project that was opened most
-        recently, the first of the @{ProjectDirectoryScope}'s recent projects
+        recently, the first of the @{ProjectDirectory}'s recent projects
         that still holds its piton.config.pi. With none, it starts with no
         project open.
+

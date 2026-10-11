@@ -1,18 +1,12 @@
 use /lib
-from /scope/application/MainWindow import MainWindowScope
+from /scope/application/MainWindow import MainWindow
 
-export scope ThemeScope:
-    concept: {ThemeConcept}
-
-concept ThemeConcept:
+export feature Theme:
     pitch:
         The look every part of the application shares: a gentle, neutral grey
         interface in the manner of Photoshop, Maya, or Houdini, where contrast
         alone says what matters, and colour is kept for meaning.
 
-    shape: {ThemeShape}
-
-shape ThemeShape:
     description:
         The theme is defined by its dark mode, built around a base grey of
         #444444. Dark mode is the reference: every colour below is chosen for
@@ -239,4 +233,5 @@ shape ThemeShape:
         danger the status colours.
 
     modes:
-        Which mode shows is up to the application: see the @{MainWindowScope}.
+        Which mode shows is up to the application: see the @{MainWindow}.
+

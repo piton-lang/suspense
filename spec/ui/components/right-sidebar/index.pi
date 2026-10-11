@@ -1,125 +1,47 @@
 use /lib
 use /ui
 use /ui/components/sidebar/Sidebar
-from ./referenced-files import ReferencedFilesPanel
-from ./subagents import SubagentsPanel
-from ./tasks import TasksTabScope
-from ./understanding import UnderstandingPanel
-from /scope/application/Body import BodyScope
-from /ui/components/scrollbar import ScrollbarScope
-from /ui/components/sidebar import SidebarScope
+from ./tasks import TasksTab
+from /scope/application/Body import Body
+from /ui/components/scrollbar import Scrollbar
+from /ui/components/sidebar import Sidebar
 
-export sidebar RightSidebarScope:
+export sidebar RightSidebar:
     side: right
 
     panels:
-        - @{ReferencedFilesPanel}
-        - @{UnderstandingPanel}
-        - @{SubagentsPanel}
+        - @{TasksTab}
 
-    concept: {RightSidebarConcept}
-
-concept RightSidebarConcept:
     pitch:
-        A second @{SidebarScope}, at the right of the message list and the
-        chat input beneath it, that lists
-        the spec files the running task references, so it's clear what part of
-        the spec the harness is working from, and the constraints it has taken
-        from it for the task.
+        A second @{Sidebar}, at the right of the message list and the
+        chat input beneath it, holding the project's tasks, what has run,
+        what is running, and what is queued, as the @{TasksTab} says.
+        What the running task is working from, its referenced files,
+        understanding, and subagents, is in the left sidebar's Run view.
 
-    shape: {RightSidebarShape}
-
-shape RightSidebarShape:
     description:
         It runs the full height of the body, beside the body's tab bar, the
-        message list or file beneath it, and the chat input beneath those, which stops at its left edge rather than
-        running beneath it. It keeps the width it was dragged to while the
-        application runs.
+        message list or file beneath it, and the chat input beneath those,
+        which stops at its left edge rather than running beneath it. It
+        keeps the width it was dragged to while the application runs.
 
-        Its panels sit one above the other, in this order: the referenced
-        files at the top, the understanding beneath them, and the subagents
-        and background commands last, along the bottom of the sidebar,
-        beneath both. The referenced files are only as tall as their rows
-        need, up to half the sidebar's height, scrolling beyond that; the
-        subagents and commands, once there are any, are only as tall as their
-        rows need, up to 30% of the sidebar's height; and the understanding
-        fills what is left between them, until they are resized. While the
-        run has started no subagent or background command, the understanding
-        reaches the sidebar's bottom.
-
-    tabs:
-        Along its top, a row of two tabs, as the body's tab bar draws tabs,
-        32 pixels tall: "Run" and "Tasks". Run holds its panels, the
-        referenced files, the understanding, and the subagents, of the task
-        selected in the message list, as above. Tasks holds the
-        @{TasksTabScope}: the queue and the previous tasks, which no longer
-        sit in the message list. While a task runs, Run is selected as it
-        starts, unless Tasks was picked since the sidebar last slid out; while
-        none does, Run is disabled, its tooltip saying no task is running,
-        and Tasks is shown. The tab picked is kept while the application
-        runs, and each tab keeps its own scroll.
-
-    resizingPanels:
-        The panels themselves can be resized, as the sidebar can. The edge
-        between one panel and the next, where the lower panel's header meets
-        the body of the one above, is a handle: dragging it up or down moves
-        that edge, the panel above growing as the one below shrinks, or the
-        other way, their contents laid out anew at each height as it changes.
-        Hovering the handle shows the resize cursor for up and down and a thin
-        line along the edge in the theme's accent, which goes once the pointer
-        leaves and the drag is over; otherwise no line is drawn there, the
-        change of colour still being the edge.
-
-        No panel can be dragged shorter than its header and one row of its
-        contents, 32 pixels below its header, nor can one be pushed out of
-        the sidebar. Once a panel has been dragged, it keeps its height rather
-        than being only as tall as its rows need: the referenced files no
-        longer fit their rows or stop at half the sidebar, and scroll once
-        their rows are taller than the height they were given. The heights
-        they were dragged to are kept while the application runs, the next
-        time the sidebar slides out included, as its width is; when the
-        sidebar's height changes, as when the window is resized, the
-        referenced files and the subagents keep their heights and the
-        understanding takes what is left, as far as the smallest heights
-        allow. Double-clicking the handle puts
-        both panels back as they start, the referenced files fitting their
-        rows again.
+        It holds the @{TasksTab} alone, filling it, with no tab row
+        along its top: the list begins directly beneath the sidebar's top
+        edge, its section headings the first thing in it.
 
     look:
         The sidebar's body is on the ribbon's command area colour, #222222 in
-        dark mode. Each panel's header is 32 pixels tall, on the darkest
-        surface, #111111 in dark mode, as the file tree is, its title in
-        small semibold text, 8 pixels from the left, with no count beside it.
-        There is no line anywhere in it, not between a header and its body,
-        nor between one panel and the next: the change of colour is the edge.
-        Each header has, along its bottom, the 1 pixel border in its panel
-        body's colour that every panel header has, as the @{SidebarScope}
-        says, which is no line, since it is the body's own colour.
-        The only line is the one down its left edge, where it meets the
+        dark mode.        The only line is the one down its left edge, where it meets the
         message list and the chat input, which is the handle it is resized
-        by, apart from the line that shows along the edge between two panels
-        while it is hovered or dragged, as resizing the panels says. In light mode the
+        by, a line nowhere else. In light mode the
         same steps are taken, as the ribbon's are.
-
-        Neither panel has a permanent scrollbar, since its column would break
-        the 8 pixel inset: a panel shows its scrollbar only while its contents
-        are taller than it, and none otherwise. When it shows, it is the
-        same scrollbar as every other, as the @{ScrollbarScope} says.
-
-        A panel whose contents fit doesn't scroll at all, not even by a
-        pixel, at any display scale or window size: it counts as taller than
-        its contents need only once they overflow it by a whole pixel or
-        more, so what is left over from rounding to the display's pixels
-        never counts, and while they fit, it stays scrolled to its top. So
-        neither the wheel nor a drag moves rows that all fit, and no
-        scrollbar shows for them.
 
     showing:
         It is there while a task is running, from the moment a task is sent
         from the Code, Chain, or Spec tab until its run is over, and while the
         queue holds a prompt, and whenever it is opened by hand: a small
         ghost button with a sidebar icon at the right end of the body's tab
-        bar, or Ctrl+Alt+B (Cmd+Alt+B on macOS), opens it on its Tasks tab,
+        bar, or Ctrl+Alt+B (Cmd+Alt+B on macOS), opens it,
         and closes it again, its tooltip saying which. Opened by hand, it
         stays until closed by hand, whatever runs; otherwise it slides back
         once nothing runs and nothing is queued. Questions from the Ask tab
@@ -133,13 +55,12 @@ shape RightSidebarShape:
         first frame of the slide to the last, the body's tab bar, the message
         list or open file beneath it, and the chat input end exactly at the
         sidebar's left edge, narrowing as it grows and widening as it
-        shrinks, laid out again each frame, as the @{BodyScope} says. Nothing
+        shrinks, laid out again each frame, as the @{Body} says. Nothing
         runs beneath the sliding sidebar, nothing is clipped by it, and
         nothing jumps to a new width once the slide settles.
 
+from ./referenced-files export ReferencedFilesPanel
+from ./understanding export UnderstandingPanel
+from ./subagents export SubagentsPanel
 
-export ReferencedFilesPanel
-export UnderstandingPanel
-export SubagentsPanel
-
-export TasksTabScope
+export TasksTab

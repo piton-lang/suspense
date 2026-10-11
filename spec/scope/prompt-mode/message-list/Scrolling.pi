@@ -1,14 +1,14 @@
 use /lib
-from /scope/open-projects import OpenProjectsScope
-from /scope/prompt-mode/chat-input import ChatInputScope
-from /scope/prompt-mode/modes import PromptModesScope
+from /scope/open-projects import OpenProjects
+from /scope/prompt-mode/chat-input import ChatInput
+from /scope/prompt-mode/modes import PromptModes
 
-export shape MessageListScrollingShape:
+export anchor MessageListScrolling:
     description:
         The latest task's table scrolls with its lock to the bottom off to
         start with, until switched on. Each open project keeps how far its
         latest task's table was scrolled and whether it was locked, and the
-        rest of its message list as it was left, as the @{OpenProjectsScope}
+        rest of its message list as it was left, as the @{OpenProjects}
         says, so switching back to it shows the list just as it was.
 
         However long the list of previous tasks grows, drawing it costs no more

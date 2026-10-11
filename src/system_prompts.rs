@@ -98,12 +98,14 @@ pub enum Prompt {
     SpecReading,
     CodeToSpec,
     SpecToCode,
+    /// The message a paused task is given as it is resumed.
+    Resume,
 }
 
 impl Prompt {
     /// Every prompt: the modes' templates, in order, then the injected ones.
     /// Freeform, which sends no system prompt, has none.
-    pub const ALL: [Prompt; 8] = [
+    pub const ALL: [Prompt; 9] = [
         Prompt::System,
         Prompt::Mode(SendMode::ALL[0]),
         Prompt::Mode(SendMode::ALL[1]),
@@ -112,6 +114,7 @@ impl Prompt {
         Prompt::SpecReading,
         Prompt::CodeToSpec,
         Prompt::SpecToCode,
+        Prompt::Resume,
     ];
 
     /// The name its file is saved under.
@@ -122,6 +125,7 @@ impl Prompt {
             Prompt::SpecReading => "spec-reading",
             Prompt::CodeToSpec => "code-to-spec",
             Prompt::SpecToCode => "spec-to-code",
+            Prompt::Resume => "resume",
         }
     }
 
@@ -133,6 +137,7 @@ impl Prompt {
             Prompt::SpecReading => "Spec reading",
             Prompt::CodeToSpec => "Code to spec",
             Prompt::SpecToCode => "Spec to code",
+            Prompt::Resume => "Resume",
         }
     }
 }
@@ -170,6 +175,7 @@ pub fn default_prompt(prompt: impl Into<Prompt>) -> &'static str {
         Prompt::SpecReading => baked!("spec-reading"),
         Prompt::CodeToSpec => baked!("code-to-spec"),
         Prompt::SpecToCode => baked!("spec-to-code"),
+        Prompt::Resume => baked!("resume"),
     }
     .trim_end()
 }
@@ -702,7 +708,7 @@ mod tests {
         ));
         assert_eq!(Prompt::CodeToSpec.key(), "code-to-spec");
         assert_eq!(Prompt::CodeToSpec.label(), "Code to spec");
-        assert_eq!(Prompt::ALL[Prompt::ALL.len() - 2], Prompt::CodeToSpec);
+        assert_eq!(Prompt::ALL[Prompt::ALL.len() - 3], Prompt::CodeToSpec);
         let filled = fill_instructions(default, "./src", "./spec", super::Fluency { piton: Some(".suspense/fluency.md"), suspense: None, harness_directory: None });
         assert!(filled.contains("the spec at ./spec ") && filled.contains("./src."));
         assert!(
@@ -710,6 +716,19 @@ mod tests {
             "the code-to-spec prompt names the fluency"
         );
         assert!(filled.contains(CODE_PROMPT) && filled.contains(CODE_RESULT));
+    }
+
+    /// The resume prompt, sent to carry on a paused task, is this
+    /// repository's own saved one, the last prompt.
+    #[test]
+    fn resume_default_is_this_repositorys() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let default = default_prompt(Prompt::Resume);
+        let saved = fs::read_to_string(file(Prompt::Resume, manifest)).unwrap();
+        assert_eq!(default, saved.trim_end());
+        assert_eq!(Prompt::Resume.key(), "resume");
+        assert_eq!(Prompt::ALL.last(), Some(&Prompt::Resume));
+        assert!(default.starts_with("Your previous run on this task was interrupted"));
     }
 
     /// The spec-to-code prompt, given to the Code task a Chain task hands on
@@ -724,7 +743,7 @@ mod tests {
         assert_eq!(default, saved.trim_end());
         assert_eq!(Prompt::SpecToCode.key(), "spec-to-code");
         assert_eq!(Prompt::SpecToCode.label(), "Spec to code");
-        assert_eq!(Prompt::ALL.last(), Some(&Prompt::SpecToCode));
+        assert_eq!(Prompt::ALL[Prompt::ALL.len() - 2], Prompt::SpecToCode);
         let filled = fill_instructions(default, "./src", "./spec", super::Fluency { piton: Some(".suspense/fluency.md"), suspense: None, harness_directory: None });
         assert!(filled.contains("./src") && filled.contains("./spec"));
         assert!(

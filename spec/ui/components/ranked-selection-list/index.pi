@@ -1,18 +1,12 @@
 use /lib
 use /ui
-from /ui/components/scrollbar import ScrollbarScope
+from /ui/components/scrollbar import Scrollbar
 
-export ui-component RankedSelectionListScope:
-    concept: {RankedSelectionListConcept}
-
-concept RankedSelectionListConcept:
+export ui-component RankedSelectionList:
     pitch:
         Findings ranked by how much they're worth, to look through one at a
         time, choose from, and act on those chosen.
 
-    shape: {RankedSelectionListShape}
-
-shape RankedSelectionListShape:
     description:
         A list of ranked rows, beside it the details of the row selected, and
         along the bottom how many are checked and what to do with them. Each use
@@ -24,7 +18,7 @@ shape RankedSelectionListShape:
         checkbox, the name of what it ranks, and a bar and percentage for how
         much it is worth, then whatever the use adds. A row that can't be
         chosen has its checkbox unchecked and disabled, and says why, muted.
-        The list scrolls with a @{ScrollbarScope}. With nothing ranked, the use
+        The list scrolls with a @{Scrollbar}. With nothing ranked, the use
         says why in place of the list.
 
     details:
@@ -35,3 +29,4 @@ shape RankedSelectionListShape:
         Along the bottom, how many rows are checked, as "No …", "1 …", or
         "N …" followed by what the use ranks and "checked", and a primary
         button for the use's action, disabled with none checked.
+

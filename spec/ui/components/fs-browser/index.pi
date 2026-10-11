@@ -1,20 +1,14 @@
 use /lib
 use /ui
-from /ui/components/scrollbar import ScrollbarScope
+from /ui/components/scrollbar import Scrollbar
 
-export ui-component FsBrowserScope:
-    concept: {FsBrowserConcept}
-
-export concept FsBrowserConcept:
+export ui-component FsBrowser:
     pitch:
         A browser of the file system drawn by the application itself rather
         than the platform's native dialog, so it looks and behaves the same
         everywhere and sits inside whatever panel needs it. What it lists, and
         what it chooses, is up to each kind of browser built on it.
 
-    shape: {FsBrowserShape}
-
-export shape FsBrowserShape:
     description:
         A title saying what is being chosen and for what, a bar for getting
         around, the entries in the current folder, and buttons to choose or
@@ -36,7 +30,7 @@ export shape FsBrowserShape:
         The current folder's entries, each a row with an icon and its name: a
         folder icon for a folder, and a file icon for a file. Folders come
         first, then files, each sorted by name ignoring case, with a
-        @{ScrollbarScope}. Clicking a row selects it, highlighted; clicking it
+        @{Scrollbar}. Clicking a row selects it, highlighted; clicking it
         twice opens it. Clicking a folder twice goes into it. A folder that
         can't be read says why in place of the list. Going to another folder
         clears the selection and scrolls back to the top. Which entries are
@@ -108,3 +102,4 @@ export shape FsBrowserShape:
         without choosing, and a primary "Choose", which chooses it, disabled
         while there is nothing to choose. What can be chosen is up to each kind
         of browser.
+

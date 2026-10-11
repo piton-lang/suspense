@@ -1,0 +1,141 @@
+use /lib
+use /ui/components/sidebar/Sidebar
+from /scope/application/Body import Body
+from /ui/components/file-tree import FileTree
+from /ui/components/git-panel import GitPanel
+from /ui/components/right-sidebar import
+    ReferencedFilesPanel,
+    SubagentsPanel,
+    UnderstandingPanel
+from /ui/components/scrollbar import Scrollbar
+from /ui/components/sidebar import Sidebar
+
+export sidebar LeftSidebar:
+    side: left
+
+    panels:
+        - @{FileTree}
+        - @{GitPanel}
+        - @{ReferencedFilesPanel}
+        - @{UnderstandingPanel}
+        - @{SubagentsPanel}
+
+    pitch:
+        The @{Sidebar} along the left of the main window, beside the
+        @{Body}, holding the project's tools as views picked from a
+        strip of icons down its left edge, as VS Code's activity bar and
+        JetBrains' tool window bar do: the files, the changes to commit, and
+        what the running task is working from.
+
+    description:
+        It runs the full height of the window beneath the ribbon, to the left
+        of the body and the chat input along its bottom, the only sidebar on
+        the body's left. It is two parts side by side: the view bar, a narrow
+        strip of icons down its left edge, and beside it the view picked,
+        which holds that view's panels. Only one view shows at a time. The
+        sidebar's thin line, its resize handle, is down the right edge of the
+        view, where it meets the body.
+
+    viewBar:
+        The view bar is 40 pixels wide, the full height of the sidebar, on
+        the theme's darkest surface, a step darker than the views, with a
+        thin line in the theme's line colour down its right. It holds a
+        button per view, top to bottom, each 40 pixels square, its icon 20
+        pixels, centred, in the theme's muted text colour, and its tooltip
+        the view's name with its shortcut. The view showing has its icon in
+        the theme's text colour and a bar 2 pixels wide down the button's
+        left edge in the theme's accent, as VS Code marks it; hovering any
+        button shows the theme's hover behind it. The views, in order:
+
+        \\
+        - Files, a folder icon, Ctrl+Shift+E (Cmd+Shift+E on macOS)
+        - Git, a branch icon, Ctrl+Shift+G (Cmd+Shift+G on macOS), with a small badge on its icon counting the files changed and not yet committed, in the theme's accent, left out at none
+        - Run, a play-circle icon, Ctrl+Shift+R (Cmd+Shift+R on macOS), with a small spinner on its icon while a task runs, and a dot in the theme's accent once a task has started since the view was last shown
+        \\
+
+        Clicking a view's button shows that view. Clicking the button of the
+        view already showing collapses the sidebar to the view bar alone,
+        leaving the body the rest of the width, and clicking any button then
+        expands it again, showing that view at the width it had. Each view's
+        shortcut does the same as clicking its button. The bar is always
+        there, collapsed or not, and never scrolls; its buttons never take
+        keyboard focus away from the chat input but when pressed.
+
+    views:
+        Each view fills the sidebar beside the bar, its panels one above the
+        other as a sidebar holds them, each headed as every sidebar panel is,
+        with the view's name as the first panel's title:
+
+        \\
+        - Files: the FileTree alone, filling the view
+        - Git: the GitPanel alone, filling the view, its changes list taking the height the git panel's own sections leave, no longer squeezed beneath the file tree
+        - Run: the running task's ReferencedFilesPanel, UnderstandingPanel, and SubagentsPanel, one above the other, sized and resized as the Run view says, of the task selected in the MessageList
+        \\
+
+        While no task runs and none has run since the project was opened,
+        the Run view shows a single muted line, "No task running", centred.
+        Once a task has run, it keeps showing the last task's referenced
+        files, understanding, and subagents until the next starts, its panel
+        headings saying the task they are for is over, muted.
+
+        The Git panel and the file tree no longer share a view: the edge
+        that was dragged between them is gone, and each view has the whole
+        height. Everything else about each panel stays as its own spec says.
+
+    following:
+        Files shows to start with. While a task runs, the sidebar doesn't
+        switch views on its own: the Run button's spinner and dot say
+        something is happening, and the user picks it. The view showing,
+        whether the sidebar is collapsed, and its width are kept while the
+        application runs, the same for every project, and the views keep
+        their own scroll and selection when another is shown.
+
+    runView:
+        The Run view's panels sit one above the other: the referenced files
+        at the top, the understanding beneath them, and the subagents and
+        background commands last, along the bottom, beneath both. The
+        referenced files are only as tall as their rows need, up to half the
+        view's height, scrolling beyond that; the subagents and commands,
+        once there are any, are only as tall as their rows need, up to 30% of
+        the view's height; and the understanding fills what is left between
+        them, until they are resized. While the run has started no subagent
+        or background command, the understanding reaches the view's bottom.
+
+        The panels themselves can be resized, as the sidebar can. The edge
+        between one panel and the next, where the lower panel's header meets
+        the body of the one above, is a handle: dragging it up or down moves
+        that edge, the panel above growing as the one below shrinks, or the
+        other way, their contents laid out anew at each height as it changes.
+        Hovering the handle shows the resize cursor for up and down and a thin
+        line along the edge in the theme's accent, which goes once the pointer
+        leaves and the drag is over; otherwise no line is drawn there, the
+        change of colour still being the edge.
+
+        No panel can be dragged shorter than its header and one row of its
+        contents, 32 pixels below its header, nor can one be pushed out of
+        the sidebar. Once a panel has been dragged, it keeps its height rather
+        than being only as tall as its rows need: the referenced files no
+        longer fit their rows or stop at half the view, and scroll once
+        their rows are taller than the height they were given. The heights
+        they were dragged to are kept while the application runs, the next
+        time the Run view is shown again included, as its width is; when the
+        view's height changes, as when the window is resized, the
+        referenced files and the subagents keep their heights and the
+        understanding takes what is left, as far as the smallest heights
+        allow. Double-clicking the handle puts
+        both panels back as they start, the referenced files fitting their
+        rows again.
+
+        Neither panel has a permanent scrollbar, since its column would break
+        the 8 pixel inset: a panel shows its scrollbar only while its contents
+        are taller than it, and none otherwise. When it shows, it is the
+        same scrollbar as every other, as the @{Scrollbar} says.
+
+        A panel whose contents fit doesn't scroll at all, not even by a
+        pixel, at any display scale or window size: it counts as taller than
+        its contents need only once they overflow it by a whole pixel or
+        more, so what is left over from rounding to the display's pixels
+        never counts, and while they fit, it stays scrolled to its top. So
+        neither the wheel nor a drag moves rows that all fit, and no
+        scrollbar shows for them.
+

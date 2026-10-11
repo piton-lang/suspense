@@ -1,0 +1,5 @@
+- [Each Tasks tab row starts with a 4px rounded bar in its mode's colour, inset 4px left and 6px top and bottom](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [A running chain is expanded with a row per step, indented 16px and labelled in the step's mode colour](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [Chain's colour is purple, midway between Code's and Spec's](.claude/reference/scope/prompt-mode/modes/index.md#colours)
+- [An open Chain task lists its steps, each a row as in the list](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [A chain's row and step rows share one unbroken purple Chain bar in place of their own](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)

@@ -1,23 +1,17 @@
 use /lib
 use /ui
-from /scope/running-activity import RunningActivityScope
-from /ui/components/inset-panel import InsetPanelScope
+from /scope/running-activity import RunningActivity
+from /ui/components/inset-panel import InsetPanel
 
-export ui-component MinimizablePanelScope:
-    concept: {MinimizablePanelConcept}
-
-concept MinimizablePanelConcept:
+export ui-component MinimizablePanel:
     pitch:
         An inset panel for long-running work that can be put out of the way
         while the work carries on, and brought back to see how it went.
 
-    shape: {MinimizablePanelShape}
-
-shape MinimizablePanelShape:
     description:
-        An @{InsetPanelScope} with a minimize button beside the close button in
+        An @{InsetPanel} with a minimize button beside the close button in
         its header. Each use names its work, the command that opens it, and how
-        its work is listed among the @{RunningActivityScope}.
+        its work is listed among the @{RunningActivity}.
 
     minimizing:
         The minimize button, whose tooltip says the work keeps running, hides
@@ -31,7 +25,7 @@ shape MinimizablePanelShape:
 
     comingBack:
         A minimized panel comes back just as it was left, steps or results.
-        While its work runs, its row among the @{RunningActivityScope} brings it
+        While its work runs, its row among the @{RunningActivity} brings it
         back. At any time, its command brings back the minimized panel rather
         than opening another; each use says whether its command also starts its
         work again.
@@ -40,3 +34,4 @@ shape MinimizablePanelShape:
         Only closing the panel, with its close button, the dimmed window around
         it, or <Escape>, stops its work, and forgets it: its command then opens
         a fresh panel.
+

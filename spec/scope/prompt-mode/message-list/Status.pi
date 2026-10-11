@@ -1,10 +1,10 @@
 use /lib
 
-export shape MessageListStatusShape:
+export anchor MessageListStatus:
     description:
         A task's status is a coloured label that spells it out: "Building" in
         blue, "Compiling" in cyan, "Running" in yellow, "Done" in green,
-        "Failed" in red, "Cancelled" in orange, "Stopped" in grey for a chain that stopped short of a step it was to run, and "Not recorded" in grey for
+        "Failed" in red, "Cancelled" in orange, "Paused" in the theme's warning colour for a task paused to be resumed, as the PromptSending says, "Stopped" in grey for a chain that stopped short of a step it was to run, and "Not recorded" in grey for
         a task from the history with no record of its run. The labels are
         readable in both light and dark mode.
 
@@ -34,3 +34,28 @@ export shape MessageListStatusShape:
         in their own column of the heading, just before its buttons, so the
         list reads as a column of durations that can be compared at a
         glance, and a long one stands out.
+
+    outputRate:
+        While a run is writing a reply, its status shows how fast the harness
+        is writing beside its elapsed time, muted, in the same small tabular
+        figures, such as "42 tok/s": the reply's output tokens as they stream
+        in, counted from the harness's own usage as it reports it, or, where
+        it reports none mid-turn, estimated from the text streamed at about
+        four characters a token, over the time the current reply has taken so
+        far, from its first streamed text, smoothed over the last few seconds
+        so it doesn't flicker. It shows only while the harness is writing:
+        while it waits on a tool call, runs a command, or hasn't yet begun to
+        reply, the rate is left out, never shown as zero.
+
+        Once a run is over, its task header, and a question's answer, show
+        its average output rate in the same place, muted: the output tokens
+        the harness reported for the run divided by the time it spent waiting
+        on the model, as Claude Code reports it in its result's API duration,
+        or, for a harness that reports no such time, the time the application
+        measured from each turn's start to the usage reported at its end,
+        leaving out the time spent in tool calls. Its tooltip says how it was
+        worked out, "Output tokens over time waiting on the model" or
+        "Output tokens over time writing, as measured". A rate the harness
+        gives too little to work out, as a run that reported no output
+        tokens, or took no measurable time, is left out rather than shown as
+        zero.

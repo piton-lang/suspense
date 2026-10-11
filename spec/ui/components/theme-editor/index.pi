@@ -1,25 +1,19 @@
 use /lib
 use /ui
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/user-preferences import UserPreferencesScope
-from /ui/components/inset-panel import InsetPanelScope
-from /ui/components/scrollbar import ScrollbarScope
-from /ui/theme import ThemeScope
+from /scope/prompt-mode/modes import PromptModes
+from /scope/user-preferences import UserPreferences
+from /ui/components/inset-panel import InsetPanel
+from /ui/components/scrollbar import Scrollbar
+from /ui/theme import Theme
 
-export ui-component ThemeEditorScope:
-    concept: {ThemeEditorConcept}
-
-concept ThemeEditorConcept:
+export ui-component ThemeEditor:
     pitch:
-        Where the @{ThemeScope}'s base colour, and the colours of Code, Chain,
-        Spec, and Ask, of the @{PromptModesScope}, are chosen in place of the
+        Where the @{Theme}'s base colour, and the colours of Code, Chain,
+        Spec, and Ask, of the @{PromptModes}, are chosen in place of the
         theme's own, or put back to them.
 
-    shape: {ThemeEditorShape}
-
-shape ThemeEditorShape:
     description:
-        Shown in an @{InsetPanelScope} over the main window, in place of
+        Shown in an @{InsetPanel} over the main window, in place of
         anything else there, like the settings. It is headed "Theme", with a
         close button whose tooltip says it closes the theme editor, and a line
         beneath the heading; closing the panel any way an inset panel closes
@@ -60,7 +54,7 @@ shape ThemeEditorShape:
 
         Picking a colour chooses it for the mode showing: it shows
         everywhere at once, the row showing its new hex code, and is saved
-        among the @{UserPreferencesScope}. A colour that can't be saved
+        among the @{UserPreferences}. A colour that can't be saved
         still holds for the session, and fails quietly.
 
     resetAll:
@@ -72,3 +66,4 @@ shape ThemeEditorShape:
         The pickers follow the mode showing and its colours however they are
         changed, such as by the ribbon's Brightness slider crossing into the
         other mode, or a Reset.
+

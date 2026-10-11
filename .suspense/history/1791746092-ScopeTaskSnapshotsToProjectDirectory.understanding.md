@@ -1,0 +1,8 @@
+- [A task snapshot is of the project's working tree, taken when the harness starts the task and again when its run ends](.claude/reference/scope/project-data/index.md#task-snapshots)
+- [A snapshot is a git tree made with `git add -A` and `git write-tree` against the private index `.suspense/snapshot-index`, never touching the repository's own index, HEAD, or working tree](.claude/reference/scope/project-data/index.md#task-snapshots)
+- [The private index is kept between snapshots so only files whose timestamps changed are hashed again](.claude/reference/scope/project-data/index.md#task-snapshots)
+- [A snapshot follows `.gitignore`; ignored files, `.suspense`'s machine-only data among them, are never in it](.claude/reference/scope/project-data/index.md#task-snapshots)
+- [Snapshots are pinned under `refs/suspense/<task>/before` and `/after`; one that can't be taken is left out and the task shows no changed files](.claude/reference/scope/project-data/index.md#task-snapshots)
+- [Outside a git repository nothing is snapshotted or shown](.claude/reference/scope/project-data/index.md#task-snapshots)
+- [Everything inside an ignored folder is ignored too](.claude/reference/scope/git/index.md#statuses)
+- [Ignored files and folders are shown dimmed in the tree](.claude/reference/scope/git/index.md#colors)

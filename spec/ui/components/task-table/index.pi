@@ -1,33 +1,27 @@
 use /lib
 use /ui/components/table/Table
-from ./CollapsedSteps import TaskTableCollapsedStepsShape
-from ./Notices import TaskTableNoticesShape
-from ./Outcome import TaskTableOutcomeShape
-from ./Replies import TaskTableRepliesShape
-from ./Scrolling import TaskTableScrollingShape
-from ./Sent import TaskTableSentShape
-from ./Status import TaskTableStatusShape
-from ./Streaming import TaskTableStreamingShape
-from ./ToolCalls import TaskTableToolCallsShape
-from ./Types import TaskTableTypesShape
-from /ui/components/table import TableScope
+from ./CollapsedSteps import TaskTableCollapsedSteps
+from ./Notices import TaskTableNotices
+from ./Outcome import TaskTableOutcome
+from ./Replies import TaskTableReplies
+from ./Scrolling import TaskTableScrolling
+from ./Sent import TaskTableSent
+from ./Status import TaskTableStatus
+from ./Streaming import TaskTableStreaming
+from ./ToolCalls import TaskTableToolCalls
+from ./Types import TaskTableTypes
+from /ui/components/table import Table
 
-export table TaskTableScope:
+export table TaskTable:
     columns: Type, Output, and Status
     collapses: step
 
-    concept: {TaskTableConcept}
-
-concept TaskTableConcept:
     pitch:
         The output of one run of the harness, as a table of everything it did,
         filling in as it does it.
 
-    shape: {TaskTableShape}
-
-shape TaskTableShape:
     description:
-        A @{TableScope} with Type, Output, and Status columns, with one row per
+        A @{Table} with Type, Output, and Status columns, with one row per
         thing the harness did, in order: each piece of reply text, each tool
         call, and any error. It is the same table wherever a run's output is
         shown, a task, a previous task, the palette's search for a file, or a
@@ -35,16 +29,16 @@ shape TaskTableShape:
         it sits. The answers to questions are the exception: they read as
         chat replies, as the Ask conversation says.
 
-    types: {TaskTableTypesShape}
-    status: {TaskTableStatusShape}
-    replies: {TaskTableRepliesShape}
-    outcome: {TaskTableOutcomeShape}
-    toolCalls: {TaskTableToolCallsShape}
-    streaming: {TaskTableStreamingShape}
-    scrolling: {TaskTableScrollingShape}
-    collapsedSteps: {TaskTableCollapsedStepsShape}
-    sent: {TaskTableSentShape}
-    notices: {TaskTableNoticesShape}
+    types: {TaskTableTypes}
+    status: {TaskTableStatus}
+    replies: {TaskTableReplies}
+    outcome: {TaskTableOutcome}
+    toolCalls: {TaskTableToolCalls}
+    streaming: {TaskTableStreaming}
+    scrolling: {TaskTableScrolling}
+    collapsedSteps: {TaskTableCollapsedSteps}
+    sent: {TaskTableSent}
+    notices: {TaskTableNotices}
 
     legibility:
         The output from a realtime agent should be readable and meaningful.
@@ -55,3 +49,4 @@ shape TaskTableShape:
         needs, and the space inside the cells and around the table tightens as
         the table narrows, so the output is never squeezed into a sliver
         between padding and empty space.
+

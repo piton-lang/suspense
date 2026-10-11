@@ -1,32 +1,27 @@
 use /lib
 use /ui
 use /ui/components/sidebar/Panel
-from /scope/git import GitScope
-from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
-from /scope/project-data import ProjectDataScope
-from /scope/project-directory import ProjectDirectoryScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /ui/components/file-tree import FileTreeScope
-from /ui/components/growing-text-input import GrowingTextInputScope
-from /ui/components/scrollbar import ScrollbarScope
-from /ui/components/sidebar import SidebarScope
+from /ui/components/left-sidebar import LeftSidebar
+from /scope/git import Git
+from /scope/harness-integration/baked-prompts import BakedSystemPrompts
+from /scope/project-data import ProjectData
+from /scope/project-directory import ProjectDirectory
+from /scope/prompt-mode/modes import PromptModes
+from /ui/components/file-tree import FileTree
+from /ui/components/growing-text-input import GrowingTextInput
+from /ui/components/scrollbar import Scrollbar
+from /ui/components/sidebar import Sidebar
 
-export panel GitPanelScope:
-    height: fit
+export panel GitPanel:
+    height: fill
     scrolls: true
 
-    concept: {GitPanelConcept}
-
-concept GitPanelConcept:
     pitch:
         A very basic git panel for the repository the
-        ${ProjectDirectoryScope} is in, as the @{GitScope} knows it: see what
+        ${ProjectDirectory} is in, as the @{Git} knows it: see what
         has changed at a glance, write a commit message, commit, push, and
         pull.
 
-    shape: {GitPanelShape}
-
-shape GitPanelShape:
     description:
         A compact panel. It is shown only while the project is inside a git
         repository.
@@ -40,30 +35,23 @@ shape GitPanelShape:
         header and the body, nor between the file tree and the header: the
         change of colour is the edge. The header has, along its bottom, the 1
         pixel border in the body's colour, #222222 in dark mode, that every
-        panel header has, as the @{SidebarScope} says. Every box and button in it is square,
+        panel header has, as the @{Sidebar} says. Every box and button in it is square,
         with no rounded corners and no border, and the Pull and Push buttons
         are square too.
 
     sizing:
-        The panel is only as tall as its header and body need, along the
-        bottom of its sidebar, up to half the sidebar's height; the file tree
-        takes the rest. It is never taller than its contents need, however it
-        is sized: as its contents grow, such as when a commit note is added,
-        it grows with them up to its most, its body scrolling beyond that,
-        and as they shrink, such as when the notes are cleared by a commit,
-        it shrinks straight back down to fit them.
-
-        The edge between the file tree and the panel's header can be dragged
-        to resize it: dragged up, the panel may grow up to where the edge was
-        dragged, but no taller than its contents need, and dragged down, it
-        shrinks, as far as its header alone. The file tree always keeps at
-        least 80 pixels. Once dragged, the panel's most is the height it was
-        dragged to rather than half the sidebar, and it stays that height as
-        the window is resized, giving way to the file tree's least height
-        when the window is too short. The edge shows no line at rest, since
-        the change of colour is the edge: while the pointer is over it, or it
-        is being dragged, a line in the accent shows along it, and the cursor
-        is a row-resize cursor.
+        The panel fills the left sidebar's Git view on its own, as the
+        @{LeftSidebar} says, never sharing it with the file tree, so
+        there is no edge between them to drag. Its header, the branch with
+        Pull and Push, sits at the view's top, the summary beneath it, the
+        message box, Generate, and Commit along the view's bottom, and the
+        commit notes fill the height between, however tall the window. It
+        fills the sidebar's whole height, from beneath the ribbon to the
+        window's bottom, whatever its contents: never only as tall as they
+        need, and never leaving the rest of the view empty beneath it. With
+        few notes or none, the space between the summary and the message
+        box is simply empty, on the body's colour, and the message box,
+        Generate, and Commit stay along the bottom.
 
     scrolling:
         When the panel is shorter than its contents, only the commit notes
@@ -71,8 +59,14 @@ shape GitPanelShape:
         and the summary stays beneath it; the message box, Generate, and
         Commit stay fixed along its bottom, always in view, however many notes
         there are. The notes, between the summary and the message box, fill
-        what is left and scroll within it, with a @{ScrollbarScope} along
-        their right only while they overflow. Everything else is always as
+        what is left and scroll within it, with a @{Scrollbar} along
+        their right only while they overflow. While the scrollbar shows,
+        there are 6 pixels of the body's own colour between the notes'
+        right edge and the scrollbar's left, so no note's box ever touches
+        the scrollbar or runs its colour into the scrollbar's border: the
+        notes narrow by the scrollbar's width and that gap, rewrapping, and
+        widen back to the body's padding when it goes. The scrollbar sits in
+        the body's right padding, against the panel's right edge. Everything else is always as
         tall as it needs, so shrinking the panel takes room from the notes
         first, down to nothing; only once the notes have no room left does the
         rest give way, the summary last before the header. The body's colour
@@ -80,18 +74,18 @@ shape GitPanelShape:
 
     branch:
         The top row shows a branch icon, then the branch from the
-        @{GitScope}, or "Detached HEAD", in regular text, beside how many
+        @{Git}, or "Detached HEAD", in regular text, beside how many
         commits it is ahead of its upstream (↑) and behind it (↓), muted, each
         only when not zero. At the right end are a Pull button, a
         cloud-download icon, and a Push button, a cloud-upload icon, ghost
         icon buttons with tooltips.
 
     summary:
-        Below the branch, a line counts the @{GitScope}'s changes, leaving out
+        Below the branch, a line counts the @{Git}'s changes, leaving out
         any kind with none, as "2 modified · 1 untracked", or "No changes".
         At the right end of that line, how many lines were added (+, in
-        green) and removed (−, in red). The count is in small, muted text. The files themselves are not listed, since the @{FileTreeScope}
-        shows them. The summary refreshes as the @{GitScope} does, and
+        green) and removed (−, in red). The count is in small, muted text. The files themselves are not listed, since the @{FileTree}
+        shows them. The summary refreshes as the @{Git} does, and
         straight after anything the panel does.
 
     commitNotes:
@@ -100,17 +94,17 @@ shape GitPanelShape:
         text that wraps onto as many lines as it needs, growing to fit it, and
         can be edited; <Enter> in a note starts a new line within it. A
         small button to remove it shows at its top right while it is hovered. Each task that adds a note, as the
-        @{PromptModesScope} says, adds a one-line summary of what it changed,
+        @{PromptModes} says, adds a one-line summary of what it changed,
         once the harness has written it, quickly, in the same way as a written
         message: from what the task asked and the harness's own summary of what
         it did, at most 72 characters in the imperative mood, as
-        commit-note.pi, of the @{BakedSystemPromptsScope}, asks. Notes are
-        saved with the project's data, as the @{ProjectDataScope} says, as they
+        commit-note.pi, of the @{BakedSystemPrompts}, asks. Notes are
+        saved with the project's data, as the @{ProjectData} says, as they
         are added, edited, and removed, so they survive a restart, and are never
         themselves committed.
 
     message:
-        A commit message box, a @{GrowingTextInputScope} growing to 10 rows at
+        A commit message box, a @{GrowingTextInput} growing to 10 rows at
         most, so it starts at a single row. On the tree's darkest surface, #111111 in dark mode,
         in the editor's monospace font, it reads "Commit Message…" while
         empty.
@@ -124,7 +118,7 @@ shape GitPanelShape:
         as much of the diff as fits in a small, fixed amount. The message is a
         summary line of at most 72 characters in the imperative mood,
         followed, only if it helps, by a few short bullet points, as
-        commit-message.pi, of the @{BakedSystemPromptsScope}, asks. The button
+        commit-message.pi, of the @{BakedSystemPrompts}, asks. The button
         is disabled while there are no changes.
 
     committing:
@@ -155,3 +149,4 @@ shape GitPanelShape:
         pushing, and pulling say so in a notification when they succeed; a pull
         says whether it was already up to date, pulled, or pulled and merged.
         Anything that fails says why in an error notification.
+

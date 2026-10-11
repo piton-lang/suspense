@@ -1,53 +1,44 @@
 use /lib
 use /ui
-from /scope/application/Body import BodyScope
-from /scope/harness-integration import HarnessIntegrationScope
-from /scope/open-projects import OpenProjectsScope
-from /scope/prompt-mode/chat-input import ChatInputScope
-from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/prompt-mode/sending import PromptSendingScope
-from /ui/components/scrollbar import ScrollbarScope
-from /ui/components/selection-popover import SelectionPopoverScope
-from /ui/components/task-table import TaskTableScope
-from /ui/theme import ThemeScope
+from /scope/prompt-mode/message-list import MessageList
+from /scope/application/Body import Body
+from /scope/harness-integration import HarnessIntegration
+from /scope/open-projects import OpenProjects
+from /scope/prompt-mode/chat-input import ChatInput
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPrompts
+from /scope/prompt-mode/modes import PromptModes
+from /scope/prompt-mode/sending import PromptSending
+from /ui/components/scrollbar import Scrollbar
+from /ui/components/selection-popover import SelectionPopover
+from /ui/components/task-table import TaskTable
+from /ui/theme import Theme
 
-export ui-component AskConversationScope:
-    concept: {AskConversationConcept}
-
-concept AskConversationConcept:
+export ui-component AskConversation:
     pitch:
         The questions asked from the Ask tab, read as a chat: every question
         and its answer, one after another, in a pane of its own beside the
         tasks, with each new conversation clearly marked where it begins.
 
-    shape: {AskConversationShape}
-
-shape AskConversationShape:
     description:
-        While the @{ChatInputScope}'s Ask tab is selected, the
-        @{BodyScope} splits in two, side by side, above the chat input: the
-        body's tab bar and the selected tab's contents on the left, and this
-        pane on the right. It goes when another tab is selected, the left
-        side taking the body's full width again, and comes back as it was,
-        scrolled where it was, when Ask is selected again. Nothing slides as
-        it comes and goes.
+        While the @{ChatInput}'s Ask tab is selected, the conversation
+        fills the body's Chat tab, beneath the tab bar and above the chat
+        input, in place of the message list, as the @{Body} says, never
+        sharing the body with it or with anything else. It goes when another
+        mode's tab is selected, the message list coming back in its place,
+        and comes back as it was, scrolled where it was, when Ask is
+        selected again. Nothing slides as it comes and goes.
 
-        It is drawn in the @{ThemeScope}'s roles, on the same base surface as
-        the selected tab's contents beside it, with the theme's line between
-        the two halves. Along its top runs a header as tall as the body's tab
-        bar, 32 pixels, on the tab bar's background with the theme's line
-        beneath it, reading "Questions" at its left, with 12 pixels of
-        padding, and at its right how many questions it holds, muted.
-
-    split:
-        The pane starts at half the width of the space it shares with the
-        left side. The line between them is a resize edge: hovering it shows
-        the resize cursor for left and right and a thin line in the theme's
-        accent, and dragging it moves it, following the pointer exactly, from
-        25% to 75% of that space, both sides laid out anew at each width. The
-        width it is dragged to is kept for as long as the application runs,
-        for every project, and none of it is saved.
+        It is drawn in the @{Theme}'s roles, on the same base surface as
+        the message list. Along its top runs a header 32 pixels tall, on the
+        tab bar's background with the theme's line beneath it, reading
+        "Questions" at its left, with 12 pixels of padding, and at its right
+        how many questions it holds, muted. Beneath it, the
+        conversation spans the full width of the space it fills, from the
+        body's left edge to its right, or to the right sidebar while it is
+        there, its questions and answers laid out across all of it with
+        only its own padding at either side, never set in a narrower column,
+        centred or not, and never leaving empty space beside it. It widens
+        and narrows with the body as the window or a sidebar is resized.
 
     conversation:
         The pane lists every question of the project, those saved with it
@@ -55,13 +46,13 @@ shape AskConversationShape:
         newest at the bottom, the way a chat reads. Each is a message and its
         reply. The question is shown as it was typed, not as it was compiled,
         in a box on the theme's raised surface, faintly tinted Ask's colour,
-        as the @{PromptModesScope} colours it, with corners rounded 6 pixels,
+        as the @{PromptModes} colours it, with corners rounded 6 pixels,
         set against the pane's right edge and at most 80% of its width,
         wrapping within that, with anything it was sent with, attached text
         and images, listed beneath its text as the chat input lists them.
         Beneath the box, at its right, sits a small muted line with the time
         it was asked and, once it is finished, a Resend button, which asks the
-        question again as the @{PromptSendingScope} says, the new question
+        question again as the @{PromptSending} says, the new question
         coming in at the bottom.
 
         Its answer follows beneath it, as a chat reply rather than a task:
@@ -70,7 +61,12 @@ shape AskConversationShape:
         did.
 
     answers:
-        An answer is not drawn as a @{TaskTableScope}: it has no columns, no
+        While an answer is being written, its status line shows the output
+        rate beside it, and once it is over, a small muted line at its foot
+        gives its average output rate, as the @{MessageList}'s status says
+        of a task.
+
+        An answer is not drawn as a @{TaskTable}: it has no columns, no
         Type badges or Status labels, and no lines between rows. What is
         shown is the answer's reply text, the reply rows after the harness's
         last tool call, as the table's collapsed steps count them, rendered
@@ -87,7 +83,7 @@ shape AskConversationShape:
         where it can't be summed up by kind. Clicking it expands the steps
         in place, beneath it and above the answer, as compact muted lines,
         one per step: a tool call as its tool's name, muted, then its most
-        telling argument, shortened as the @{TaskTableScope}'s tool calls
+        telling argument, shortened as the @{TaskTable}'s tool calls
         are, and reply text between them as muted markdown; clicking it again
         collapses them. It starts collapsed, and stays as it was left for as
         long as the application runs. An answer whose harness did nothing
@@ -118,8 +114,8 @@ shape AskConversationShape:
         An answer can hand back a prompt for the user to send, as a fenced
         code block whose info string is `suspense-prompt`, followed by a
         space and the mode it is meant for, `code`, `chain`, `spec`, `ask`, or
-        `freeform`, as the @{PromptModesScope} names them, and holding the
-        prompt's text, as the card format of the @{ModeSystemPromptsScope}
+        `freeform`, as the @{PromptModes} names them, and holding the
+        prompt's text, as the card format of the @{ModeSystemPrompts}
         tells the harness. Such a block
         is never shown as a code block. It is shown in the answer, where it
         stands among the reply's markdown, as a prompt card: a box on the
@@ -141,7 +137,7 @@ shape AskConversationShape:
         narrow: Copy, with a copy icon, which puts the prompt's text on the
         clipboard; Edit, with a pencil icon, as below; and then "Send to
         Code", "Send to Chain", and "Send to Spec", in that order, each with
-        an arrow icon and in its mode's colour, as the @{PromptModesScope}
+        an arrow icon and in its mode's colour, as the @{PromptModes}
         colours them. The send button for the card's own mode, where it is
         one of those three, is filled in its colour, and the others are ghost
         buttons in theirs, so the one the answer meant stands out while every
@@ -150,8 +146,8 @@ shape AskConversationShape:
         the three after it as ghosts.
 
         Each send button sends the prompt's text at once, in its mode, as
-        though it had been written in the @{ChatInputScope} on that tab and
-        sent, as the @{PromptSendingScope} says, the Chain button sending it as
+        though it had been written in the @{ChatInput} on that tab and
+        sent, as the @{PromptSending} says, the Chain button sending it as
         a Chain prompt: a task is compiled anew, building the spec first,
         and queues while its lane is busy, and a question runs at once. It
         is sent with the Slice toggle as it stands, with nothing attached,
@@ -199,7 +195,7 @@ shape AskConversationShape:
 
         Clicking an answer asks it at once as the next question, carrying on
         the conversation of the question it answers, as asking any question
-        does, as the @{PromptSendingScope} says, its text the card's question
+        does, as the @{PromptSending} says, its text the card's question
         quoted as a Markdown block quote, then the answer picked on a
         paragraph of its own. The new question comes in at the bottom, as
         any does. The card then shows the answer picked as chosen, in Ask's
@@ -218,10 +214,10 @@ shape AskConversationShape:
         colour at either side of a label reading "New conversation", then,
         muted, the date and time its first question was asked. A question
         starts a new conversation as its saved record says, in its hidden
-        anchor's newConversation, as the @{ChatInputScope} says; a question
+        anchor's newConversation, as the @{ChatInput} says; a question
         saved before that was recorded carries on the one above it, unless it
         is the first. A question asked while another was running carries on a
-        copy of that conversation, as the @{HarnessIntegrationScope} says, and
+        copy of that conversation, as the @{HarnessIntegration} says, and
         is not marked.
 
         Pressing New conversation for questions puts the divider in at the
@@ -232,7 +228,7 @@ shape AskConversationShape:
         second divider.
 
     scrolling:
-        The pane scrolls, with a @{ScrollbarScope}, and opens scrolled to the
+        The pane scrolls, with a @{Scrollbar}, and opens scrolled to the
         bottom, on the newest question, the first time it is shown. While it
         is at the bottom it stays locked there, following each question asked
         and each answer as it grows; scrolling up unlocks it, and scrolling
@@ -254,7 +250,7 @@ shape AskConversationShape:
     selectingText:
         The text of any question, answer, or expanded step in the pane can be
         selected by dragging across it, as any text can. A drag that selects
-        text ending within the pane shows a @{SelectionPopoverScope} with two
+        text ending within the pane shows a @{SelectionPopover} with two
         buttons, "Copy", with a copy icon, and "Attach to prompt", with a
         paperclip icon. Copy puts the selected text on the clipboard; Attach to prompt
         adds it to the prompt as an attachment. Either one clears the
@@ -272,7 +268,8 @@ shape AskConversationShape:
 
     projects:
         The pane shows the questions of the project on screen, as the
-        @{OpenProjectsScope} says, and each project keeps how far its pane was
+        @{OpenProjects} says, and each project keeps how far its pane was
         scrolled and whether it was locked to the bottom while the
         application runs; questions of other projects carry on running in the
         background.
+

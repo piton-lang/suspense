@@ -2,21 +2,15 @@ use /lib
 use /ui
 from ./Panel export *
 from ./Sidebar export *
-from /ui/components/project-sidebar import ProjectSidebarScope
-from /ui/components/right-sidebar import RightSidebarScope
-from /ui/components/scrollbar import ScrollbarScope
+from /ui/components/left-sidebar import LeftSidebar
+from /ui/components/right-sidebar import RightSidebar
+from /ui/components/scrollbar import Scrollbar
 
-export ui-component SidebarScope:
-    concept: {SidebarConcept}
-
-concept SidebarConcept:
+export ui-component Sidebar:
     pitch:
         A column along the left or right of the main window, holding panels
         one above the other, each a tool for the work beside it.
 
-    shape: {SidebarShape}
-
-shape SidebarShape:
     description:
         Every sidebar is a sidebar, as its own scope says: it names the side it
         runs along, how wide it starts and how narrow it can be dragged, and
@@ -27,8 +21,8 @@ shape SidebarShape:
         between one panel and the next.
 
     sidebars:
-        - left: the @{ProjectSidebarScope}, to the left of the body, for finding your way around the project
-        - right: the @{RightSidebarScope}, at the right of the message list while a task runs
+        - left: the @{LeftSidebar}, to the left of the body, its views of the files, the changes to commit, and the running task picked from a bar of icons down its left
+        - right: the @{RightSidebar}, at the right of the message list, holding the tasks, while a task runs or is queued, or it is opened by hand
 
     panels:
         A panel is one tool in a sidebar, as its own scope says. What it is
@@ -37,7 +31,7 @@ shape SidebarShape:
         - its title: a panel with a title has a header reading it; one without has no header
         - whether it is counted: a counted panel's header shows how many rows it lists, muted, at its right
         - its height: a panel fills the height its sidebar's other panels leave, fits its contents, or shares the height left with the other panels that share it, by a line dragged between them
-        - whether it scrolls: one that scrolls has a @{ScrollbarScope} of its own when its contents are taller than it
+        - whether it scrolls: one that scrolls has a @{Scrollbar} of its own when its contents are taller than it
 
     headers:
         A panel's header is slightly contrasting to the panel's body: the
@@ -56,3 +50,4 @@ shape SidebarShape:
         drawn at every display scale and in light and dark mode alike, and
         follows the body's colour wherever it changes, as when the theme's
         brightness is changed.
+

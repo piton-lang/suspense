@@ -240,6 +240,10 @@ mod tests {
         assert_eq!(of("notes.md", false), Some(Status::Untracked));
         assert_eq!(of("build", true), Some(Status::Ignored));
         assert_eq!(of("build/out", false), Some(Status::Ignored));
+        // Learnt folder by folder: the ignored folder is one entry, never
+        // every file inside it.
+        assert_eq!(status.ignored_folders, [dir.join("build")]);
+        assert!(!status.paths.contains_key(&dir.join("build/out")), "the ignored folder's files were listed");
         assert_eq!(of(".gitignore", false), None);
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -1,9 +1,9 @@
 use /lib
 use /ui
 use /ui/components/sidebar/Panel
-from .. import RightSidebarScope
-from /scope/open-file import OpenFileScope
-from /scope/project-locations import ProjectLocationsScope
+from /ui/components/left-sidebar import LeftSidebar
+from /scope/open-file import OpenFile
+from /scope/project-locations import ProjectLocations
 
 export panel ReferencedFilesPanel:
     title: Referenced Spec
@@ -12,16 +12,10 @@ export panel ReferencedFilesPanel:
     scrolls: true
     scrollbar: overflowing
 
-    concept: {ReferencedFilesConcept}
-
-concept ReferencedFilesConcept:
     pitch:
-        The top panel of the @{RightSidebarScope}: the spec files the
+        The top panel of the @{LeftSidebar}'s Run view: the spec files the
         running task references.
 
-    shape: {ReferencedFilesShape}
-
-shape ReferencedFilesShape:
     description:
         One row per spec file the running task references, each listed once: first those its prompt imports from, then
         the rest in the order they are first referenced. The rows sit 8
@@ -35,7 +29,7 @@ shape ReferencedFilesShape:
 
     referencing:
         A spec file is one in the spec location, as the
-        @{ProjectLocationsScope} says; a compiled spec file is one under
+        @{ProjectLocations} says; a compiled spec file is one under
         `.claude/reference`, which stands for part of the spec. Both are
         listed, and files anywhere else are not. A file's full path counts
         however long it is, and a relative path is read from the project
@@ -64,6 +58,7 @@ shape ReferencedFilesShape:
         a subagent referenced shows the same way, with "Read by a subagent" in
         its tooltip beneath its full path.
 
-        Clicking a row opens its file, as the @{OpenFileScope} says. While no
+        Clicking a row opens its file, as the @{OpenFile} says. While no
         spec file is referenced yet, the list reads
         "No spec files referenced yet", muted.
+

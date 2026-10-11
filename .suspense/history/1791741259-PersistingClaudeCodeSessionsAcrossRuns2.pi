@@ -1,0 +1,64 @@
+
+export anchor PersistingClaudeCodeSessionsAcrossRuns2:
+    userPrompt:
+        \\\
+        A conversation the application carries on never expires on its own. Every Claude Code run the application starts, on the host or in a container, is run with its transcript cleanup turned off, so Claude Code never deletes a session for its age. When a run is over, the application copies the harness's session for its conversation into the project's data, beside the run's history record; before carrying on a conversation whose session the harness no longer has, it puts that copy back where the harness looks for it, so the conversation carries on with its context rather than starting a new one. A conversation is only started afresh when no copy of it exists, or when the user leaves it for a new one. Codex and OpenCode sessions are kept and restored the same way, wherever each harness keeps them.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            A conversation the application carries on never expires on its own. Every Claude Code run the application starts, on the host or in a container, is run with its transcript cleanup turned off, so Claude Code never deletes a session for its age. When a run is over, the application copies the harness's session for its conversation into the project's data, beside the run's history record; before carrying on a conversation whose session the harness no longer has, it puts that copy back where the harness looks for it, so the conversation carries on with its context rather than starting a new one. A conversation is only started afresh when no copy of it exists, or when the user leaves it for a new one. Codex and OpenCode sessions are kept and restored the same way, wherever each harness keeps them.
+            \\\
+        result:
+            \\\
+            I added your session-keeping rules to the harness's Context section, so conversations never expire on their own. `piton check` reports no problems and `piton build` wrote 83 files.
+
+            - **No cleanup:** every Claude Code run, on the host or in a container, has transcript cleanup turned off, with `cleanupPeriodDays` set so nothing is ever old enough to delete. The setting is passed with the run and never written into your own Claude settings.
+            - **Copied after each run:** however a run ends, its conversation's session is copied into the project's data, in a `.session` folder beside the run's history record. Each copy replaces the conversation's previous one.
+            - **Restored before resuming:** if the harness no longer has a conversation's session, the latest copy is put back under the same session id, and the conversation carries on with its context.
+            - **Starting afresh:** this happens only if no copy exists or it can't be put back. A conversation you left for a new one is never restored.
+            - **Codex and OpenCode:** their sessions are kept and restored the same way, from wherever each one keeps them.
+            - **Where restores go:** container runs restore into the sessions folder they mount, and host runs into the harness's own folder.
+
+            **Choices to check:**
+            - I named the `.session` folder.
+            - I chose the `cleanupPeriodDays` approach. The code step should confirm Claude Code honours that setting when it's passed with the run, and pick the exact value that disables cleanup.
+
+            **Anchors the code should follow:** `HarnessIntegrationScope` `#context`, `ProjectDataScope` `#contents`, and `ContainerEnvironmentScope` `#volumes` for the mounted sessions folder.
+            \\\
+
+    sentFrom: PersistingClaudeCodeSessionsAcrossRuns
+
+    model: opus

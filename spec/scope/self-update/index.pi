@@ -1,24 +1,18 @@
 use /lib
-from /scope/application/MainWindow import MainWindowScope
-from /scope/edge-releases import EdgeReleasesScope
-from /scope/open-file import OpenFileScope
-from /scope/settings-window import SettingsWindowScope
-from /scope/user-preferences import UserPreferencesScope
+from /scope/application/MainWindow import MainWindow
+from /scope/edge-releases import EdgeReleases
+from /scope/open-file import OpenFile
+from /scope/settings-window import SettingsWindow
+from /scope/user-preferences import UserPreferences
 
-export scope SelfUpdateScope:
-    concept: {SelfUpdateConcept}
-
-concept SelfUpdateConcept:
+export feature SelfUpdate:
     pitch:
         Suspense keeps itself up to date: it looks for a newer edge release,
         downloads it in the background, and puts it in place of its own
         binary when it restarts, so the newest build is only a restart away.
 
-    shape: {SelfUpdateShape}
-
-shape SelfUpdateShape:
     description:
-        Updates come from the edge releases, as the @{EdgeReleasesScope}
+        Updates come from the edge releases, as the @{EdgeReleases}
         says, published in the GitHub repository the running build was
         published from, which it knows because that is baked into it. Only
         such a build updates itself. A build made anywhere else, as on a
@@ -38,7 +32,7 @@ shape SelfUpdateShape:
         hours while it runs, in the background, never holding up anything
         else, and only while "Check for updates automatically" is on, as it
         is until turned off. That choice is remembered for the user, as the
-        @{UserPreferencesScope} says. Check for updates, in the Updates
+        @{UserPreferences} says. Check for updates, in the Updates
         section, checks straight away, whether it is on or not. A check that
         can't be made, as with no network or GitHub refusing it, is quiet
         when automatic, trying again at the next, and says why when asked
@@ -70,7 +64,7 @@ shape SelfUpdateShape:
         Later only closes the notification; the update stays staged, and is
         put in place whenever Suspense next quits.
 
-        Restart quits as quitting does, as the @{MainWindowScope} says,
+        Restart quits as quitting does, as the @{MainWindow} says,
         asking first while work is running, and doing nothing more if the
         quit is cancelled, then starts Suspense again from the same path once
         the update is in place. However Suspense quits, a staged update is
@@ -112,7 +106,7 @@ shape SelfUpdateShape:
         as it was, or quit with the update in place and the new one started.
 
     updatesSection:
-        The @{SettingsWindowScope} has an "Updates" section. It says the
+        The @{SettingsWindow} has an "Updates" section. It says the
         running version, as "Suspense 0.1.42", and where it can't update
         itself, as for a build made elsewhere, why, and offers nothing else.
         Otherwise it shows a checkbox reading "Check for updates
@@ -164,7 +158,7 @@ shape SelfUpdateShape:
     diagnostics:
         Suspense keeps a log of what updating does, `updates.log` in its own
         data directory, beside its preferences, as the
-        @{UserPreferencesScope} keeps them: one line per step, with the time,
+        @{UserPreferences} keeps them: one line per step, with the time,
         each check with the repository and running version it checked for,
         the releases it found and the one it took or why it took none, each
         download with its asset, size, and digest check, each staging, each
@@ -178,6 +172,7 @@ shape SelfUpdateShape:
         build, the running binary's path and whether its directory can be
         written, the last check's time and the newest release it found, and
         what is staged, if anything, with a "Show log" button that opens
-        `updates.log` as the @{OpenFileScope} opens a file, and a "Copy"
+        `updates.log` as the @{OpenFile} opens a file, and a "Copy"
         button that puts all of it, with the log's last 50 lines, on the
         clipboard, for a bug report.
+

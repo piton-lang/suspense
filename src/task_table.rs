@@ -956,6 +956,7 @@ impl Reply {
             | HarnessEvent::CacheWrites { .. }
             | HarnessEvent::Limits(_)
             | HarnessEvent::Model(_)
+            | HarnessEvent::ApiTime(_)
             | HarnessEvent::ToolCalled { .. }
             | HarnessEvent::ToolOutput { .. }
             | HarnessEvent::SubagentStarted { .. }
@@ -971,6 +972,14 @@ impl Reply {
     pub(crate) fn stop(&mut self) {
         self.done = true;
         self.settle_tools(ToolState::Failed);
+        self.refresh();
+    }
+
+    /// Carries on a run that was paused: its output goes on beneath what it
+    /// had.
+    pub(crate) fn resume(&mut self) {
+        self.done = false;
+        self.outcome.clear();
         self.refresh();
     }
 

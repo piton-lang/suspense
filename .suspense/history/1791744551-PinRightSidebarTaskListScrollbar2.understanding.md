@@ -1,0 +1,8 @@
+- [The list's scrollbar is an 18px column along the tab's right edge, always shown, even with nothing to scroll](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [It runs the tab's full height, top to bottom, beside the pinned headings as well as the rows](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [It never scrolls with the list, never shows only on hover or scroll, and is never laid over the rows](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Headings, pinned or in place, day dividers, and every row end at the column's left edge, never beneath it](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Its thumb is sized and placed from the whole list's height, as though every row were drawn](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Scrolled to its bottom, the last row shows whole; the scrollbar's room is never counted as part of the list](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [It has no lock-to-bottom button, since the list isn't output that keeps arriving](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [The column has 17px up and down buttons at its top and bottom, and is the list's only scrollbar](.claude/reference/ui/components/scrollbar/index.md#buttons)

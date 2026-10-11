@@ -1,41 +1,35 @@
 use /lib
 use /ui
-from /ui/components/right-sidebar import TasksTabScope
-from ../editor import EditorScope
-from ../no-project import NoProjectStateScope
-from ../open-file import OpenFileScope
+from /ui/components/right-sidebar import TasksTab
+from ../editor import Editor
+from ../no-project import NoProjectState
+from ../open-file import OpenFile
 from ../prompt-mode import PromptEditor
-from ../prompt-mode/ask-conversation import AskConversationScope
-from ../prompt-mode/chat-input import ChatInputScope
+from ../prompt-mode/ask-conversation import AskConversation
+from ../prompt-mode/chat-input import ChatInput
 from ../prompt-mode/message-list import MessageList
 from /ui/behaviours/drag-reorder import DragReorderBehaviour
-from /ui/components/file-tree import FileTreeScope
-from /ui/components/inset-panel import InsetPanelScope
-from /ui/components/project-sidebar import ProjectSidebarScope
-from /ui/components/ribbon import RibbonScope
-from /ui/components/right-sidebar import RightSidebarScope
+from /ui/components/file-tree import FileTree
+from /ui/components/inset-panel import InsetPanel
+from /ui/components/left-sidebar import LeftSidebar
+from /ui/components/ribbon import Ribbon
+from /ui/components/right-sidebar import RightSidebar
 
-export ui-component BodyScope:
-    concept: {BodyConcept}
-
-concept BodyConcept:
+export ui-component Body:
     pitch:
         The main window's body: the area to the right of the project sidebar,
         where the tasks sent to the harness, and the files opened in tabs
         beside them, are shown, and the chat input they are sent from.
 
-    shape: {BodyShape}
-
-shape BodyShape:
     description:
-        Beneath the @{RibbonScope}, to the right of the
-        @{ProjectSidebarScope}, which runs the full height beside it, and
+        Beneath the @{Ribbon}, to the right of the
+        @{LeftSidebar}, which runs the full height beside it, and
         reaching the window's right edge. It is part of the @{PromptEditor}.
 
-        The @{ChatInputScope} lives within the body, along its bottom: its
+        The @{ChatInput} lives within the body, along its bottom: its
         left edge against the project sidebar, and above it, beneath the
         body's tab bar, the selected tab's contents: the message list, or an
-        open file. While a task runs, the @{RightSidebarScope} runs
+        open file. While a task runs, the @{RightSidebar} runs
         the body's full height at its right, beside the tab bar, the selected
         tab's contents, and the chat input, and the chat input's right edge is against it: the chat input
         never runs beneath the right sidebar. While that sidebar isn't there,
@@ -45,11 +39,11 @@ shape BodyShape:
         list or an open file, sit on the theme's base surface, #444444 in dark
         mode, running edge to edge with no border, and the chat input along
         the bottom is set apart from them only by its own darker tab strip, as
-        the @{ChatInputScope} says, with no line between them.
+        the @{ChatInput} says, with no line between them.
 
     sliding:
         Whenever something slides out or back along one of the body's edges,
-        as the @{RightSidebarScope} does, everything else in the body moves
+        as the @{RightSidebar} does, everything else in the body moves
         smoothly with it, frame by frame, rather than jumping once the slide
         is over: the tab bar, the selected tab's contents, the Ask
         conversation while it shows, and the chat input all keep their right edge against the sliding edge throughout, so
@@ -66,38 +60,35 @@ shape BodyShape:
 
         - a tab bar along its top, holding a Chat tab and a tab for each file open
         - the @{MessageList}, the chat history, shown beneath the tab bar while the Chat tab is selected
-        - the hint shown in the message list's place before any task has been sent, or while no project is open, as the @{PromptEditor} and the @{NoProjectStateScope} say
-        - an @{EditorScope} for each open file, shown beneath the tab bar while its tab is selected
+        - the hint shown in the message list's place before any task has been sent, or while no project is open, as the @{PromptEditor} and the @{NoProjectState} say
+        - an @{Editor} for each open file, shown beneath the tab bar while its tab is selected
         - a task view for each task opened in a tab of its own, as its task tabs say, shown beneath the tab bar while its tab is selected
-        - the @{AskConversationScope}, beside the tab bar and the selected tab's contents, while the chat input's Ask tab is selected
-        - the @{ChatInputScope}, along the bottom beneath whichever tab is selected, and beneath the Ask conversation too
-        - the @{RightSidebarScope}, at the right of all of these, the tab bar and the chat input included, while a task runs
+        - the @{AskConversation}, in the Chat tab's place beneath the tab bar, while the chat input's Ask tab is selected
+        - the @{ChatInput}, along the bottom beneath whichever tab is selected, and beneath the Ask conversation too
+        - the @{RightSidebar}, at the right of all of these, the tab bar and the chat input included, while a task runs or is queued, or it is opened by hand
 
-        An @{InsetPanelScope} floats over the whole window, the body included,
+        An @{InsetPanel} floats over the whole window, the body included,
         but is never part of it.
 
-    askSplit:
-        While the chat input's Ask tab is selected, the body splits in two,
-        side by side, above the chat input, as the @{AskConversationScope}
-        says: the tab bar and the selected tab's contents, the message list or
-        an open file, take the left side, and the Ask conversation the right,
-        with a resize edge between them. The chat input still runs along the
-        bottom beneath both, from the project sidebar to the right sidebar
-        while a task runs, or to the window's right edge. Only the left side
-        has the tab bar; the Ask conversation has a header of its own, as
-        tall, level with it. Selecting another mode's tab takes the split
-        away at once, the left side taking the body's full width again, and
-        no tab, file, or scrolling on the left changes as the split comes or
-        goes. While the right sidebar slides, both sides move with it, the
-        Ask conversation keeping its right edge against the sliding edge and
-        its share of the width, as the sliding says.
+    askMode:
+        While the chat input's Ask tab is selected, the Ask conversation, as
+        the @{AskConversation} says, takes the Chat tab's place in the
+        body, filling all of it beneath the tab bar and above the chat input,
+        as the message list fills it for every other mode: the body never
+        splits, and nothing is shown beside the conversation. The Chat tab
+        then reads "Ask" in Ask's colour. Selecting another mode's tab brings
+        the message list back in its place, as it was left, and selecting
+        Ask again brings the conversation back, scrolled where it was; the
+        switch is at once, with nothing sliding. A file or task tab selected
+        shows that file or task whatever mode is selected, and selecting
+        Ask while one is shown selects the Chat tab, so the conversation is
+        in view.
 
     tabs:
         Along the top of the body runs a tab bar, in gpui-kit's default tab
         styling, across the width the message list takes: from the project
         sidebar to the right sidebar while a task runs, and to the
-        window's right edge otherwise, or, while the body is split for Ask, to
-        the edge between it and the Ask conversation. Its first tab, Chat, shows the message
+        window's right edge otherwise. Its first tab, Chat, shows the message
         list, and is always there: it can't be closed or moved. After it comes
         a tab for each open file and each task opened in a tab of its own,
         files and tasks together, in the order they were opened unless they
@@ -148,7 +139,7 @@ shape BodyShape:
         those running beside it, as the @{MessageList}'s header shows them,
         or, while none runs, the task that finished last, until the next is
         sent. It never shows any other task: a task opened from the right
-        sidebar's Tasks tab, as the @{TasksTabScope} says, or from anywhere
+        sidebar's Tasks tab, as the @{TasksTab} says, or from anywhere
         else that opens a task, opens in a tab of its own in the body's tab
         bar, as a file does: a task not open yet gets a new tab just after
         the one selected, and is selected; opening one that already has a
@@ -180,8 +171,8 @@ shape BodyShape:
         opened again.
 
     openFile:
-        A file opened, from the @{FileTreeScope} or anywhere else the
-        @{OpenFileScope} says, shows in an @{EditorScope} in a tab of its own,
+        A file opened, from the @{FileTree} or anywhere else the
+        @{OpenFile} says, shows in an @{Editor} in a tab of its own,
         as many files open at once as are opened. A file not open yet gets a
         new tab, just after the one selected, and is selected. Opening a file
         that already has a tab selects that tab instead, leaving its editor
@@ -190,8 +181,7 @@ shape BodyShape:
         Nothing slides: a file's tab is selected, and its editor shows, at
         once, and closing it takes it away at once too. Files never split the
         body among themselves; the file takes the tab bar's full width above
-        the chat input, beside the Ask conversation while the body is split
-        for Ask.
+        the chat input.
 
         Closing a file's tab, with its close button or the editor's, closes
         the file, the editor first asking to discard any unsaved changes.
@@ -199,3 +189,4 @@ shape BodyShape:
         to its right, the one to its left, which is Chat once no file is
         left. Closing a tab that isn't selected leaves the selection as it
         is.
+

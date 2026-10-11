@@ -16,6 +16,7 @@ use crate::agent::Agent;
 use crate::chat_input::tokens_label;
 use crate::harness::HarnessEvent;
 use crate::prompt_history::RunRecord;
+use crate::output_rate::{self, OutputRate};
 
 /// Tokens, each `None` until reported.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -308,6 +309,11 @@ struct Run {
     /// How its cache writes split, at the 5-minute and the 1-hour rate, as
     /// last reported.
     split: Option<(u64, u64)>,
+    /// Its conversation's time waiting on the model, as last reported, in
+    /// milliseconds, every run before it included.
+    api_total: Option<u64>,
+    /// Its time writing, as the application measured it, in milliseconds.
+    writing_ms: Option<u64>,
     /// It reported its usage.
     reported: bool,
     /// It is over.
@@ -328,6 +334,8 @@ impl Run {
             totals: BTreeMap::new(),
             added: BTreeMap::new(),
             split: None,
+            api_total: None,
+            writing_ms: None,
             reported: false,
             over: false,
         }
@@ -367,6 +375,10 @@ impl Run {
                 self.split = Some((*five_minute, *one_hour));
                 false
             }
+            HarnessEvent::ApiTime(ms) => {
+                self.api_total = Some(*ms);
+                false
+            }
             // The conversation it was to carry on wasn't the harness's: it
             // went again as a new one, and what it reported before was
             // never.
@@ -377,6 +389,7 @@ impl Run {
                 self.totals.clear();
                 self.added.clear();
                 self.split = None;
+                self.api_total = None;
                 self.reported = false;
                 false
             }
@@ -430,6 +443,7 @@ impl SavedRun {
         );
         run.name = Some(name.to_string());
         run.over = true;
+        run.writing_ms = record.writing_ms;
         for line in record.output.iter().filter(|line| tells_usage(line)) {
             for event in crate::harness::parse(line) {
                 run.follow(&event);
@@ -455,19 +469,20 @@ fn tells_usage(line: &Value) -> bool {
     )
 }
 
-/// Every run's own tokens, by model, a run's own figures being how much its
-/// conversation's totals rose since that conversation's previous run.
-fn own_figures(runs: &[&Run]) -> Vec<BTreeMap<String, Spend>> {
+/// Every run's own figures: its tokens, by model, a run's own being how
+/// much its conversation's totals rose since that conversation's previous
+/// run, and its output rate, where it can be told.
+fn own_figures(runs: &[&Run]) -> Vec<(BTreeMap<String, Spend>, Option<OutputRate>)> {
     let mut order: Vec<usize> = (0..runs.len()).collect();
     order.sort_by_key(|&ix| (runs[ix].sent, ix));
-    // Each conversation's totals as its latest run left them, and every
-    // run's, in order.
-    let mut last: HashMap<&str, &BTreeMap<String, Spend>> = HashMap::new();
-    let mut earlier: Vec<(RunKind, &BTreeMap<String, Spend>)> = Vec::new();
-    let mut own = vec![BTreeMap::new(); runs.len()];
+    // Each conversation's latest run, and every run that reported totals,
+    // in order.
+    let mut last: HashMap<&str, &Run> = HashMap::new();
+    let mut earlier: Vec<&Run> = Vec::new();
+    let mut own = vec![(BTreeMap::new(), None); runs.len()];
     for ix in order {
         let run = runs[ix];
-        let base = match &run.resumed_from {
+        let base: Option<&Run> = match &run.resumed_from {
             Some(from) => last.get(from.as_str()).copied(),
             None => run
                 .session
@@ -481,25 +496,36 @@ fn own_figures(runs: &[&Run]) -> Vec<BTreeMap<String, Spend>> {
                             earlier
                                 .iter()
                                 .rev()
-                                .filter(|(kind, _)| *kind == run.kind)
-                                .map(|(_, totals)| *totals)
-                                .find(|totals| rose(&run.totals, totals).is_some())
+                                .filter(|base| base.kind == run.kind)
+                                .find(|base| rose(&run.totals, &base.totals).is_some())
+                                .copied()
                         })
                         .flatten()
                 }),
         };
         let mut figures = base
-            .and_then(|base| rose(&run.totals, base))
+            .and_then(|base| rose(&run.totals, &base.totals))
             .unwrap_or_else(|| run.totals.clone());
         for (model, spend) in &run.added {
             figures.entry(model.clone()).or_default().add(spend);
         }
-        own[ix] = run.named(figures);
-        if !run.totals.is_empty() {
+        // Its own time waiting on the model, as its tokens are its own; or,
+        // where the harness reported none, its time writing as measured.
+        let output: u64 = figures.values().filter_map(|spend| spend.output).sum();
+        let api = run.api_total.map(|total| {
+            let before = base.and_then(|base| base.api_total).unwrap_or(0);
+            if total >= before { total - before } else { total }
+        });
+        let rate = match api {
+            Some(ms) => OutputRate::of(output, ms, false),
+            None => run.writing_ms.and_then(|ms| OutputRate::of(output, ms, true)),
+        };
+        own[ix] = (run.named(figures), rate);
+        if !run.totals.is_empty() || run.api_total.is_some() {
             if let Some(session) = &run.session {
-                last.insert(session, &run.totals);
+                last.insert(session, run);
             }
-            earlier.push((run.kind, &run.totals));
+            earlier.push(run);
         }
     }
     own
@@ -602,8 +628,8 @@ impl ProjectUsage {
     }
 
     /// Every run, those followed first, a saved one left out where it is one
-    /// followed since; and each one's own tokens.
-    fn figures(&self) -> Vec<(&Run, BTreeMap<String, Spend>)> {
+    /// followed since; and each one's own tokens and output rate.
+    fn figures(&self) -> Vec<(&Run, (BTreeMap<String, Spend>, Option<OutputRate>))> {
         let followed: Vec<&str> = self
             .runs
             .iter()
@@ -625,7 +651,7 @@ impl ProjectUsage {
     /// What the runs of the `epoch`th of `conversation` spent, by model.
     pub fn conversation(&self, conversation: Conversation, epoch: u64) -> BTreeMap<String, Spend> {
         let mut models = BTreeMap::new();
-        for (run, own) in self.figures() {
+        for (run, (own, _)) in self.figures() {
             if run.conversation == Some((conversation, epoch)) {
                 merge(&mut models, own);
             }
@@ -633,12 +659,35 @@ impl ProjectUsage {
         models
     }
 
+    /// The average output rate of the runs of the `epoch`th of
+    /// `conversation` that are over; none where none can be told.
+    pub fn conversation_rate(&self, conversation: Conversation, epoch: u64) -> Option<OutputRate> {
+        OutputRate::sum(self.figures().into_iter().filter_map(|(run, (_, rate))| {
+            (run.over && run.conversation == Some((conversation, epoch))).then_some(rate)?
+        }))
+    }
+
+    /// The average output rate of the runs of the task or question named
+    /// `name` that are over; none where none can be told.
+    pub fn rate_of(&self, name: &str) -> Option<OutputRate> {
+        OutputRate::sum(self.figures().into_iter().filter_map(|(run, (_, rate))| {
+            (run.over && run.name.as_deref() == Some(name)).then_some(rate)?
+        }))
+    }
+
+    /// Run `run` spent `ms` writing, as the application measured it.
+    pub fn set_writing(&mut self, run: usize, ms: u64) {
+        if let Some(run) = self.runs.get_mut(run) {
+            run.writing_ms = Some(ms);
+        }
+    }
+
     /// What the runs of the task or question named `name` spent: their
     /// tokens, and what they cost where every model they used is priced;
     /// none while nothing it ran reported any.
     pub fn spent_by(&self, name: &str) -> Option<(u64, Option<f64>)> {
         let mut models = BTreeMap::new();
-        for (run, own) in self.figures() {
+        for (run, (own, _)) in self.figures() {
             if run.name.as_deref() == Some(name) {
                 merge(&mut models, own);
             }
@@ -654,10 +703,12 @@ impl ProjectUsage {
     pub fn project(&self) -> ProjectReport {
         let mut report = ProjectReport::default();
         let mut models = BTreeMap::new();
-        for (run, own) in self.figures() {
+        let mut rates = Vec::new();
+        for (run, (own, rate)) in self.figures() {
             if !run.over {
                 continue;
             }
+            rates.extend(rate);
             let count = match run.kind {
                 RunKind::Task => &mut report.tasks,
                 RunKind::Question => &mut report.questions,
@@ -668,6 +719,7 @@ impl ProjectUsage {
             }
             merge(&mut models, own);
         }
+        report.rate = OutputRate::sum(rates);
         report.cost = Cost::of(models.iter().map(|(model, spend)| (model.as_str(), spend)));
         report.models = models
             .into_iter()
@@ -722,6 +774,8 @@ pub struct ProjectReport {
     pub questions: RunCount,
     pub models: Vec<ModelSpend>,
     pub cost: Option<Cost>,
+    /// The average output rate of its runs, where any can be told.
+    pub rate: Option<OutputRate>,
 }
 
 impl ProjectReport {
@@ -816,6 +870,8 @@ pub struct UsageReport {
     /// would cost at API prices, where it can be worked out.
     pub conversation_spend: Spend,
     pub conversation_cost: Option<Cost>,
+    /// The average output rate of its runs, where any can be told.
+    pub conversation_rate: Option<OutputRate>,
     /// Every run the project has made.
     pub project: ProjectReport,
     /// The harness and model the figures came from, and when they were last
@@ -1056,6 +1112,9 @@ pub fn details(report: &UsageReport, now: u64, side_by_side: bool, cx: &App) -> 
                     qualified(cost_label(cost.total()), excluding(cost)),
                 )
             }))
+            .chain(report.conversation_rate.map(|rate| {
+                figure("conversation-rate", "Output rate", text(output_rate::label(rate.per_second())))
+            }))
             .collect(),
     );
 
@@ -1076,6 +1135,13 @@ pub fn details(report: &UsageReport, now: u64, side_by_side: bool, cx: &App) -> 
                 ),
             ));
         }
+    }
+    if let Some(rate) = project.rate {
+        project_rows.push(figure(
+            "project-rate",
+            "Output rate",
+            text(output_rate::label(rate.per_second())),
+        ));
     }
     for (ix, model) in project.models.iter().enumerate() {
         let rows = token_figures(&format!("project-model-{ix}"), &model.spend);
@@ -1322,6 +1388,58 @@ mod tests {
             .iter()
             .find(|spend| spend.name == model)
             .and_then(|spend| spend.spend.output)
+    }
+
+    /// A run's average output rate is its own output tokens over its own
+    /// time waiting on the model, Claude Code's running totals of both taken
+    /// as how much they rose since the conversation's run before; a harness
+    /// reporting no such time uses the time writing measured. A rate that
+    /// can't be told is left out of the averages, never counted as nothing.
+    #[test]
+    fn output_rates_are_each_runs_own() {
+        let mut usage = ProjectUsage::default();
+        let first = run(
+            &mut usage,
+            RunKind::Task,
+            None,
+            "s1",
+            &[totals("claude-opus-4", 10, 100), HarnessEvent::ApiTime(2_000)],
+        );
+        usage.name_run(first, "First");
+        let second = run(
+            &mut usage,
+            RunKind::Task,
+            Some("s1"),
+            "s1",
+            &[totals("claude-opus-4", 20, 400), HarnessEvent::ApiTime(5_000)],
+        );
+        usage.name_run(second, "Second");
+        let rate = |usage: &ProjectUsage, name: &str| {
+            usage.rate_of(name).map(|rate| (rate.tokens, rate.ms, rate.measured))
+        };
+        assert_eq!(rate(&usage, "First"), Some((100, 2_000, false)));
+        assert_eq!(rate(&usage, "Second"), Some((300, 3_000, false)));
+
+        // No time of its own: as measured, and none measured, none told.
+        let measured = usage.start_run(Conversation::Questions, 0, RunKind::Question, None);
+        usage.follow(measured, Agent::OpenCode, &HarnessEvent::Spent {
+            model: None,
+            spend: Spend { output: Some(50), ..Spend::default() },
+            tally: Tally::More,
+        }, 1);
+        usage.name_run(measured, "Measured");
+        usage.set_writing(measured, 1_000);
+        usage.end_run(measured);
+        assert_eq!(rate(&usage, "Measured"), Some((50, 1_000, true)));
+        let silent = run(&mut usage, RunKind::Question, None, "s3", &[]);
+        usage.name_run(silent, "Silent");
+        assert_eq!(rate(&usage, "Silent"), None);
+
+        let project = usage.project().rate.unwrap();
+        assert_eq!((project.tokens, project.ms), (450, 6_000));
+        let tasks = usage.conversation_rate(Conversation::Tasks, 0).unwrap();
+        assert_eq!((tasks.tokens, tasks.ms), (400, 5_000));
+        assert_eq!(usage.conversation_rate(Conversation::SpecTasks, 0), None);
     }
 
     #[test]

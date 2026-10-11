@@ -1,21 +1,15 @@
 use /lib
 use /ui
-from /scope/import-project import ImportProjectScope
-from /scope/new-project import NewProjectScope
-from /scope/project-directory import ProjectDirectoryScope
-from /scope/project/open-project import OpenProjectScope
+from /scope/import-project import ImportProject
+from /scope/new-project import NewProject
+from /scope/project-directory import ProjectDirectory
+from /scope/project/open-project import OpenProject
 from /ui/components/project-indicator import ProjectIndicator
 
-export ui-component RibbonProjectTabScope:
-    concept: {RibbonProjectTabConcept}
-
-concept RibbonProjectTabConcept:
+export ui-component RibbonProjectTab:
     pitch:
         The ribbon's Project tab: the commands for the project as a whole.
 
-    shape: {RibbonProjectTabShape}
-
-shape RibbonProjectTabShape:
     description:
         The Project tab of the ribbon, first of the tabs and the one the window
         opens on.
@@ -29,14 +23,14 @@ shape RibbonProjectTabShape:
     commands:
         newProject:
             A "New Project" button with a folder-plus icon. Clicking it opens
-            the @{NewProjectScope}, and its tooltip says it creates a new
+            the @{NewProject}, and its tooltip says it creates a new
             project and opens it.
 
             It is primary, and a slim button.
 
         importProject:
             An "Import Project…" button with a folder-input icon. Clicking it
-            opens the @{ImportProjectScope}, and its tooltip says it makes an
+            opens the @{ImportProject}, and its tooltip says it makes an
             existing folder into a project and opens it.
 
             It is primary, and a slim button.
@@ -47,6 +41,7 @@ shape RibbonProjectTabShape:
             the ribbon's tabs shows which is. Its tooltip says to pick a
             piton.config.pi file, whose folder becomes the project.
 
-            Clicking it opens the @{OpenProjectScope}.
+            Clicking it opens the @{OpenProject}.
 
             It is primary, and a slim button.
+

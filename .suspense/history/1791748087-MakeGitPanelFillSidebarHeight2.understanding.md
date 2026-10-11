@@ -1,0 +1,8 @@
+- [The git panel fills the left sidebar's Git view on its own, never sharing it with the file tree](.claude/reference/ui/components/git-panel/index.md#sizing)
+- [It fills the sidebar's whole height, beneath the ribbon to the window's bottom, whatever its contents, never only as tall as they need](.claude/reference/ui/components/git-panel/index.md#sizing)
+- [Its header, the branch with Pull and Push, sits at the view's top, the summary beneath it](.claude/reference/ui/components/git-panel/index.md#sizing)
+- [The message box, Generate, and Commit stay along the view's bottom](.claude/reference/ui/components/git-panel/index.md#sizing)
+- [The commit notes fill the height between the summary and the message box, scrolling within it](.claude/reference/ui/components/git-panel/index.md#scrolling)
+- [With few notes or none, the space between the summary and the message box is empty, on the body's colour](.claude/reference/ui/components/git-panel/index.md#sizing)
+- [The body is on the ribbon's command area colour, with 8px padding at the sides and bottom](.claude/reference/ui/components/git-panel/index.md#look)
+- [The Git view shows the GitPanel alone, filling the view](.claude/reference/ui/components/left-sidebar/index.md#views)

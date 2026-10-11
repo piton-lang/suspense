@@ -1,33 +1,28 @@
 use /lib
-from /scope/new-project import NewProjectScope
-from /scope/open-projects import OpenProjectsScope
-from /scope/project/open-project import OpenProjectScope
-from /scope/user-preferences import UserPreferencesScope
+from /scope/new-project import NewProject
+from /scope/open-projects import OpenProjects
+from /scope/project/open-project import OpenProject
+from /scope/user-preferences import UserPreferences
 from /ui/components/project-indicator import ProjectIndicator
 
-export scope ProjectDirectoryScope:
-    concept: {ProjectDirectoryConcept}
-
-concept ProjectDirectoryConcept:
+export feature ProjectDirectory:
     pitch:
         The project the application works on: the directory holding the
         project's piton.config.pi.
 
-    shape: {ProjectDirectoryShape}
-
-shape ProjectDirectoryShape:
     description:
         The application stores the folder holding the project's piton.config.pi
         as the project directory, set when a project is opened with the
-        @{OpenProjectScope}, created with the @{NewProjectScope}, or picked
+        @{OpenProject}, created with the @{NewProject}, or picked
         from the recent projects of the @{ProjectIndicator}. Setting it again
         switches the project on screen for the whole application, while the
         project it was keeps its running work in the background, as the
-        @{OpenProjectsScope} says.
+        @{OpenProjects} says.
 
     recentProjects:
         Every project opened, however it was opened, is remembered among the
-        @{UserPreferencesScope}: the five opened most recently, newest first,
+        @{UserPreferences}: the five opened most recently, newest first,
         opening one again moving it to the front rather than listing it twice.
         A project that no longer holds its piton.config.pi is left out wherever
         they are offered.
+

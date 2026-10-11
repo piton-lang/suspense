@@ -1,0 +1,6 @@
+- [Only the commit notes scroll, with a Scrollbar along their right only while they overflow](.claude/reference/ui/components/git-panel/index.md#scrolling)
+- [While the scrollbar shows, 6px of the body's own colour sit between the notes' right edge and the scrollbar's left](.claude/reference/ui/components/git-panel/index.md#scrolling)
+- [No note's box touches the scrollbar or runs its colour into the scrollbar's border](.claude/reference/ui/components/git-panel/index.md#scrolling)
+- [The notes narrow and rewrap while the scrollbar shows, and widen back to the body's padding when it goes](.claude/reference/ui/components/git-panel/index.md#scrolling)
+- [The scrollbar sits in the body's right padding, against the panel's right edge](.claude/reference/ui/components/git-panel/index.md#scrolling)
+- [The scrollbar has no background of its own: its column takes the colour of the surface it sits on](.claude/reference/ui/components/scrollbar/index.md#surface)

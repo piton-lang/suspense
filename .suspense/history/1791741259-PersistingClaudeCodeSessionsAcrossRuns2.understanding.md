@@ -1,0 +1,8 @@
+- [Every Claude Code run, host or container, has transcript cleanup turned off via cleanupPeriodDays passed with the run, never written to the user's settings](.claude/reference/scope/harness-integration/index.md#context)
+- [When a run is over, however it ended, its conversation's session is copied into the project's data beside the run's history record, replacing the earlier copy of that conversation](.claude/reference/scope/harness-integration/index.md#context)
+- [The copy is a `.session` folder named as the run's history record](.claude/reference/scope/project-data/index.md#contents)
+- [Before carrying on a conversation whose session the harness no longer has, the latest copy is put back where the harness looks, under the same session id](.claude/reference/scope/harness-integration/index.md#context)
+- [Only where no copy exists, or it can't be put back, is the request sent again as a new conversation](.claude/reference/scope/harness-integration/index.md#context)
+- [A conversation the user left for a new one is never restored](.claude/reference/scope/harness-integration/index.md#context)
+- [Codex and OpenCode sessions are kept and restored the same way, wherever each harness keeps them](.claude/reference/scope/harness-integration/index.md#context)
+- [A container run restores into the conversation's sessions folder it mounts; a host run into the harness's own folder](.claude/reference/scope/harness-integration/index.md#context)

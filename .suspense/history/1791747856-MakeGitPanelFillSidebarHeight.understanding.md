@@ -1,0 +1,5 @@
+- [A panel's height is fill, fit, or share; fit is only as tall as its contents](.claude/reference/ui/components/git-panel/index.md#panel)
+- [The git panel fills the left sidebar's Git view on its own, never sharing it with the file tree](.claude/reference/ui/components/git-panel/index.md#look)
+- [Only the commit notes scroll; header and summary stay at top, message box and Commit at bottom](.claude/reference/ui/components/git-panel/index.md#scrolling)
+- [The Git view holds the GitPanel alone, filling the view](.claude/reference/ui/components/left-sidebar/index.md#views)
+- [The git panel fills the sidebar's whole height, its controls along the bottom, empty space between when few notes](.claude/reference/ui/components/git-panel/index.md#look)

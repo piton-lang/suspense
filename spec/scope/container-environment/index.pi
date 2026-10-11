@@ -1,18 +1,15 @@
 use /lib
-from /scope/prompt-mode/chat-input import ChatInputScope
-from /scope/application import ApplicationScope
-from /scope/harness-integration import HarnessIntegrationScope
-from /scope/project-data import ProjectDataScope
-from /scope/project-locations import ProjectLocationsScope
-from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
-from /scope/prompt-mode/sending import PromptSendingScope
-from /scope/settings-window import SettingsWindowScope
-from /scope/spec-build import SpecBuildScope
+from /scope/prompt-mode/chat-input import ChatInput
+from /scope/application import Application
+from /scope/harness-integration import HarnessIntegration
+from /scope/project-data import ProjectData
+from /scope/project-locations import ProjectLocations
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPrompts
+from /scope/prompt-mode/sending import PromptSending
+from /scope/settings-window import SettingsWindow
+from /scope/spec-build import SpecBuild
 
-export scope ContainerEnvironmentScope:
-    concept: {ContainerEnvironmentConcept}
-
-concept ContainerEnvironmentConcept:
+export feature ContainerEnvironment:
     pitch:
         A container the application owns, that a run of the harness works
         in, so each mode sees only what it may use. What a run can read or
@@ -21,14 +18,11 @@ concept ContainerEnvironmentConcept:
         read the code or change it, whatever the harness is and whatever it
         tries.
 
-    shape: {ContainerEnvironmentShape}
-
-shape ContainerEnvironmentShape:
     description:
         Spec tasks, a Chain prompt's spec steps and spec follow-up, and
         questions from the Ask tab always run in a container, and are the
         only runs that do. Code tasks and a Chain prompt's code step always
-        run on the host, as the @{HarnessIntegrationScope} says, with their
+        run on the host, as the @{HarnessIntegration} says, with their
         protected locations, and never need Podman. Freeform tasks always
         run on the host, and so do the application's own runs, the one-off runs, the
         palette's file search, and the notes, commit messages, and prompt
@@ -52,7 +46,7 @@ shape ContainerEnvironmentShape:
         user, as it would on the host. On macOS and Windows, Podman runs its
         containers in a Podman machine, a virtual machine it manages. There
         too, what a run writes to the project belongs to the user, as the
-        @{ApplicationScope} says of every file the application creates:
+        @{Application} says of every file the application creates:
         the container runs as the user rather than as root inside the
         machine, and a file it writes into a folder mounted from Windows is
         the user's, owned by them and inheriting the folder's permissions,
@@ -62,7 +56,7 @@ shape ContainerEnvironmentShape:
         Where `podman` isn't installed, a prompt that has to run in a
         container isn't sent, and never runs on the host instead: a Spec task,
         a Chain prompt's spec steps, or a question. It fails as a run whose harness isn't installed
-        does, as the @{HarnessIntegrationScope} says, or as one whose spec
+        does, as the @{HarnessIntegration} says, or as one whose spec
         build can't run piton does, its output saying that Podman is needed to
         run it, with a link, opened in the browser when clicked, to Podman's
         installation instructions for the platform it is running on:
@@ -122,7 +116,7 @@ shape ContainerEnvironmentShape:
 
         A project can add to it with a Containerfile of its own,
         `.suspense/Containerfile`, built FROM the default image, to add what
-        its runs in a container need, as the @{ProjectDataScope} says. The
+        its runs in a container need, as the @{ProjectData} says. The
         project's image is built from it, and kept, and built again only when
         the Containerfile or the default image changes. Without one, the
         project's runs use the default image.
@@ -187,7 +181,7 @@ shape ContainerEnvironmentShape:
         and the run works in `/workspace`. So a harness that keys its
         sessions on its working directory, as Claude Code does, finds them
         again after the project moves, whatever its path on the host. What
-        each kind of run is given, as the @{ProjectLocationsScope} names
+        each kind of run is given, as the @{ProjectLocations} names
         the locations, follows.
 
         spec:
@@ -210,7 +204,7 @@ shape ContainerEnvironmentShape:
             places the shape's guidance in.
 
             Unless the project lets its Spec runs read the code, a setting of
-            the project's, off until switched on in the @{SettingsWindowScope}'s
+            the project's, off until switched on in the @{SettingsWindow}'s
             Containers section and saved with the project's data. While it is
             on, a Spec run is given the code location too, read only, as a
             question is, mounted in its place, so the harness can read the
@@ -270,7 +264,7 @@ shape ContainerEnvironmentShape:
         before the run, and an empty understanding file is shown as one not
         written yet is.
 
-        The files attached to a run's prompt, as the @{ChatInputScope}
+        The files attached to a run's prompt, as the @{ChatInput}
         says, are mounted the same way, each on its own, read only, at its
         path under `/workspace`, never the attachments folder they are in, so
         a run sees the files attached to it and no other prompt's.
@@ -294,7 +288,7 @@ shape ContainerEnvironmentShape:
         one costs only a login.
 
         The harness's sessions are never kept in a volume. They are kept in
-        the project, in `.suspense/sessions/`, as the @{ProjectDataScope}
+        the project, in `.suspense/sessions/`, as the @{ProjectData}
         says, one folder per conversation: `spec` for the spec lane's, and
         `questions` for the Ask tab's questions. Each run mounts only its own
         conversation's folder, read and write, where the harness keeps its
@@ -303,7 +297,7 @@ shape ContainerEnvironmentShape:
         conversation's sessions. The application creates the folder before
         the run if it isn't there. So a conversation carries on across runs,
         restarts of the application, and moves of the project, as the
-        @{HarnessIntegrationScope} says.
+        @{HarnessIntegration} says.
 
         Losing the project's sessions folder costs only the conversations'
         context: the next run starts a new conversation, as when a session
@@ -359,7 +353,7 @@ shape ContainerEnvironmentShape:
         can write its credentials there on the first login as on any other.
 
         Which harness is logged in is always the one the run needs: the
-        harness of the run's project, as the @{HarnessIntegrationScope} says,
+        harness of the run's project, as the @{HarnessIntegration} says,
         never Claude Code by default, and never another project's. A run, a
         Welcome check, or a login asked for checks that harness's own volume
         alone, by its own credentials file: Claude Code's
@@ -385,15 +379,15 @@ shape ContainerEnvironmentShape:
 
         The credentials stay in the harness's volume, and are refreshed
         there, so a harness is logged in once on a machine, not for every
-        run. The @{SettingsWindowScope} shows whether each harness is logged
+        run. The @{SettingsWindow} shows whether each harness is logged
         in in its container, and can log it in again.
 
     guards:
         A run in a container has no protected locations, as the
-        @{HarnessIntegrationScope} names them: it isn't guarded, and its
+        @{HarnessIntegration} names them: it isn't guarded, and its
         harness is given no rule against reading or editing any location,
         since nothing it mustn't touch is there. Its prompts, as the
-        @{ModeSystemPromptsScope} says, name only what it can see. Runs on
+        @{ModeSystemPrompts} says, name only what it can see. Runs on
         the host keep their protected locations as ever.
 
     specBuild:
@@ -406,5 +400,6 @@ shape ContainerEnvironmentShape:
         the spec, never because of what the container leaves out, so its
         errors are the run's own to fix. Once a Spec task or a Chain prompt's spec step is over,
         however it ended, the application runs `piton build` on the host, as
-        the @{SpecBuildScope} says, so the host's reference and shape guidance
+        the @{SpecBuild} says, so the host's reference and shape guidance
         are those of the spec as the run left it.
+

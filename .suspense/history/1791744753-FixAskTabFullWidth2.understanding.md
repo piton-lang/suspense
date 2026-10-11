@@ -1,0 +1,4 @@
+- [The Ask conversation spans the full width of the space it fills, from the body's left edge to its right, or to the right sidebar while open](.claude/reference/scope/prompt-mode/ask-conversation/index.md#description)
+- [Only its own padding sits at either side; never a narrower column, centred or not, never empty space beside it](.claude/reference/scope/prompt-mode/ask-conversation/index.md#description)
+- [It widens and narrows with the body as the window or a sidebar is resized](.claude/reference/scope/prompt-mode/ask-conversation/index.md#description)
+- [It fills the Chat tab beneath the tab bar and above the chat input, in place of the message list](.claude/reference/scope/application/Body.md#ask-mode)

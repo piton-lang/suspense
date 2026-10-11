@@ -1,0 +1,7 @@
+- [A task's status label has its elapsed time beside it in small muted tabular figures](.claude/reference/scope/prompt-mode/message-list/index.md#elapsed)
+- [The task header is one slim line: mode bar, status and time, summary, then buttons](.claude/reference/scope/prompt-mode/message-list/index.md#description)
+- [A question's answer shows a status line with a spinner while it runs, its steps summed up in one muted line](.claude/reference/scope/prompt-mode/ask-conversation/index.md#answers)
+- [The Usage popover's Conversation and This project groups give tokens and API-price cost](.claude/reference/scope/prompt-mode/chat-input/index.md#usage)
+- [A run's own figures are how much its conversation's running totals rose since its previous run](.claude/reference/scope/prompt-mode/chat-input/index.md#usage)
+- [A figure the harness doesn't report is left out rather than shown as zero](.claude/reference/scope/prompt-mode/chat-input/index.md#usage)
+- [The status shows a live tok/s while writing and an average once over; Usage groups give averages; unknown rates are left out](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)

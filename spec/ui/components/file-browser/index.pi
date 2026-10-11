@@ -1,21 +1,12 @@
 use /lib
 use /ui
-from /ui/components/fs-browser import
-    FsBrowserConcept,
-    FsBrowserScope,
-    FsBrowserShape
+from /ui/components/fs-browser import FsBrowser
 
-export ui-component FileBrowserScope extends FsBrowserScope:
-    concept: {FileBrowserConcept}
-
-concept FileBrowserConcept extends FsBrowserConcept:
+export ui-component FileBrowser extends FsBrowser:
     pitch:
-        An @{FsBrowserScope} for choosing a file.
+        An @{FsBrowser} for choosing a file.
 
-    shape: {FileBrowserShape}
-
-shape FileBrowserShape extends FsBrowserShape:
-    description: {FsBrowserShape.description}
+    description: {FsBrowser.description}
 
     listed:
         The current folder's folders are listed, to find the file in, then its
@@ -34,3 +25,4 @@ shape FileBrowserShape extends FsBrowserShape:
         one, naming the file needed when there is one, as in
         "Select a piton.config.pi", and Choose is disabled. Choose's tooltip
         says it chooses this file.
+

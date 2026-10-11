@@ -1,18 +1,12 @@
 use /lib
-from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPrompts
 
-export scope BakedSystemPromptsScope:
-    concept: {BakedSystemPromptsConcept}
-
-concept BakedSystemPromptsConcept:
+export feature BakedSystemPrompts:
     pitch:
         The prompts the application gives the harness for its own work, rather
         than a prompt someone writes, written in Piton and built into the
         application.
 
-    shape: {BakedSystemPromptsShape}
-
-shape BakedSystemPromptsShape:
     description:
         The prompts are Piton files in the repository's system-prompts folder,
         one for each piece of the application's own work.
@@ -43,4 +37,5 @@ shape BakedSystemPromptsShape:
 
     modePrompts:
         The system prompts each chat mode sends are not among them: see the
-        @{ModeSystemPromptsScope}.
+        @{ModeSystemPrompts}.
+

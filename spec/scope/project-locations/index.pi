@@ -1,20 +1,14 @@
 use /lib
-from /scope/project-directory import ProjectDirectoryScope
+from /scope/project-directory import ProjectDirectory
 
-export scope ProjectLocationsScope:
-    concept: {ProjectLocationsConcept}
-
-concept ProjectLocationsConcept:
+export feature ProjectLocations:
     pitch:
         Where in a project its spec and its code are, and which files are
         counted as being there.
 
-    shape: {ProjectLocationsShape}
-
-shape ProjectLocationsShape:
     description:
         A project's locations are set in the piton.config.pi of the
-        @{ProjectDirectoryScope}, each a path relative to the project directory.
+        @{ProjectDirectory}, each a path relative to the project directory.
 
     locations:
         - the spec location is `root`, of its piton-config anchor
@@ -35,3 +29,4 @@ shape ProjectLocationsShape:
         The spec files are the .pi files under the spec location, and the
         source files are the files under the code location. A use can leave
         out more, or cap how many it takes.
+

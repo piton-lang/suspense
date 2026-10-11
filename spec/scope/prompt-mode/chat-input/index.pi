@@ -1,36 +1,30 @@
 use /lib
 use /ui
-from /scope/open-file import OpenFileScope
-from /scope/application/MainWindow import MainWindowScope
-from /scope/harness-integration import HarnessIntegrationScope
-from /scope/user-preferences import UserPreferencesScope
-from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
-from /scope/harness-integration/catalog import HarnessCatalogScope
+from /scope/open-file import OpenFile
+from /scope/application/MainWindow import MainWindow
+from /scope/harness-integration import HarnessIntegration
+from /scope/user-preferences import UserPreferences
+from /scope/harness-integration/baked-prompts import BakedSystemPrompts
+from /scope/harness-integration/catalog import HarnessCatalog
 from /scope/lsp import LSP
-from /scope/open-projects import OpenProjectsScope
-from /scope/project-data import ProjectDataScope
+from /scope/open-projects import OpenProjects
+from /scope/project-data import ProjectData
 from /scope/prompt-mode import PromptEditor
-from /scope/prompt-mode/ask-conversation import AskConversationScope
+from /scope/prompt-mode/ask-conversation import AskConversation
 from /scope/prompt-mode/message-list import MessageList
-from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/prompt-mode/queue-list import QueueListScope
-from /scope/prompt-mode/sending import PromptSendingScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPrompts
+from /scope/prompt-mode/modes import PromptModes
+from /scope/prompt-mode/queue-list import QueueList
+from /scope/prompt-mode/sending import PromptSending
 from /shape/ChatInput import ChatInputInstruction
-from /ui/components/growing-text-input import GrowingTextInputScope
-from /ui/components/task-table import TaskTableScope
+from /ui/components/growing-text-input import GrowingTextInput
+from /ui/components/task-table import TaskTable
 
-export ui-component ChatInputScope:
-    concept: {ChatInputConcept}
-
-concept ChatInputConcept:
+export ui-component ChatInput:
     pitch:
         A multi-line, syntax-highlighted textbox that accepts plain text as well
         as snippets of Piton.
 
-    shape: {ChatInputShape}
-
-shape ChatInputShape:
     description:
         Input on the left, send button on the right.
 
@@ -64,10 +58,10 @@ shape ChatInputShape:
         disabled on the Ask tab, since a question never queues.
 
         <Enter> allows for creating new lines, like Ctrl/Cmd+Enter sends it to
-        the ${HarnessIntegrationScope}
+        the ${HarnessIntegration}
 
         Sending sends the prompt in the selected tab's mode, as the
-        @{PromptSendingScope} says. While the selected tab's lane is busy, as
+        @{PromptSending} says. While the selected tab's lane is busy, as
         it says, the send button on the Code, Chain, Spec, and Freeform tabs
         reads "Queue", since the prompt will queue: on Code while a task runs
         in the code lane, on Chain and Spec while one runs in the spec lane,
@@ -102,7 +96,7 @@ shape ChatInputShape:
             The menu's options, in order:
             - "Preview Compiled Prompt", with an eye icon
             - "Queue", with a list icon, which queues the prompt rather than sending it, even while the harness is free, as the queue of the @{PromptEditor} says; like the send button, it clears the input. On the Ask tab it is disabled, since a question never queues, and the highlight passes over it
-            - "Send to task", with a send icon, only while a task is running with a harness that can be fed more, as the @{HarnessIntegrationScope} says, and its output is shown, the previous tasks not expanded over it; never on the Ask tab, where a question runs on its own. It sends what is typed, and what is attached, to the running task instead of queueing it, as the @{PromptSendingScope} says, and clears the input as sending does. <Ctrl+Enter> (<Cmd+Enter> on macOS) still queues, as the send button does
+            - "Send to task", with a send icon, only while a task is running with a harness that can be fed more, as the @{HarnessIntegration} says, and its output is shown, the previous tasks not expanded over it; never on the Ask tab, where a question runs on its own. It sends what is typed, and what is attached, to the running task instead of queueing it, as the @{PromptSending} says, and clears the input as sending does. <Ctrl+Enter> (<Cmd+Enter> on macOS) still queues, as the send button does
 
     editingQueued:
         Editing a queued prompt, from the queue of the @{PromptEditor}, sets
@@ -140,7 +134,7 @@ shape ChatInputShape:
         cancels the edit, leaving the input empty again. Neither goes past
         the first prompt. While the queue holds more than one prompt, editing
         from <Up> expands the queue's list, if it isn't already, scrolled to
-        the prompt being edited, as the @{QueueListScope} says.
+        the prompt being edited, as the @{QueueList} says.
 
         While the queue is empty, and on the Ask tab, where nothing queues,
         <Up> instead puts the last prompt sent from that tab, the latest task
@@ -184,7 +178,7 @@ shape ChatInputShape:
             between its tabs, or around them. Each tab is only its label, in
             small text, with 8 pixels to each side of it and no border, and
             its label is always in its mode's colour at full strength, of the
-            @{PromptModesScope}, whether selected or not: Code red, Chain's
+            @{PromptModes}, whether selected or not: Code red, Chain's
             icon purple, Spec blue, Ask green, and Freeform grey. The one
             exception is Chain selected, when Code and Spec take Chain's purple
             too, as the chain says. The selected
@@ -192,7 +186,7 @@ shape ChatInputShape:
             its background, the same surface as the body beneath it, so it
             reads as a tab joined to that body; unselected tabs have none, and
             show the strip, lightening a little on hover. There is a tab for each of the
-            @{PromptModesScope}, in their order: Code, Chain, Spec, Ask, and
+            @{PromptModes}, in their order: Code, Chain, Spec, Ask, and
             Freeform. Code, Spec, Ask, and Freeform are ordinary tabs. Chain is also a tab, just a
             small one, because it only shows an icon. All five sit flush against
             each other with no extra gaps, and no tab has more padding than a
@@ -201,7 +195,7 @@ shape ChatInputShape:
             The chat input starts in the combined mode: Chain is selected, so
             Code and Spec are selected together, and a prompt sent before
             switching tabs changes the code and the spec together. Each open
-            project keeps the tab it was left on, as the @{OpenProjectsScope}
+            project keeps the tab it was left on, as the @{OpenProjects}
             says, so a project starts on Chain the first time it is opened in
             a launch, and switching back to it selects the tab it was on.
 
@@ -219,7 +213,7 @@ shape ChatInputShape:
             Chain is a tab with unusual behaviour. It shows an icon rather than
             a label, reading "Code and Spec" as its tooltip, and selecting it
             selects both Code and Spec. Its icon is drawn in Chain's colour, the
-            purple of the @{PromptModesScope}, selected or not, as every
+            purple of the @{PromptModes}, selected or not, as every
             tab's label is in its mode's colour. It never shows a focus outline, and its
             icon looks evenly spaced between Code and Spec whichever of the two
             is selected.
@@ -260,14 +254,14 @@ shape ChatInputShape:
             than wrapped when the bar is too narrow.
 
             It reads what the selected tab's mode is for, as the
-            @{PromptModesScope} says.
+            @{PromptModes} says.
 
         session:
             At the far right of the bar, at the right end of the help text,
             sits how much context the selected tab's conversation holds, then a
             New conversation button. Each lane's tasks, and the questions of the
             Ask tab, have a conversation of their own, as the
-            @{HarnessIntegrationScope} says, so the figure is the spec lane's on
+            @{HarnessIntegration} says, so the figure is the spec lane's on
             the Spec and Chain tabs, a Chain prompt starting in the spec lane,
             the code lane's on Code and Freeform, and the questions' on Ask.
 
@@ -290,7 +284,7 @@ shape ChatInputShape:
             conversation left that is still going finishes as it would, but
             neither it nor the project's history brings that conversation back,
             even once the project is closed and opened again, as the
-            @{HarnessIntegrationScope} says.
+            @{HarnessIntegration} says.
 
             It can be pressed while a run in that conversation is under way, a
             task on Code, Chain, Spec, or Freeform, or any question on Ask, without
@@ -335,7 +329,7 @@ shape ChatInputShape:
         usage:
             Just right of the context figure, before New conversation, sits the
             agent's usage: how much of the harness picked, of the
-            @{HarnessIntegrationScope}, has been used, as Claude Code's /usage
+            @{HarnessIntegration}, has been used, as Claude Code's /usage
             shows it. Its summary is short and extra small, muted like the
             context figure: "Usage", then the share used of the plan limit
             nearest to running out, such as "Usage 42%", turning the theme's
@@ -439,6 +433,13 @@ shape ChatInputShape:
             says this is what the tokens would cost at API prices, not what a
             subscription charges.
 
+            The Conversation and This project groups each also give the
+            average output rate across their runs, as "38 tok/s": every
+            output token their runs reported over the time those runs spent
+            waiting on the model, each run's time worked out as the task
+            header's average is, as the @{MessageList}'s status says. Runs
+            whose rate can't be worked out are left out of it, and where none
+            can be, the figure is left out rather than shown as zero.
         slice:
             Just left of the context figure sits the Slice toggle: a small ghost
             button with a scissors icon, reading "Slice", which shows as
@@ -457,7 +458,7 @@ shape ChatInputShape:
             "Opus", "Sonnet", or "Default", with a chevron, extra small and
             muted like the session controls. Clicking it opens a small menu
             above it listing the models the harness in use can be told, as the
-            @{HarnessIntegrationScope} says, the one chosen ticked, each with
+            @{HarnessIntegration} says, the one chosen ticked, each with
             its full name muted beside it, and "Default" first, which tells the
             harness no model, so it uses its own. Picking one closes the menu
             and sends every prompt after it to that model, on every tab, Ask
@@ -467,7 +468,7 @@ shape ChatInputShape:
             model chosen and says it applies to the next prompts sent.
 
             The choice is remembered for the user, per harness, as the
-            @{UserPreferencesScope} says, and stays as it is across sends, tab
+            @{UserPreferences} says, and stays as it is across sends, tab
             switches, and project switches, as the Slice toggle does; it
             starts at Default. A prompt keeps the model it was sent with:
             its hidden anchor records it, so a queued prompt goes to the model
@@ -505,7 +506,7 @@ shape ChatInputShape:
             It applies, is remembered, and travels with a prompt the same
             way the model picker does: on every tab but Freeform, which
             always goes without one; remembered for the user per harness,
-            as the @{UserPreferencesScope} says, starting at Default; a
+            as the @{UserPreferences} says, starting at Default; a
             queued prompt, a resend, a Chain prompt's steps, and a message
             sent to a running task each keeping the effort they were first
             sent with; and the help text giving way to it as it does to the
@@ -543,31 +544,31 @@ shape ChatInputShape:
 
     systemPrompt:
         The selected tab is the mode a prompt is sent in, and each mode's system
-        prompt is sent with it, as the @{ModeSystemPromptsScope} says.
+        prompt is sent with it, as the @{ModeSystemPrompts} says.
 
     ask:
         Ask is for simply asking a question, which runs as the
-        @{PromptModesScope} says. Any number of questions can be asked, and they
+        @{PromptModes} says. Any number of questions can be asked, and they
         all run at the same time; asking another never stops or waits for one
         already running.
 
-        Each question's progress and results are shown in a @{TaskTableScope},
-        and while the Ask tab is selected, the body splits to show every
-        question and its answer as a chat, in the @{AskConversationScope},
-        beside the selected tab's contents, each new conversation marked where
+        Each question's progress and results are shown in a @{TaskTable},
+        and while the Ask tab is selected, the body shows every
+        question and its answer as a chat, in the @{AskConversation},
+        in place of the message list, each new conversation marked where
         it begins. Each question slides in at the bottom of it as it is asked.
         While another tab is selected, the questions still running stay in
-        view above the tabs, as the @{AskConversationScope} says, so none of a
+        view above the tabs, as the @{AskConversation} says, so none of a
         question's progress, nor a running task's, is ever hidden behind
         anything.
 
     answerSteps:
         For a question, only the answer matters, so wherever a finished
         question's task table is shown, the table collapses the steps leading
-        up to the answer, as the @{TaskTableScope} says. Tasks are never
+        up to the answer, as the @{TaskTable} says. Tasks are never
         collapsed like this: see the @{MessageList}.
 
-    askConversation: @{AskConversationScope}
+    askConversation: @{AskConversation}
 
     attachments:
         What is attached to the prompt is listed above the text input, between
@@ -628,7 +629,7 @@ shape ChatInputShape:
         the attachments it was sent with.
 
     projects:
-        The questions, running and finished, belong to their project, as the @{OpenProjectsScope} says:
+        The questions, running and finished, belong to their project, as the @{OpenProjects} says:
         switching projects shows those of the project switched to, while the
         questions of other projects carry on running in the background. The
         prompt being written, its attachments, and the Slice toggle stay as
@@ -640,10 +641,10 @@ shape ChatInputShape:
         Pressing <Escape> while in the chat input takes focus out of the chat
         input. <Ctrl+Enter> (<Cmd+Enter> on macOS) brings it back, from
         anywhere the chat input isn't beneath something else, as the
-        @{MainWindowScope} says.
+        @{MainWindow} says.
 
     growToFit:
-        The text input is a @{GrowingTextInputScope} growing to 12 rows at most.
+        The text input is a @{GrowingTextInput} growing to 12 rows at most.
         Its first row lines up with the send button, both at the top of the
         input row, and it grows downward from there.
 
@@ -682,13 +683,13 @@ shape ChatInputShape:
 
         offered:
             The skills, commands, and agents offered are the
-            @{HarnessCatalogScope}'s. Each shows whether it is a skill, command,
+            @{HarnessCatalog}'s. Each shows whether it is a skill, command,
             or agent, and its description as documentation when it has one.
             Results are narrowed and ordered like Piton completions: matches at
             the start of a name before matches anywhere in it, then by name.
 
         accepting:
-            Accepting one inserts it as a mention, as the @{HarnessCatalogScope}
+            Accepting one inserts it as a mention, as the @{HarnessCatalog}
             says, in place of what was typed of it. Mentions work without the
             @{LSP}.
 
@@ -696,14 +697,14 @@ shape ChatInputShape:
         While the user will be able to type plain text, behind the scenes,
         they'll be typing into a piton anchor with a userPrompt property,
         named after what the prompt asks for, as its naming says. It's this
-        compiled anchor that will be send to the @{HarnessIntegrationScope}
+        compiled anchor that will be send to the @{HarnessIntegration}
 
         naming:
             Each task and question is named by the harness, rather than at
             random, so its files, its snapshot refs, and its header say what it
             was for. When a prompt is sent or queued, the harness is asked for
             a short title for it with the prompt-title prompt of the
-            @{BakedSystemPromptsScope}, in a run of its own that keeps no
+            @{BakedSystemPrompts}, in a run of its own that keeps no
             session, as the notes and commit messages are, with a small model
             where the harness can be told one. It is given the prompt as typed,
             and none of its attachments.
@@ -787,7 +788,7 @@ shape ChatInputShape:
 
         attachedImages:
             Each attached image is saved in the project's data, as the
-            @{ProjectDataScope} says, once the prompt is sent or queued, and a
+            @{ProjectData} says, once the prompt is sent or queued, and a
             prompt with images gives the hidden anchor an attachedImages
             property: a list of the saved images' paths, from the project
             directory, in the order they were attached, keyed image1, image2,
@@ -798,7 +799,7 @@ shape ChatInputShape:
             images in memory, saving nothing.
 
             The harness is given the images alongside the compiled prompt, in
-            the way it takes images, as the @{HarnessIntegrationScope} says,
+            the way it takes images, as the @{HarnessIntegration} says,
             in the order they were attached. A message sent to a running task
             can carry images the same way, and so can a question. A saved image
             that can't be found when the run starts fails it saying so, before
@@ -823,7 +824,7 @@ shape ChatInputShape:
 
         attachedFiles:
             Each attached file is saved in the project's data, as the
-            @{ProjectDataScope} says, in `.suspense/attachments/`, once the
+            @{ProjectData} says, in `.suspense/attachments/`, once the
             prompt is sent or queued, under its own name, in a folder named by
             the second it was saved and a short hash of its content, so the
             same file attached twice is saved once and two files of the same
@@ -848,7 +849,7 @@ shape ChatInputShape:
 
             Wherever an attached prompt is shown, its files are listed
             beneath its images, each as its row shows it, without the remove
-            button; clicking one opens it as the @{OpenFileScope} opens a file,
+            button; clicking one opens it as the @{OpenFile} opens a file,
             or, for a file it can't show, in the platform's default
             application for it. A message sent to a running task, and a
             question, can carry files the same way. Resending, sending to the
@@ -893,3 +894,4 @@ shape ChatInputShape:
             clicking it again collapses them. Each prompt's slices start
             collapsed, and stay as they were left for as long as the
             application runs. What the harness receives is unchanged.
+

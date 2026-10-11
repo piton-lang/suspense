@@ -1,8 +1,8 @@
 use /lib
-from /ui/components/right-sidebar import RightSidebarScope
+from /ui/components/left-sidebar import LeftSidebar
 
-export shape MessageListReferencedSpecShape:
+export anchor MessageListReferencedSpec:
     description:
-        While a task is running, a @{RightSidebarScope} slides out from
-        the message list's right edge, listing the spec files the task
-        references, and slides back once the run is over.
+        The spec files a running task references, the understanding it has
+        taken from them, and its subagents are shown in the
+        @{LeftSidebar}'s Run view, not beside the message list.

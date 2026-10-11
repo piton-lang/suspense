@@ -19,15 +19,6 @@ use super::*;
 use gpui_kit::component::button::ButtonCustomVariant;
 use crate::task_table::ChatSegment;
 
-/// The share of the width above the chat input the pane starts at, and the
-/// least and most its edge can be dragged to.
-pub(super) const ASK_SPLIT_SHARE: f32 = 0.5;
-const MIN_ASK_SPLIT_SHARE: f32 = 0.25;
-const MAX_ASK_SPLIT_SHARE: f32 = 0.75;
-
-/// How wide the strip along the pane's left edge that resizes it is.
-const ASK_SPLIT_HANDLE: Pixels = px(6.);
-
 /// How tall the pane's header is: as tall as the body's tab bar, level with
 /// it.
 const ASK_HEADER_HEIGHT: Pixels = px(32.);
@@ -39,10 +30,6 @@ const ANSWER_GAP: Pixels = px(8.);
 
 /// How much of Ask's colour tints a question's box.
 const QUESTION_TINT: f32 = 0.12;
-
-/// Dragged by the edge between the body's left side and the pane to resize
-/// the split.
-pub(super) struct AskSplitResize;
 
 /// A prompt in a chat: a question saved with the project, by its place
 /// among the saved questions, or asked since, by its id; or a Freeform task,
@@ -206,6 +193,8 @@ struct Look {
     answer: AnswerLayout,
     /// Its prompt cards expanded.
     expanded: Vec<String>,
+    /// Its average output rate, once over, in tokens a second.
+    rate: Option<u64>,
 }
 
 /// What the list was last laid out for.
@@ -719,6 +708,10 @@ impl PromptMode {
                     .collect(),
             };
             let look = Look {
+                rate: (!task.status.is_active())
+                    .then(|| self.usage.rate_of(&task.name))
+                    .flatten()
+                    .map(|rate| (rate.per_second() * 10.).round() as u64),
                 starts: starts_conversation[ix],
                 status: task.status,
                 reply: task.reply.version(),
@@ -930,6 +923,8 @@ impl PromptMode {
                         .min_w_0()
                         .child(latest_row(id, &task.reply, cx)),
                 )
+                // How fast it is writing, while it writes.
+                .children(super::rate_label(("question-rate", id), task, None, cx))
                 .children(stop);
             return gpui_kit::TestSupportExt::test_support(row).into_any_element();
         }
@@ -1258,6 +1253,12 @@ impl PromptMode {
             }
             _ => end,
         };
+        // Once over, its average output rate, small and muted, at its foot.
+        let rate = (!task.status.is_active())
+            .then(|| super::rate_label(("question-average-rate", key.id()), task, self.usage.rate_of(&task.name), cx))
+            .flatten()
+            .map(|rate| h_flex().pt_1().text_xs().child(rate));
+        let end = end.children(rate);
         // A task's files changed while it ran, beneath its reply.
         let changed = match key {
             QuestionKey::Task(ix) if with_changed => {
@@ -1274,7 +1275,7 @@ impl PromptMode {
     pub(super) fn render_ask_pane(&self, cx: &mut Context<Self>) -> AnyElement {
         let keys = self.question_keys();
         let theme = cx.theme();
-        let (border, muted, ring) = (theme.border, theme.muted_foreground, theme.ring);
+        let (border, muted) = (theme.border, theme.muted_foreground);
         let (tab_bar, background) = (theme.tab_bar, theme.background);
         let header = h_flex()
             .id("ask-pane-header")
@@ -1312,38 +1313,12 @@ impl PromptMode {
         } else {
             self.render_conversation(&keys, cx)
         };
-        let handle = div()
-            .id("ask-split-resize")
-            .group("ask-split-resize")
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left(-ASK_SPLIT_HANDLE / 2.)
-            .w(ASK_SPLIT_HANDLE)
-            .flex()
-            .justify_center()
-            .cursor_col_resize()
-            .on_prepaint(|bounds, _, cx| {
-                crate::hit_areas::register_resize("ask-split-resize".into(), bounds, cx)
-            })
-            .child(
-                div()
-                    .h_full()
-                    .w(px(2.))
-                    .group_hover("ask-split-resize", |line| line.bg(ring)),
-            )
-            .on_drag(AskSplitResize, |_, _, _, cx| cx.new(|_| EmptyView));
-        let handle = gpui_kit::TestSupportExt::test_support(handle);
         let pane = v_flex()
             .id("ask-pane")
             .relative()
-            .flex_none()
-            .h_full()
-            .w(relative(self.ask_split_share))
+            .size_full()
             .min_w_0()
             .bg(background)
-            .border_l_1()
-            .border_color(border)
             // A drag that selects some of a question's or answer's text
             // offers to copy it or attach it to the prompt, once the
             // selection has settled.
@@ -1361,8 +1336,16 @@ impl PromptMode {
                 }),
             )
             .child(header)
-            .child(content)
-            .child(handle);
+            // Its questions and answers across the full width of the space
+            // it fills, with only their own padding at either side.
+            .child(
+                // Lets UI tests find it; inert in normal builds.
+                gpui_kit::TestSupportExt::test_support(v_flex().id("ask-pane-body"))
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .child(content),
+            );
         gpui_kit::TestSupportExt::test_support(pane).into_any_element()
     }
 
@@ -1554,22 +1537,6 @@ impl PromptMode {
     /// Locks the Freeform chat to its bottom, as sending a prompt does.
     pub(super) fn lock_freeform_chat(&mut self) {
         self.freeform_pane.locked = true;
-    }
-
-    /// Resizes the split so the pane's left edge is at `x`, within `bounds`,
-    /// the space both sides share.
-    pub(super) fn drag_ask_split(
-        &mut self,
-        x: Pixels,
-        bounds: Bounds<Pixels>,
-        cx: &mut Context<Self>,
-    ) {
-        if bounds.size.width <= px(0.) {
-            return;
-        }
-        self.ask_split_share = ((bounds.right() - x) / bounds.size.width)
-            .clamp(MIN_ASK_SPLIT_SHARE, MAX_ASK_SPLIT_SHARE);
-        cx.notify();
     }
 }
 

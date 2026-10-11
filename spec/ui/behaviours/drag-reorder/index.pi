@@ -1,10 +1,7 @@
 use /lib
-from /ui/theme import ThemeScope
+from /ui/theme import Theme
 
-export scope DragReorderBehaviour:
-    concept: {DragReorderBehaviourConcept}
-
-concept DragReorderBehaviourConcept:
+export feature DragReorderBehaviour:
     pitch:
         How anything that can be reordered by dragging shows where it will
         end up, as macOS lists and tab bars do: with a line in the gap between
@@ -12,9 +9,6 @@ concept DragReorderBehaviourConcept:
         Every list, tab bar, or row of items that is reordered by drag and
         drop behaves this way.
 
-    shape: {DragReorderBehaviourShape}
-
-shape DragReorderBehaviourShape:
     description:
         While an item is dragged over the items it can be reordered among,
         what it would be dropped into is always a gap between two items, or
@@ -23,7 +17,7 @@ shape DragReorderBehaviourShape:
         item is highlighted, tinted, or outlined as a target.
 
     indicator:
-        The indicator is a line 2 pixels thick in the @{ThemeScope}'s accent,
+        The indicator is a line 2 pixels thick in the @{Theme}'s accent,
         with rounded ends and a small open circle, 6 pixels across and in the
         same colour, at its leading end. It lies across the gap, centred on
         the gap, horizontal between the rows of a list, running the list's
@@ -77,3 +71,4 @@ shape DragReorderBehaviourShape:
         outside the items, over a gap it may not go into, or back where it
         started, nothing changes. Either way the indicator and the dimming go
         at once.
+

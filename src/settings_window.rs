@@ -85,7 +85,7 @@ impl Section {
             (Section::SystemPrompts, Prompt::System | Prompt::Mode(_))
                 | (
                     Section::InjectedPrompts,
-                    Prompt::SpecReading | Prompt::CodeToSpec | Prompt::SpecToCode
+                    Prompt::SpecReading | Prompt::CodeToSpec | Prompt::SpecToCode | Prompt::Resume
                 )
         )
     }
@@ -1149,6 +1149,7 @@ mod tests {
                 Prompt::SpecReading,
                 Prompt::CodeToSpec,
                 Prompt::SpecToCode,
+                Prompt::Resume,
             ]
         );
         assert!(!system_prompts::file(SendMode::Freeform, &dir).exists());
@@ -1231,7 +1232,7 @@ mod tests {
         });
         assert_eq!(
             order,
-            [Prompt::SpecReading, Prompt::CodeToSpec, Prompt::SpecToCode]
+            [Prompt::SpecReading, Prompt::CodeToSpec, Prompt::SpecToCode, Prompt::Resume]
         );
         system_prompts::save(Prompt::CodeToSpec, "Say ${CODE_RESULT}.", &dir).unwrap();
         settings.update_in(cx, |this, window, cx| this.load(window, cx));

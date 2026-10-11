@@ -1,18 +1,12 @@
 use /lib
-from /scope/project-directory import ProjectDirectoryScope
+from /scope/project-directory import ProjectDirectory
 
-export scope GitScope:
-    concept: {GitConcept}
-
-concept GitConcept:
+export feature Git:
     pitch:
-        Awareness of the git repository the ${ProjectDirectoryScope} is in:
+        Awareness of the git repository the ${ProjectDirectory} is in:
         what has changed in it, and what each file was at the last commit.
         Whatever shows git state reads it from here.
 
-    shape: {GitShape}
-
-shape GitShape:
     description:
         The project may sit anywhere inside a repository, including at its
         top. Outside a git repository, or without git, there is no git state,
@@ -47,3 +41,4 @@ shape GitShape:
         Git state follows the repository by itself, within a couple of
         seconds of files changing on disk or of the repository changing, such
         as after staging, committing, or switching branches.
+

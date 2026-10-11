@@ -1,25 +1,19 @@
 use /lib
 use /ui
-from /scope/about import AboutScope
-from /scope/self-update import SelfUpdateScope
-from /scope/settings-window import SettingsWindowScope
-from /scope/user-preferences import UserPreferencesScope
-from /scope/walkthrough import WalkthroughScope
-from /scope/welcome import WelcomeScope
-from /ui/components/theme-editor import ThemeEditorScope
-from /ui/theme import ThemeScope
+from /scope/about import About
+from /scope/self-update import SelfUpdate
+from /scope/settings-window import SettingsWindow
+from /scope/user-preferences import UserPreferences
+from /scope/walkthrough import Walkthrough
+from /scope/welcome import Welcome
+from /ui/components/theme-editor import ThemeEditor
+from /ui/theme import Theme
 
-export ui-component RibbonApplicationTabScope:
-    concept: {RibbonApplicationTabConcept}
-
-concept RibbonApplicationTabConcept:
+export ui-component RibbonApplicationTab:
     pitch:
         The ribbon's Application tab: the commands for the application itself,
         rather than the project.
 
-    shape: {RibbonApplicationTabShape}
-
-shape RibbonApplicationTabShape:
     description:
         The Application tab of the ribbon, last of the tabs.
 
@@ -52,7 +46,7 @@ shape RibbonApplicationTabShape:
             lighter, from its darkest to its lightest, keeping its contrast,
             and that double-clicking it resets it.
 
-            Its one track runs through every appearance the @{ThemeScope}
+            Its one track runs through every appearance the @{Theme}
             allows, darkest first: dark mode from its darkest brightness to
             its lightest, then light mode from its darkest to its lightest,
             one position for each step, with no switch between them. So all
@@ -62,7 +56,7 @@ shape RibbonApplicationTabShape:
 
             Dragging it changes the mode and the brightness straight away as
             it moves, and once it is let go saves the mode showing and each
-            mode's brightness among the @{UserPreferencesScope}. A mode that
+            mode's brightness among the @{UserPreferences}. A mode that
             can't be saved shows a notification titled
             "Could not save brightness", with why; a brightness that can't be
             saved fails quietly. Its thumb follows the appearance showing,
@@ -79,7 +73,7 @@ shape RibbonApplicationTabShape:
 
         theme:
             A "Theme" button with a palette icon. Clicking it opens the
-            @{ThemeEditorScope}. Its tooltip says it chooses the base colour,
+            @{ThemeEditor}. Its tooltip says it chooses the base colour,
             and the colours of Code, Chain, Spec, and Ask.
 
             It is a full button, and not primary, so the collapsed ribbon
@@ -87,7 +81,7 @@ shape RibbonApplicationTabShape:
 
         settings:
             A "Settings" button with a gear icon. Clicking it opens the
-            @{SettingsWindowScope}, where the system prompt each chat tab sends
+            @{SettingsWindow}, where the system prompt each chat tab sends
             is edited. Its tooltip says so, and gives its keyboard shortcut,
             Ctrl+, (Cmd+, on macOS).
 
@@ -95,7 +89,7 @@ shape RibbonApplicationTabShape:
 
         welcome:
             A "Welcome" button with a checklist icon. Clicking it opens the
-            @{WelcomeScope}, running its checks anew. Its tooltip says it
+            @{Welcome}, running its checks anew. Its tooltip says it
             checks that Suspense is ready to run.
 
             It is a full button, and not primary, so the collapsed ribbon
@@ -103,7 +97,7 @@ shape RibbonApplicationTabShape:
 
         walkthrough:
             A "Walkthrough" button with a signpost icon. Clicking it starts
-            the @{WalkthroughScope} from its first step. Its tooltip says it
+            the @{Walkthrough} from its first step. Its tooltip says it
             walks through creating a project and the prompt modes.
 
             It is a full button, and not primary, so the collapsed ribbon
@@ -112,7 +106,7 @@ shape RibbonApplicationTabShape:
         checkForUpdates:
             A "Check for Updates" button with a refresh icon. Clicking it
             checks for an update straight away, as the Updates section's
-            Check for updates does, as the @{SelfUpdateScope} says, whether
+            Check for updates does, as the @{SelfUpdate} says, whether
             automatic checks are on or not, and says how it went in a
             notification, which reads "Suspense is up to date", with the
             version running;
@@ -135,8 +129,9 @@ shape RibbonApplicationTabShape:
 
         about:
             An "About" button with an info icon. Clicking it opens the
-            @{AboutScope}, showing which version of Suspense is running. Its
+            @{About}, showing which version of Suspense is running. Its
             tooltip says it shows the version and build of Suspense.
 
             It is a full button, and not primary, so the collapsed ribbon
             leaves it out.
+

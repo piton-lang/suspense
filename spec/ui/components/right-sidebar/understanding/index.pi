@@ -1,9 +1,9 @@
 use /lib
 use /ui
 use /ui/components/sidebar/Panel
-from .. import RightSidebarScope
-from /scope/open-file import OpenFileScope
-from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
+from /ui/components/left-sidebar import LeftSidebar
+from /scope/open-file import OpenFile
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPrompts
 
 export panel UnderstandingPanel:
     title: Understanding
@@ -12,20 +12,14 @@ export panel UnderstandingPanel:
     scrolls: true
     scrollbar: overflowing
 
-    concept: {UnderstandingConcept}
-
-concept UnderstandingConcept:
     pitch:
-        The panel beneath the referenced files in the @{RightSidebarScope},
+        The panel beneath the referenced files in the @{LeftSidebar}'s Run view,
         above the subagents once there are any: the constraints
         the harness has taken from the spec for the running task.
 
-    shape: {UnderstandingShape}
-
-shape UnderstandingShape:
     description:
         It shows the running task's understanding file, as the
-        @{ModeSystemPromptsScope} says, as it is written: one row per item of
+        @{ModeSystemPrompts} says, as it is written: one row per item of
         its Markdown list, in the file's order, its text wrapping rather than
         cut off. Each row is a box on the ribbon's tab row colour, #333333 in
         dark mode, with corners rounded 4 pixels, its text in small text with
@@ -35,7 +29,7 @@ shape UnderstandingShape:
 
         A row's text is its item's, with any link shown as its text alone.
         Clicking a row opens the file its link points to, read from the
-        project directory, as the @{OpenFileScope} says. A row whose link
+        project directory, as the @{OpenFile} says. A row whose link
         points to a file that doesn't exist shows its text muted, and clicking
         it does nothing; a row with no link does nothing either.
 
@@ -45,3 +39,4 @@ shape UnderstandingShape:
         "Nothing understood yet", muted. Once it exists but has no list items
         yet, as when it has just been created, the panel shows nothing beneath
         its header, and has nothing to scroll and no scrollbar.
+

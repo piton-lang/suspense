@@ -1,21 +1,15 @@
 use /lib
-from /scope/container-environment import ContainerEnvironmentScope
-from /scope/no-project import NoProjectStateScope
-from /scope/open-projects import OpenProjectsScope
-from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
-from /scope/running-activity import RunningActivityScope
+from /scope/container-environment import ContainerEnvironment
+from /scope/no-project import NoProjectState
+from /scope/open-projects import OpenProjects
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPrompts
+from /scope/running-activity import RunningActivity
 
-export scope SpecBuildScope:
-    concept: {SpecBuildConcept}
-
-concept SpecBuildConcept:
+export feature SpecBuild:
     pitch:
         Brings the project's compiled spec up to date, so what the harness
         reads of the spec is what the spec says now.
 
-    shape: {SpecBuildShape}
-
-shape SpecBuildShape:
     description:
         `piton build` runs in the project directory, compiling the spec and
         writing it out for the agents, the reference folder the harness reads
@@ -24,7 +18,7 @@ shape SpecBuildShape:
 
         Each build also writes the project's Piton fluency, what
         `piton agent --print-fluency` prints, to the fluency file in the
-        project's data, as the @{ModeSystemPromptsScope} says, whether the
+        project's data, as the @{ModeSystemPrompts} says, whether the
         build succeeds or not, so the file keeps in step with the project's
         piton. Where the fluency can't be printed, the file is left as it
         was.
@@ -54,9 +48,9 @@ shape SpecBuildShape:
     onItsOwn:
         The Build Spec command, and Build in the palette, run a build on their
         own. They are unavailable while no project is open, as the
-        @{NoProjectStateScope} says, and while such a build is running, when the
+        @{NoProjectState} says, and while such a build is running, when the
         command shows a spinner and its tooltip says the spec is building. The
-        build is listed among the @{RunningActivityScope} as
+        build is listed among the @{RunningActivity} as
         "Building the spec".
 
         When the build is over, a notification says how it went. A build that
@@ -68,7 +62,7 @@ shape SpecBuildShape:
 
     projects:
         A build run on its own belongs to the project it started in, as the
-        @{OpenProjectsScope} says, and carries on when switching to another
+        @{OpenProjects} says, and carries on when switching to another
         project. The command shows it running only while that project is on
         screen; another project can build at the same time. When it is over
         while another project is on screen, its notification's title ends with
@@ -87,7 +81,7 @@ shape SpecBuildShape:
 
     afterSpecWork:
         A Spec task, or a Chain prompt's spec step or spec follow-up, runs in a
-        container with no code location, as the @{ContainerEnvironmentScope}
+        container with no code location, as the @{ContainerEnvironment}
         says, so any build it runs there writes only the reference it can see.
         Once its run is over, however it ended, done, failed, or cancelled, a
         build runs on the host, as one ahead of work does, so the host's
@@ -113,3 +107,4 @@ shape SpecBuildShape:
         a build that still fails after it fails as ever, its passive notice
         saying so. A task that was cancelled, or failed, is never followed by
         a spec fix: its build fails as ever.
+

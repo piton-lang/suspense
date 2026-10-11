@@ -1,0 +1,6 @@
+- [The Scrollbar is a narrow column along the list's right, always shown, the list's only scrollbar](.claude/reference/ui/components/scrollbar/index.md#description)
+- [The scrollbar column is 18px wide, with up and down buttons and a thumb sized to the share in view](.claude/reference/ui/components/scrollbar/index.md#buttons)
+- [The Tasks tab is one scrolling column with a Scrollbar](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [All three section headings stay pinned at the top or bottom, the rows scrolling between them](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [The scrollbar's thumb is sized from the whole list's height](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [The Tasks list has the pinned, always-shown scrollbar column the full height of the tab, headings and rows ending at its edge](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)

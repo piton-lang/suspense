@@ -30,26 +30,17 @@ use crate::theme::Hue;
 /// How often the summary is read again.
 const REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 
-/// The panel's header is on a colour of its own, so that change of colour is
-/// the edge above it, with no line between it and the panel before.
-pub const COLOUR_IS_EDGE: bool = true;
-
 /// How tall the header, the branch's row, is.
 pub const HEADER_HEIGHT: Pixels = px(32.);
-
-/// The most of its sidebar's height the panel grows to, until the edge above
-/// it is dragged; it is never taller than its contents need.
-pub const MAX_SHARE: f32 = 0.5;
-
-/// The shortest it can be dragged: its header alone, the body scrolling
-/// beneath it.
-pub const MIN_HEIGHT: Pixels = HEADER_HEIGHT;
 
 /// The body's padding at either side and at the bottom.
 pub const PADDING: Pixels = px(8.);
 
 /// Between one thing in the body and the next.
 pub const GAP: Pixels = px(4.);
+
+/// The body's colour between the notes and their scrollbar, while it shows.
+pub const SCROLLBAR_GAP: Pixels = px(6.);
 
 /// How tall the summary's line is.
 const SUMMARY_HEIGHT: Pixels = px(22.);
@@ -518,6 +509,12 @@ impl GitPanel {
         }
     }
 
+    /// How many files are changed and not yet committed, none outside a
+    /// git repository.
+    pub fn uncommitted(&self) -> usize {
+        self.summary.as_ref().map_or(0, |summary| summary.changes().len())
+    }
+
     #[cfg(test)]
     pub fn summary(&self) -> Option<&Summary> {
         self.summary.as_ref()
@@ -885,7 +882,7 @@ impl Render for GitPanel {
         let notes = v_flex()
             .id("git-scroll")
             .w_full()
-            .flex_shrink(1.)
+            .flex_1()
             .min_h_0()
             .gap(GAP)
             .overflow_y_scroll()
@@ -985,7 +982,20 @@ impl Render for GitPanel {
         // Lets UI tests find the notes; inert in normal builds.
         let notes = gpui_kit::TestSupportExt::test_support(notes);
         let notes = if overflows {
-            crate::scrollbar::with_fitted_scrollbar("git-scroll", &self.scroll, notes, cx)
+            // The scrollbar in the body's right padding, against the panel's
+            // edge, with the body's colour between it and the notes, which
+            // narrow to make room.
+            v_flex()
+                .flex_1()
+                .min_h_0()
+                .mr(-PADDING)
+                .child(crate::scrollbar::with_fitted_scrollbar(
+                    "git-scroll",
+                    &self.scroll,
+                    notes.pr(SCROLLBAR_GAP),
+                    cx,
+                ))
+                .into_any_element()
         } else {
             notes.into_any_element()
         };
@@ -993,23 +1003,30 @@ impl Render for GitPanel {
             .id("git-body")
             .relative()
             .w_full()
-            .flex_shrink(1.)
+            .flex_1()
             .min_h_0()
             .px(PADDING)
             .pb(PADDING)
             .gap(GAP)
             .bg(crate::theme::color(palette.ribbon))
             .child(div().flex_none().child(summary_row))
-            .when(!self.notes.is_empty(), |body| body.child(notes))
+            // The notes fill the height between the summary and the
+            // message; with none, it is left empty.
+            .map(|body| {
+                if self.notes.is_empty() {
+                    body.child(div().flex_1().min_h_0())
+                } else {
+                    body.child(notes)
+                }
+            })
             .child(gpui_kit::TestSupportExt::test_support(footer))
             .child(watch);
         // No line above it, nor between its header and body: the change of
-        // colour is the edge. It is as tall as its contents until its sidebar
-        // gives it less, on the body's colour all the way down.
+        // colour is the edge. It fills its view's whole height, whatever its
+        // contents, on the body's colour all the way down.
         let panel = v_flex()
             .id("git-panel")
-            .w_full()
-            .flex_shrink(1.)
+            .size_full()
             .min_h_0()
             .text_sm()
             .bg(crate::theme::color(palette.ribbon))
@@ -1512,7 +1529,9 @@ mod tests {
                 assert_eq!(summary.top(), body.top(), "{mode:?}: summary");
                 assert_eq!(notes[0].top() - summary.bottom(), super::GAP, "{mode:?}");
                 assert_eq!(notes[1].top() - notes[0].bottom(), super::GAP, "{mode:?}");
-                assert_eq!(message.top() - notes[1].bottom(), super::GAP, "{mode:?}");
+                // The message along the bottom, the room the notes don't
+                // need left empty above it.
+                assert!(message.top() - notes[1].bottom() >= super::GAP, "{mode:?}");
                 let commit = bounds("git-commit");
                 assert_eq!(body.bottom() - commit.bottom(), super::PADDING, "{mode:?}");
 
@@ -1692,6 +1711,83 @@ mod tests {
             "the notes' own file was committed"
         );
         assert!(panel.read_with(cx, |panel, _| panel.notes.is_empty()));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// While the notes overflow, their scrollbar sits against the panel's
+    /// right edge, in the body's padding, with 6px of the body's colour
+    /// between it and the notes; with nothing to scroll, the notes reach the
+    /// body's padding.
+    #[gpui_kit::test]
+    async fn notes_keep_clear_of_their_scrollbar(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-panel-scrollbar-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "-q", "-b", "main"]);
+        for n in 0..120 {
+            crate::commit_notes::add(&dir, &format!("Note {n}")).unwrap();
+        }
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            ProjectDirectory::set(dir.clone(), cx);
+        });
+        // Given less height than its notes need, as a sidebar gives it.
+        use gpui_kit::component::v_flex;
+        use gpui_kit::{Context, Entity, IntoElement, ParentElement as _, Render, Styled as _, Window, px};
+        struct Framed(Entity<GitPanel>);
+        impl Render for Framed {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                v_flex().w(px(300.)).h(px(400.)).child(self.0.clone())
+            }
+        }
+        let mut panel = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| GitPanel::new(window, cx));
+            panel = Some(view.clone());
+            let framed = cx.new(|_| Framed(view));
+            Root::new(framed, window, cx)
+        });
+        let panel = panel.unwrap();
+        let handle = window.into();
+        cx.wait_for(handle, Duration::from_secs(5), |window, _| {
+            window.try_find("git-scroll-scroll-column").is_some()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let panel = window.find("git-panel").bounds();
+            let column = window.find("git-scroll-scroll-column").bounds();
+            let note = window.find(("commit-note", 1usize)).bounds();
+            assert_eq!(column.right(), panel.right(), "the scrollbar isn't at the panel's edge");
+            assert_eq!(column.left() - note.right(), super::SCROLLBAR_GAP, "{note:?} beside {column:?}");
+        })
+        .unwrap();
+
+        // Down to a few, nothing scrolls, and the notes reach the padding.
+        panel.update(cx, |panel, cx| {
+            for row in panel.notes.iter().skip(3) {
+                crate::commit_notes::remove(&dir, row.id).ok();
+            }
+            crate::commit_notes::changed(cx);
+        });
+        cx.wait_for(handle, Duration::from_secs(5), |window, _| {
+            window.try_find("git-scroll-scroll-column").is_none()
+        })
+        .await;
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            let panel = window.find("git-panel").bounds();
+            let note = window.find(("commit-note", 1usize)).bounds();
+            assert_eq!(panel.right() - note.right(), super::PADDING);
+            // Few notes, it still fills its view's height, the message,
+            // Generate, and Commit along its bottom.
+            assert_eq!(panel.size.height, px(400.));
+            let footer = window.find("git-footer").bounds();
+            assert_eq!(panel.bottom() - footer.bottom(), super::PADDING);
+        })
+        .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 }

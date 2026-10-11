@@ -1,23 +1,17 @@
 use /lib
 use /ui
-from /scope/application import ApplicationScope
-from /scope/harness-integration import HarnessIntegrationScope
-from /scope/project-data import ProjectDataScope
-from /scope/project-directory import ProjectDirectoryScope
-from /scope/project/open-project import OpenProjectScope
-from /ui/components/folder-browser import FolderBrowserScope
+from /scope/application import Application
+from /scope/harness-integration import HarnessIntegration
+from /scope/project-data import ProjectData
+from /scope/project-directory import ProjectDirectory
+from /scope/project/open-project import OpenProject
+from /ui/components/folder-browser import FolderBrowser
 
-export ui-component NewProjectScope:
-    concept: {NewProjectConcept}
-
-concept NewProjectConcept:
+export ui-component NewProject:
     pitch:
         Creates a new Piton project, with its piton.config.pi set up for Belay
         and the agents it should write for, and opens it.
 
-    shape: {NewProjectShape}
-
-shape NewProjectShape:
     description:
         A form titled "New Project", with a close button, holding the project's
         name, where it goes, the template it starts from, and its Belay options,
@@ -42,7 +36,7 @@ shape NewProjectShape:
         project, or the user's home folder when no project is open. Beneath it,
         muted, the full path of the folder that will be created.
 
-        Browse opens a @{FolderBrowserScope} in place of the form, titled
+        Browse opens a @{FolderBrowser} in place of the form, titled
         "Choose where the project goes" and starting in the current location. A
         new folder for the project to go in can be created from there. Choosing
         a folder makes it the location, and choosing or cancelling goes back to
@@ -81,7 +75,7 @@ shape NewProjectShape:
         and of the brackets, are never cut off.
 
         Beneath the agents, a "Harness" group of radio buttons picks the
-        harness the project's runs go to, as the @{HarnessIntegrationScope}
+        harness the project's runs go to, as the @{HarnessIntegration}
         says: one per agent checked, in their order, Claude Code, OpenCode,
         and Codex, each with its command muted beside it and "Not installed"
         after that where it can't be found. Only the agents checked are
@@ -133,7 +127,7 @@ shape NewProjectShape:
         that already exist are kept. A project created from either template
         builds with `piton build` straight away. Everything it creates,
         folders, files, and the Git repository alike, belongs to the user,
-        as the @{ApplicationScope} says, never to Administrators on Windows,
+        as the @{Application} says, never to Administrators on Windows,
         so the project can be edited, built, and committed at once, with no
         ownership to take.
 
@@ -141,12 +135,13 @@ shape NewProjectShape:
         project's folder is made a Git repository with `git init`, unless it
         already is the top of one, and a .gitignore is written there ignoring
         what Suspense keeps for this machine alone rather than for the project,
-        as the @{ProjectDataScope} says. An existing .gitignore is left as it
+        as the @{ProjectData} says. An existing .gitignore is left as it
         is. Nothing is committed. If Git fails, the project still opens, and a
         warning notification says the repository couldn't be initialized, and
         why.
 
         Once created, the project opens as if opened with the
-        @{OpenProjectScope}, becoming the @{ProjectDirectoryScope}, and the
+        @{OpenProject}, becoming the @{ProjectDirectory}, and the
         form closes. If anything fails, the
         form stays open and says what went wrong above its buttons.
+

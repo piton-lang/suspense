@@ -1,0 +1,6 @@
+- [The body has a tab bar: Chat first, then a tab per open file or task](.claude/reference/scope/application/Body.md#tabs)
+- [The Chat tab shows the message list beneath the tab bar](.claude/reference/scope/application/Body.md#contents)
+- [The chat input runs along the bottom beneath whichever tab is selected](.claude/reference/scope/application/Body.md#tabs)
+- [The Ask conversation has a 32px header reading "Questions" with its count](.claude/reference/scope/prompt-mode/ask-conversation/index.md#description)
+- [The Ask conversation comes back as it was, scrolled where it was, when Ask is selected again](.claude/reference/scope/prompt-mode/ask-conversation/index.md#description)
+- [In Ask mode the Ask conversation fills the Chat tab in place of the message list; the body never splits](.claude/reference/scope/application/Body.md#ask-mode)

@@ -1,0 +1,76 @@
+
+export anchor MoveRightSidebarScopeRunTabToLeftSidebar2:
+    userPrompt:
+        \\\
+        So let's move the @{RightSidebarScope} run tab to the left sidebar (we also need a LeftSidebar spec that revamps how Git and FileTree are structured.)
+
+        The tabs should be side-style like VS Code or JetBrains
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            So let's move the @{RightSidebarScope} run tab to the left sidebar (we also need a LeftSidebar spec that revamps how Git and FileTree are structured.)
+
+            The tabs should be side-style like VS Code or JetBrains
+            \\\
+        result:
+            \\\
+            I replaced the old left sidebar with a new **LeftSidebar** that has a VS Code / JetBrains-style strip of view icons down its left edge, and moved the Run panels into it. `piton check` reports no problems and `piton build` wrote 82 files.
+
+            - **New LeftSidebar** (`.claude/reference/ui/components/left-sidebar/index.md`):
+              - **View bar** (`#view-bar`): a 40px icon strip on the darkest surface with three views.
+                - **Files** (Ctrl+Shift+E).
+                - **Git** (Ctrl+Shift+G), with a badge counting uncommitted files.
+                - **Run** (Ctrl+Shift+R), with a spinner while a task runs and a dot when one has started since you last looked.
+              - **Selected view:** shown with an accent bar and full-strength icon.
+              - **Collapsing:** clicking the view already showing collapses the sidebar to just the bar.
+              - **Views** (`#views`, `#run-view`):
+                - Files and Git each get the full height. The draggable edge between the file tree and Git is gone.
+                - Run holds the referenced files, understanding and subagents panels, sized and resizable as before.
+                - With no task yet, Run says "No task running". After a task ends, Run keeps showing it until the next one starts.
+              - **No automatic switching** (`#following`): Files shows to start with, and the sidebar never switches to Run by itself.
+            - **Right sidebar:** now holds only the Tasks list, with no tab row. It still shows while a task runs or is queued, or when you open it.
+            - **Removed:** the old Project Sidebar spec is gone. The Git panel and the three Run panels now point to their new homes.
+
+            **Choices to check:**
+            - The keyboard shortcuts are mine.
+            - Ctrl+Shift+R may clash with something on your setup.
+
+            **Anchors the code should follow:** `LeftSidebarScope` `#description`, `#view-bar`, `#views`, `#following` and `#run-view`; `RightSidebarScope` `#description` and `#showing`; `GitPanelScope`; `TasksTabScope` `#virtualized`; and `BodyScope` and `MainWindowScope` for where the sidebars sit.
+            \\\
+
+    sentFrom: MoveRightSidebarScopeRunTabToLeftSidebar
+
+    model: opus

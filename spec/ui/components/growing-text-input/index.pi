@@ -1,17 +1,11 @@
 use /lib
 use /ui
 
-export ui-component GrowingTextInputScope:
-    concept: {GrowingTextInputConcept}
-
-concept GrowingTextInputConcept:
+export ui-component GrowingTextInput:
     pitch:
         A multi-line text input that is only as tall as its text, so it takes
         a single row until there is more to show.
 
-    shape: {GrowingTextInputShape}
-
-shape GrowingTextInputShape:
     description:
         A multi-line text input whose long lines soft wrap, starting at a
         single row.
@@ -76,3 +70,4 @@ shape GrowingTextInputShape:
         but lays itself out around the height the input takes, growing and
         shrinking with it in the same frame. Only its most rows stop it
         growing.
+

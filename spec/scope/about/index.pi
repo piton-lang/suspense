@@ -1,20 +1,14 @@
 use /lib
 use /ui
-from /scope/edge-releases import EdgeReleasesScope
-from /scope/self-update import SelfUpdateScope
+from /scope/edge-releases import EdgeReleases
+from /scope/self-update import SelfUpdate
 
-export ui-component AboutScope:
-    concept: {AboutConcept}
-
-concept AboutConcept:
+export ui-component About:
     pitch:
         What this copy of Suspense is: its name, its version, and the build it
         came from, so it can be told which one is running, as when reporting
         a bug.
 
-    shape: {AboutShape}
-
-shape AboutShape:
     description:
         A small panel titled "About Suspense", with a close button, its
         contents centred: the application's icon, 64 pixels square, then
@@ -25,7 +19,7 @@ shape AboutShape:
     details:
         Beneath, a short list of labelled figures, a label at the left,
         muted, and its value at the right, in tabular figures where it is a
-        number, in this order, the version as the @{EdgeReleasesScope} says it is
+        number, in this order, the version as the @{EdgeReleases} says it is
         baked into the binary.
 
         \\
@@ -52,5 +46,6 @@ shape AboutShape:
         per line, "Suspense" first, for pasting into a bug report, and reads
         "Copied", with a check, for 2 seconds after; and, where the build can
         update itself, a "Check for Updates" button, doing what the ribbon's
-        does, as the @{SelfUpdateScope} says. A primary "Close" button, or
+        does, as the @{SelfUpdate} says. A primary "Close" button, or
         <Escape>, closes the panel.
+

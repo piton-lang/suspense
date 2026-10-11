@@ -1,22 +1,16 @@
 use /lib
-from /scope/open-file import OpenFileScope
-from /scope/project-data import ProjectDataScope
-from /scope/self-update import SelfUpdateScope
+from /scope/open-file import OpenFile
+from /scope/project-data import ProjectData
+from /scope/self-update import SelfUpdate
 
-export scope DebugLogScope:
-    concept: {DebugLogConcept}
-
-concept DebugLogConcept:
+export feature DebugLog:
     pitch:
         A debug log of what Suspense does, so that a problem can be handed to
         an agent as files to investigate.
 
-    shape: {DebugLogShape}
-
-shape DebugLogShape:
     description:
         The log is `suspense.log` in Suspense's own data directory, beside
-        `updates.log`, as the @{SelfUpdateScope} keeps that one. It is one
+        `updates.log`, as the @{SelfUpdate} keeps that one. It is one
         line per event, each with the time to the millisecond, the project it
         concerns, by its folder, or none for the application's own, and what
         happened. It keeps the last 20,000 lines, across sessions: each launch
@@ -41,7 +35,7 @@ shape DebugLogShape:
         replied.
 
     phases:
-        A task's history record, as the @{ProjectDataScope} says, also keeps
+        A task's history record, as the @{ProjectData} says, also keeps
         the times of its phases, as the log names them, when each began and
         ended, to the millisecond.
 
@@ -61,4 +55,5 @@ shape DebugLogShape:
 
         With no project open, it holds what doesn't need one, and its README
         says no project was open. The palette's "Open debug log" opens
-        `suspense.log` as the @{OpenFileScope} opens a file.
+        `suspense.log` as the @{OpenFile} opens a file.
+

@@ -380,8 +380,12 @@ mod tests {
         mark_first_to_end(&mut marked);
         let output = marked.output().unwrap();
         assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "1000");
-        let own = std::fs::read_to_string("/proc/self/oom_score_adj").unwrap();
-        assert_ne!(own.trim(), "1000", "Suspense marked itself");
+        let own = || std::fs::read_to_string("/proc/self/oom_score_adj").unwrap();
+        let before = own();
+        let mut again = command("true");
+        mark_first_to_end(&mut again);
+        again.status().unwrap();
+        assert_eq!(own(), before, "Suspense marked itself");
         assert!(out_of_memory_message("cargo").contains("ran out of memory"));
     }
 

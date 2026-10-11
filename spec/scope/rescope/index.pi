@@ -1,42 +1,36 @@
 use /lib
 use /ui
-from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
-from /scope/harness-integration/one-off-run import OneOffAgentRunScope
-from /scope/open-projects import OpenProjectsScope
-from /scope/project-locations import ProjectLocationsScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/prompt-mode/sending import PromptSendingScope
-from /scope/running-activity import RunningActivityScope
-from /ui/components/minimizable-panel import MinimizablePanelScope
-from /ui/components/ranked-selection-list import RankedSelectionListScope
-from /ui/components/task-table import TaskTableScope
+from /scope/harness-integration/baked-prompts import BakedSystemPrompts
+from /scope/harness-integration/one-off-run import OneOffAgentRun
+from /scope/open-projects import OpenProjects
+from /scope/project-locations import ProjectLocations
+from /scope/prompt-mode/modes import PromptModes
+from /scope/prompt-mode/sending import PromptSending
+from /scope/running-activity import RunningActivity
+from /ui/components/minimizable-panel import MinimizablePanel
+from /ui/components/ranked-selection-list import RankedSelectionList
+from /ui/components/task-table import TaskTable
 
-export ui-component RescopeScope:
-    concept: {RescopeConcept}
-
-concept RescopeConcept:
+export ui-component Rescope:
     pitch:
         Finds concepts the spec describes over and over in different scopes
         that would be better as scopes of their own, ranks them, and hands the
         ones chosen to the harness to refactor the spec around them.
 
-    shape: {RescopeShape}
-
-shape RescopeShape:
     description:
-        A @{MinimizablePanelScope} titled "Rescope". Opening it starts looking
+        A @{MinimizablePanel} titled "Rescope". Opening it starts looking
         straight away. Once it is over, a "Look again" button in the header
         starts afresh.
 
     switchingProjects:
-        A search belongs to its project, as the @{OpenProjectsScope} says:
+        A search belongs to its project, as the @{OpenProjects} says:
         switching to another project minimizes the panel, the search carrying
         on in the background, and switching back brings it back minimized,
         just as it was left.
 
     minimizing:
         Its minimize button's tooltip says the search keeps running. While it
-        runs, it is listed among the @{RunningActivityScope} as
+        runs, it is listed among the @{RunningActivity} as
         "Finding scopes to extract". The Rescope command brings back a
         minimized panel as it was, without looking again.
 
@@ -48,9 +42,9 @@ shape RescopeShape:
 
         agent:
             First the panel lists the spec files, as the
-            @{ProjectLocationsScope} says. Then a @{OneOffAgentRunScope} looks
+            @{ProjectLocations} says. Then a @{OneOffAgentRun} looks
             through them. Its prompt is rescope.pi, of the
-            @{BakedSystemPromptsScope}, with the list of spec files after it.
+            @{BakedSystemPrompts}, with the list of spec files after it.
             It replies, for each repeated concept worth a scope of its own, with
             a name for the scope, a sentence on what the concept is, from 0 to 1
             how much extracting it is worth, a sentence on why, and each place
@@ -59,7 +53,7 @@ shape RescopeShape:
 
         progress:
             Beneath the steps, the run's output shows in its
-            @{TaskTableScope}.
+            @{TaskTable}.
 
         failing:
             When the run fails, the step says why, and nothing is offered.
@@ -67,7 +61,7 @@ shape RescopeShape:
     results:
         list:
             Once found, the panel lists the concepts in a
-            @{RankedSelectionListScope}, most worth extracting first, those
+            @{RankedSelectionList}, most worth extracting first, those
             with the most places after, each row with the proposed scope's
             name, how much it is worth, and in how many places and how many
             scopes the spec describes it. Those worth half or more start
@@ -82,9 +76,10 @@ shape RescopeShape:
 
     refactoring:
         The list's action is "Refactor", counting concepts. Pressing it closes
-        the panel and sends a prompt in Spec mode, of the @{PromptModesScope},
-        on the application's behalf, as the @{PromptSendingScope} says. The
+        the panel and sends a prompt in Spec mode, of the @{PromptModes},
+        on the application's behalf, as the @{PromptSending} says. The
         prompt is the refactoring request from rescope.pi, then each checked
         concept: its name, what it is, and every place the spec describes it,
         asking for each to become a scope of its own that those places
         reference instead of describing it again.
+

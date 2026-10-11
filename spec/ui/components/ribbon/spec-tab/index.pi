@@ -1,28 +1,22 @@
 use /lib
 use /ui
-from /scope/divergence import DivergenceScope
-from /scope/generate-skills import GenerateSkillsScope
-from /scope/no-project import NoProjectStateScope
-from /scope/prompt-mode/chat-input import ChatInputScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/rescope import RescopeScope
-from /scope/spec-build import SpecBuildScope
-from /scope/spec-components/new-concept import NewConceptScope
-from /scope/spec-components/new-instruction import NewInstructionScope
-from /scope/spec-components/new-scope import NewScopeScope
-from /scope/spec-components/new-shape import NewShapeScope
-from /ui/components/minimizable-panel import MinimizablePanelScope
+from /scope/divergence import Divergence
+from /scope/generate-skills import GenerateSkills
+from /scope/no-project import NoProjectState
+from /scope/prompt-mode/chat-input import ChatInput
+from /scope/prompt-mode/modes import PromptModes
+from /scope/rescope import Rescope
+from /scope/spec-build import SpecBuild
+from /scope/spec-components/new-concept import NewConcept
+from /scope/spec-components/new-instruction import NewInstruction
+from /scope/spec-components/new-scope import NewScope
+from /scope/spec-components/new-shape import NewShape
+from /ui/components/minimizable-panel import MinimizablePanel
 
-export ui-component RibbonSpecTabScope:
-    concept: {RibbonSpecTabConcept}
-
-concept RibbonSpecTabConcept:
+export ui-component RibbonSpecTab:
     pitch:
         The ribbon's Spec tab: the commands for working on the spec.
 
-    shape: {RibbonSpecTabShape}
-
-shape RibbonSpecTabShape:
     description:
         The Spec tab of the ribbon.
 
@@ -30,7 +24,7 @@ shape RibbonSpecTabShape:
         While closed, the tab's label is in Spec's colour, at full strength,
         in the same place as ever. While open, the label is the tab's own colour,
         and the tab and its body are tinted with Spec's colour, of the
-        @{PromptModesScope}, just as the @{ChatInputScope}'s Spec tab and the
+        @{PromptModes}, just as the @{ChatInput}'s Spec tab and the
         body beneath it are: the same tint laid over the tab, and over the
         command area while Spec is the only tab open. The tint takes no room,
         so the tab keeps the size and place it has closed, and its label never
@@ -60,12 +54,12 @@ shape RibbonSpecTabShape:
     commands:
         noProject:
             Every command on the tab needs a project, so until one is open, each
-            is disabled as the @{NoProjectStateScope} says, with the tooltip
+            is disabled as the @{NoProjectState} says, with the tooltip
             each gives.
 
         newScope:
             A "New Scope" button with a box icon. Clicking it opens the
-            @{NewScopeScope}, and its tooltip says it creates a scope, with its
+            @{NewScope}, and its tooltip says it creates a scope, with its
             concept and shape. Without a project, its tooltip says to open a
             project to add a scope to its spec.
 
@@ -73,7 +67,7 @@ shape RibbonSpecTabShape:
 
         newConcept:
             A "New Concept" button with a lightbulb icon. Clicking it opens the
-            @{NewConceptScope}, and its tooltip says it creates a concept in a
+            @{NewConcept}, and its tooltip says it creates a concept in a
             spec file. Without a project, its tooltip says to open a project to
             add a concept to its spec.
 
@@ -81,7 +75,7 @@ shape RibbonSpecTabShape:
 
         newShape:
             A "New Shape" button with a shapes icon. Clicking it opens the
-            @{NewShapeScope}, and its tooltip says it creates a shape in a spec
+            @{NewShape}, and its tooltip says it creates a shape in a spec
             file. Without a project, its tooltip says to open a project to add
             a shape to its spec.
 
@@ -89,7 +83,7 @@ shape RibbonSpecTabShape:
 
         newInstruction:
             A "New Instruction" button with a scroll icon. Clicking it opens the
-            @{NewInstructionScope}, and its tooltip says it writes an instruction
+            @{NewInstruction}, and its tooltip says it writes an instruction
             for a folder or file of the code. Without a project, its tooltip
             says to open a project to add an instruction to its spec.
 
@@ -97,8 +91,8 @@ shape RibbonSpecTabShape:
 
         rescope:
             A "Rescope" button with a shapes icon. Clicking it opens the
-            @{RescopeScope} and starts looking for repeated concepts, or brings
-            back a minimized one, as a @{MinimizablePanelScope} does, and its
+            @{Rescope} and starts looking for repeated concepts, or brings
+            back a minimized one, as a @{MinimizablePanel} does, and its
             tooltip says it finds concepts the spec repeats that could be scopes
             of their own. Without a project, its tooltip says to open a project
             to rescope its spec.
@@ -107,7 +101,7 @@ shape RibbonSpecTabShape:
 
         generateSkills:
             A "Generate Skills" button with a sparkles icon. Clicking it opens
-            the @{GenerateSkillsScope} and starts ranking the spec's scopes for
+            the @{GenerateSkills} and starts ranking the spec's scopes for
             skills, and its tooltip says it finds which scopes skills should be
             built for. Without a project, its tooltip says to open a project to
             generate skills for it.
@@ -116,7 +110,7 @@ shape RibbonSpecTabShape:
 
         analyzeDivergence:
             An "Analyze Divergence" button with a compare-arrows icon. Clicking
-            it opens the @{DivergenceScope} and starts a fresh analysis, and its
+            it opens the @{Divergence} and starts a fresh analysis, and its
             tooltip says it analyzes how the code and the spec have diverged.
             Without a project, its tooltip says to open a project to analyze
             it.
@@ -125,7 +119,7 @@ shape RibbonSpecTabShape:
 
         viewDivergenceReports:
             A "View Divergence Reports" button with a document icon. Clicking
-            it opens the @{DivergenceScope} without starting an analysis,
+            it opens the @{Divergence} without starting an analysis,
             showing the latest saved report, from which the earlier ones can be
             opened, and its tooltip says it shows the reports of earlier
             analyses. Without a project, its tooltip says to open a project to
@@ -135,8 +129,9 @@ shape RibbonSpecTabShape:
 
         buildSpec:
             A "Build Spec" button with a hammer icon. Clicking it builds the
-            spec on its own, as the @{SpecBuildScope} says, and its tooltip says
+            spec on its own, as the @{SpecBuild} says, and its tooltip says
             it runs `piton build` in the project to compile the spec. Without a
             project, its tooltip says to open a project to build its spec.
 
             It is primary, and a full button.
+

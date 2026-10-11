@@ -1,0 +1,7 @@
+- [Each lane and the questions carry on a conversation of their own, the latest in history when the project opens](.claude/reference/scope/harness-integration/index.md#context)
+- [A conversation that can't be carried on is sent again at once as a new one, never retried](.claude/reference/scope/harness-integration/index.md#context)
+- [Container runs keep their sessions in .suspense/sessions/, one folder per conversation; host runs where the harness keeps them](.claude/reference/scope/harness-integration/index.md#context)
+- [A conversation left for a new one is never carried on again](.claude/reference/scope/harness-integration/index.md#context)
+- [A task's history record sits in .suspense/history/, named by second and anchor name](.claude/reference/scope/project-data/index.md#contents)
+- [Questions are saved in asks/ the same way as tasks](.claude/reference/scope/project-data/index.md#contents)
+- [Sessions never expire: cleanup off, copied beside each record after a run, restored before resuming; fresh only with no copy or when left](.claude/reference/scope/harness-integration/index.md#context)

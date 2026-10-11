@@ -2,17 +2,11 @@ use /lib
 use /ui
 from /ui/animations/rise-in import RiseInAnimation
 
-export ui-component InsetPanelScope:
-    concept: {InsetPanelConcept}
-
-concept InsetPanelConcept:
+export ui-component InsetPanel:
     pitch:
         A floating panel over the whole main window, for work that needs more
         room than a popup and shouldn't disturb what is beneath it.
 
-    shape: {InsetPanelShape}
-
-shape InsetPanelShape:
     description:
         The panel floats over everything in the window, the ribbon and sidebar
         included, inset 32 pixels from every edge of the window. It has rounded
@@ -51,3 +45,4 @@ shape InsetPanelShape:
         <Escape>, or by clicking the dimmed window around it; clicking inside
         the panel never closes it. Once it closes, focus goes back to the chat
         input.
+

@@ -1,0 +1,5 @@
+- [The git panel's body has 8px of padding at either side and at the bottom](.claude/reference/ui/components/git-panel/index.md#description)
+- [When the panel is shorter than its contents, only the commit notes scroll, with a Scrollbar along their right only while they overflow](.claude/reference/ui/components/git-panel/index.md#scrolling)
+- [Each commit note is a box on the ribbon's tab row colour](.claude/reference/ui/components/git-panel/index.md#commit-notes)
+- [The scrollbar column takes the colour of the surface it sits on, its border and buttons a step lighter](.claude/reference/ui/components/scrollbar/index.md#surface)
+- [While the notes scroll, 6px of the body colour separates them from the scrollbar](.claude/reference/ui/components/git-panel/index.md#scrolling)

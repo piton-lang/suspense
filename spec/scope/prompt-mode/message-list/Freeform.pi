@@ -1,13 +1,13 @@
 use /lib
-from /scope/prompt-mode/ask-conversation import AskConversationScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/prompt-mode/sending import PromptSendingScope
+from /scope/prompt-mode/ask-conversation import AskConversation
+from /scope/prompt-mode/modes import PromptModes
+from /scope/prompt-mode/sending import PromptSending
 
-export shape MessageListFreeformShape:
+export anchor MessageListFreeform:
     description:
         A Freeform task is shown as a regular chat, not as a task: its prompt
         as a message on the right, and the harness's reply as a message on the
-        left, read as prose, as the @{AskConversationScope} shows a question
+        left, read as prose, as the @{AskConversation} shows a question
         and its answer.
 
     conversation:
@@ -22,19 +22,19 @@ export shape MessageListFreeformShape:
 
     messages:
         Each prompt is shown as it was typed, in a box on the theme's raised
-        surface, faintly tinted Freeform's grey, as the @{PromptModesScope}
+        surface, faintly tinted Freeform's grey, as the @{PromptModes}
         colours it, with corners rounded 6 pixels, set against the chat's
         right edge and at most 80% of its width, with the text and images
         attached to it listed beneath its text. Beneath the box, at its
         right, a small muted line gives the time it was sent and, once its
-        task is over, its Resend button, as the @{PromptSendingScope} says;
+        task is over, its Resend button, as the @{PromptSending} says;
         while it runs, its Cancel button is there instead. A message sent to
         the task while it ran is a box of its own, laid out the same way,
         placed among the reply where the harness took it in.
 
         Each reply follows beneath its prompt, against the chat's left edge,
         at the chat's full width, with no box, laid out as the
-        @{AskConversationScope}'s answers are: the reply text after the
+        @{AskConversation}'s answers are: the reply text after the
         harness's last tool call rendered as markdown in the body's text
         colour, everything before it summed up in one small muted line that
         expands into the steps, a status line with a spinner and the latest

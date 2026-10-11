@@ -1,23 +1,17 @@
 use /lib
 use /ui
-from /scope/project-directory import ProjectDirectoryScope
-from /scope/user-preferences import UserPreferencesScope
-from /ui/components/file-browser import FileBrowserScope
-from /ui/components/inset-panel import InsetPanelScope
+from /scope/project-directory import ProjectDirectory
+from /scope/user-preferences import UserPreferences
+from /ui/components/file-browser import FileBrowser
+from /ui/components/inset-panel import InsetPanel
 
-export ui-component OpenProjectScope:
-    pitch: {OpenProjectConcept.pitch}
-
-concept OpenProjectConcept:
+export ui-component OpenProject:
     pitch:
         Opens an existing Piton project by choosing its piton.config.pi, making
-        the folder holding it the @{ProjectDirectoryScope}.
+        the folder holding it the @{ProjectDirectory}.
 
-    shape: {OpenProjectShape}
-
-shape OpenProjectShape:
     description:
-        A @{FileBrowserScope} in an @{InsetPanelScope} over the main window,
+        A @{FileBrowser} in an @{InsetPanel} over the main window,
         not the platform's own dialog, titled
         "Open a project: choose its piton.config.pi", listing only files named
         piton.config.pi among the folders.
@@ -26,7 +20,7 @@ shape OpenProjectShape:
         It opens from whatever command opens a project, such as the ribbon's
         Open Project or the palette's "Open Project…", in place of anything
         else in the inset panel. It starts in the folder a project was last
-        opened from with it, one of the @{UserPreferencesScope}; when
+        opened from with it, one of the @{UserPreferences}; when
         there is none, or it no longer exists, in the folder holding the open
         project; and otherwise in the home folder. Opening it while it is
         already open leaves it as it is.

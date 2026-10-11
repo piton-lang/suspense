@@ -1,41 +1,53 @@
 use /lib
 use /ui
-from /scope/application/Body import BodyScope
+from /scope/application/Body import Body
 from /scope/prompt-mode import PromptEditor
-from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/chat-input import ChatInput
 from /scope/prompt-mode/message-list import MessageList
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/prompt-mode/queue-list import QueueListScope
-from /scope/prompt-mode/sending import PromptSendingScope
-from /ui/components/growing-text-input import GrowingTextInputScope
-from /ui/components/scrollbar import ScrollbarScope
+from /scope/prompt-mode/modes import PromptModes
+from /scope/prompt-mode/queue-list import QueueList
+from /scope/prompt-mode/sending import PromptSending
+from /ui/components/growing-text-input import GrowingTextInput
+from /ui/components/scrollbar import Scrollbar
 
-export ui-component TasksTabScope:
-    concept: {TasksTabConcept}
-
-concept TasksTabConcept:
+export ui-component TasksTab:
     pitch:
         The right sidebar's Tasks tab: every task of the project at a glance,
         what has run, what is running, and what is queued, where any of them
         can be looked into, edited, and adjusted, and a chain given more
         steps.
 
-    shape: {TasksTabShape}
-
-shape TasksTabShape:
     description:
-        The tab is one scrolling column, with a @{ScrollbarScope}, read top to
+        The tab is one scrolling column, with a @{Scrollbar}, read top to
         bottom as a timeline, in three groups, each headed by a small muted
         label with its count: "Previous", every task that has run, oldest at
         the top, as the @{PromptEditor}'s previous tasks are, with their
         filters and batch actions along the group's heading; "Running", every
         task under way, in either lane; and "Queued", the queue, in its order,
-        as the @{QueueListScope} says, reordered by dragging, its auto-send
+        as the @{QueueList} says, reordered by dragging, its auto-send
         switch and "Send next" button along its heading. A group with nothing
         in it shows its heading alone, muted, "No queued prompts" and the
-        like. Each time the tab is shown, it is scrolled so the Running
-        group, or the start of the Queued one when nothing runs, is in view.
+        like.
 
+        Every level of the tab remembers where it was scrolled, and coming
+        back to it, however, finds it just as it was left. The list keeps
+        its scroll when a task is opened from it and the back arrow or
+        <Escape> returns to it, when the sidebar slides back and out again,
+        when it is closed and opened by hand, and when another project is
+        shown and this one shown again, each open project keeping its own.
+        Each open task keeps its own scroll, its Prompt expanded or clipped,
+        and its Steps section as it was, for as long as the application
+        runs, so opening it again, from the list, a step of its chain, View
+        all, or anywhere else, shows it where it was left; going from a
+        chain to one of its steps and back returns to the chain where it was.
+        The list is scrolled on its own only the first time it is shown for
+        a project in a launch, so the Running section, or the start of the
+        Queued one when nothing runs, is in view, and when a task is opened
+        from elsewhere, as from the running activity list, which scrolls it
+        into view. Rows added, removed, or moved above what is in view, as
+        tasks finish and move from Running to Previous, never shift the rows
+        in view: the scroll is kept on the row at the top of the view, not
+        on a number of pixels.
         The three groups are accordion sections, each collapsible on its
         own. A section's heading is a row 28 pixels tall, on the theme's
         raised surface, a step apart from the rows: a chevron at its left,
@@ -84,6 +96,21 @@ shape TasksTabShape:
         below the Previous heading only while Previous's rows are what is in
         view beneath it.
 
+        The list's @{Scrollbar} is pinned, as every scrollbar is: a column
+        along the tab's right edge, always shown, whether or not the list has
+        anything to scroll, running the tab's full height, from its top to
+        its bottom, beside the pinned headings as well as the rows. It never
+        scrolls with the list, never appears only while hovering or
+        scrolling, and is never laid over the rows. The headings, pinned or
+        in place, the day dividers, and every row end at the column's left
+        edge, never running beneath it, so the column takes the same 18
+        pixels of width from all of them and their right-hand parts, the
+        times and the headings' controls, line up against it. Its thumb is
+        sized and placed from the whole list, the rows hidden beneath pinned
+        headings and collapsed sections left out, so scrolling it to its
+        bottom shows the last row whole. It has no lock to the bottom, since
+        the list isn't output that keeps arriving.
+
     days:
         Within Previous, tasks are grouped by the day they were sent, in the
         user's local time, each day headed by a divider row, 28 pixels tall
@@ -110,7 +137,7 @@ shape TasksTabShape:
         Every task is one row, 28 pixels tall, as a queued prompt's is, and
         every row in every section is laid out in the same columns, so their
         parts line up down the whole list: a bar in its mode's colour, as the
-        @{PromptModesScope} colours it, 4 pixels wide with corners rounded 2
+        @{PromptModes} colours it, 4 pixels wide with corners rounded 2
         pixels, inset from the row's edges, 4 pixels from its left and 6
         from its top and bottom, so it stands as a short rounded pill rather
         than running edge to edge, and the bars of rows one above another
@@ -136,8 +163,8 @@ shape TasksTabShape:
         row, then a row for each of its steps beneath it, in the order they
         run, sent or still to send, each a 28 pixel row in the same columns,
         its text set in 16 pixels further and labelled "Spec", "Code", or
-        "Spec follow-up" in that step's mode colour, with the step's own
-        status: a tick, cross, or dash for one that has ended, a spinner for
+        "Spec follow-up" in that step's mode colour, with the step's own status, a
+        tick, cross, or dash for one that has ended, a spinner for
         the one running, "Queued" with its place in its lane's queue for
         one waiting there, and a muted "Next" for one that will be sent once
         the step before it finishes, and "Waiting" for any after that, every
@@ -149,6 +176,17 @@ shape TasksTabShape:
         into Previous as a single row. Clicking the chain's row, or any of
         its steps, opens the chain, its Steps section showing the same.
 
+        A chain's rows are joined by its colour: in place of each row's own
+        bar, one bar in the Chain colour, purple, 4 pixels wide with corners
+        rounded 2 pixels, runs unbroken down the left of the chain's row and
+        every step row beneath it, Spec, Code, Spec follow-up, and any step
+        added, from 6 pixels below the top of the chain's row to 6 pixels
+        above the bottom of its last step's, across the gaps between the
+        rows, so the chain reads as one block. The steps' own modes show in
+        their labels' colours, never in a bar of their own. It is drawn the
+        same in a chain's Steps section once opened, and grows or shrinks
+        with the chain as a step is added. A single task, not part of a
+        chain, keeps its own bar.
         Clicking a row opens it, as below, and the row stays highlighted
         while it is open. Hovering a row shows its prompt's first lines in
         its tooltip.
@@ -198,9 +236,8 @@ shape TasksTabShape:
         pixels. The list's height is the sum of its rows, headings and day
         dividers included, and that padding, measured in the same device
         pixels the rows are drawn at, and its scrollable height is that less
-        the height of the area it is drawn in: the area beneath the right
-        sidebar's tab row, never the sidebar's whole height, nor an area that
-        still counts the tab row, a sticky heading, the open task's back bar,
+        the height of the area it is drawn in: the right sidebar's own
+        visible area, never an area that counts a sticky heading, the open task's back bar,
         or the scrollbar's own room as part of the list. Headings pinned at the
         bottom take room from the list's visible area, as those at the top
         do, so scrolled to the bottom, the last row still shows whole above
@@ -213,18 +250,18 @@ shape TasksTabShape:
         mode and name along its top, the arrow and <Escape> going back to the
         list as it was left. Opening a task that has run or is running also
         opens it in a tab of its own in the body, as a file opens, as the
-        @{BodyScope} says, showing its header and output there, unless it is
+        @{Body} says, showing its header and output there, unless it is
         a task the Chat tab shows, one running or the one it shows while
         none runs, when Chat is selected instead, with that task selected in
         its header. What the open task shows, top to bottom:
 
         \\
         - Status: its status label and how long it took, or has been running, as the MessageList writes them, on one line
-        - Prompt: its prompt, as it was typed, in a GrowingTextInputScope, and beneath it what is attached to it
+        - Prompt: its prompt, as it was typed, in a GrowingTextInput, and beneath it what is attached to it
         - Steps: for a chain, its steps, as its chain steps say, with Add step; a task that isn't a chain has no Steps section
         - Details: the rest at a glance, its lane, its place in the queue while it waits, the conversation it carries on or that it starts a new one, its model and effort, and once it has run, how many tool calls it made, its errors, its tokens and their cost, and how many files it changed, each a labelled figure, those that don't apply left out
         - Parameters: its mode, its model and effort, its Slice toggle, and whether it starts a new conversation, each as the chat input shows it
-        - Actions: Resend, Send to Spec or Send to Code, Cancel while it is under way or queued, and Open output, as the PromptSendingScope gives them
+        - Actions: Resend, Send to Spec or Send to Code, Pause while it runs or Resume while it is paused, Cancel while it is under way, paused, or queued, and Open output, as the PromptSending gives them
         \\
 
         A long prompt is clipped: past 8 lines, as they wrap at the tab's
@@ -250,7 +287,7 @@ shape TasksTabShape:
         running, can't be changed: its prompt and parameters read as they
         were sent, and "Edit and resend" puts them in the open task as a new
         queued prompt, ready to change, sent once "Send" is clicked. The
-        chat input's own <Up> editing still works as the @{ChatInputScope}
+        chat input's own <Up> editing still works as the @{ChatInput}
         says, and opens the same task here.
 
     chainSteps:
@@ -280,7 +317,8 @@ shape TasksTabShape:
         change once the spec is built, or a spec tidy-up after the code. A
         step not yet sent can be edited, moved among the others not yet
         sent, or removed; one sent reads as it was. Steps are saved with the
-        chain, in its hidden anchor, as the @{PromptSendingScope} keeps a
+        chain, in its hidden anchor, as the @{PromptSending} keeps a
         queued prompt, so a chain keeps its added steps across restarts, and
         a step whose step before it failed or was cancelled is never sent, as
         none of a chain's are.
+

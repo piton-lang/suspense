@@ -1,32 +1,26 @@
 use /lib
 use /ui
-from /scope/application/Body import BodyScope
-from ./chat-input import ChatInputScope
+from /scope/application/Body import Body
+from ./chat-input import ChatInput
 from ./message-list import MessageList
-from /ui/components/right-sidebar import TasksTabScope
-from ./queue-list import QueueListScope
-from /scope/container-environment import ContainerEnvironmentScope
-from /scope/harness-integration import HarnessIntegrationScope
-from /scope/no-project import NoProjectStateScope
-from /scope/open-projects import OpenProjectsScope
-from /scope/project-data import ProjectDataScope
-from /scope/prompt-mode/ask-conversation import AskConversationScope
-from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/prompt-mode/sending import PromptSendingScope
-from /ui/components/scrollbar import ScrollbarScope
+from /ui/components/right-sidebar import TasksTab
+from ./queue-list import QueueList
+from /scope/container-environment import ContainerEnvironment
+from /scope/harness-integration import HarnessIntegration
+from /scope/no-project import NoProjectState
+from /scope/open-projects import OpenProjects
+from /scope/project-data import ProjectData
+from /scope/prompt-mode/ask-conversation import AskConversation
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPrompts
+from /scope/prompt-mode/modes import PromptModes
+from /scope/prompt-mode/sending import PromptSending
+from /ui/components/scrollbar import Scrollbar
 
 export ui-component PromptEditor:
-    concept: {PromptEditorConcept}
-
-concept PromptEditorConcept:
     pitch:
         An interface for sending tasks to a local coding harness like Claude
         Code, written directly with compiled-on-depand Piton.
 
-    shape: {PromptEditorShape}
-
-shape PromptEditorShape:
     description:
         Not a chat. Each prompt sent is a task for the harness, tasks can
         queue, and each task shows its output until it finishes. There are no
@@ -34,26 +28,26 @@ shape PromptEditorShape:
 
     basicDesignAndLayout:
         The @{MessageList} fills the body's Chat tab: all the space between
-        the body's tab bar and the @{ChatInputScope} along the bottom. From top to bottom it holds the
+        the body's tab bar and the @{ChatInput} along the bottom. From top to bottom it holds the
         header, holding the latest task and every other task under way, one
         of them selected and shown in full and the rest as compact rows, as
         the @{MessageList} says, and the selected task's output. The previous
         tasks and the queue are in the right sidebar's Tasks tab, as the
-        @{TasksTabScope} says.
+        @{TasksTab} says.
 
         Before any task has been sent, the space shows a hint instead, which
         wraps when the view is narrow. It reads
         "Write a prompt below. Enter adds a line; Ctrl/Cmd+Enter sends it."
-        or, while no project is open, as the @{NoProjectStateScope} says,
+        or, while no project is open, as the @{NoProjectState} says,
         "Open a project to start prompting."
 
     chatHistory: @{MessageList}
 
     previousTasks:
         Previous tasks are listed in the right sidebar's Tasks tab, in its
-        Previous group, as the @{TasksTabScope} says, every task sent but
+        Previous group, as the @{TasksTab} says, every task sent but
         those the header shows, each a row that opens it there, and its
-        output in a tab of its own in the body, as the @{BodyScope} says,
+        output in a tab of its own in the body, as the @{Body} says,
         never in the Chat tab. Their heading counts them:
         "No previous tasks", "1 previous task", or "N previous tasks". The
         selection, filters, and batch actions below work there as they say,
@@ -66,7 +60,7 @@ shape PromptEditorShape:
         clicked before, it selects or deselects that one as a plain click
         does. The selection is kept while the list is closed and opened again,
         until it is cleared or sent. Each open project keeps its own, as the
-        @{OpenProjectsScope} says.
+        @{OpenProjects} says.
 
         While any task is selected, the row shows the batch actions at its
         right, in place of nothing: "N selected", muted, counting every task
@@ -74,7 +68,7 @@ shape PromptEditorShape:
         buttons with a swap icon, each tinted the colour of the mode it sends
         to, then "Clear", which deselects them all. Send N to Spec counts, and
         sends, the selected tasks that offer Send to Spec, and Send N to Code
-        those that offer Send to Code, as the @{PromptSendingScope} says; each
+        those that offer Send to Code, as the @{PromptSending} says; each
         is shown only while its count isn't zero. Tasks that don't offer it,
         sent in Chain or Freeform, whose mode isn't known, already sent to the
         other mode or being sent there, marked done, or complete, can be
@@ -82,7 +76,7 @@ shape PromptEditorShape:
         them. Clicking an action never opens or closes the list.
 
         A batch action sends each of its tasks to the other mode, as the
-        @{PromptSendingScope} says for one, oldest first: the first starts
+        @{PromptSending} says for one, oldest first: the first starts
         straight away while its lane is free and the rest queue behind it in
         that lane, so they run in the order they were first sent, each saved in the
         history as a new task. Once sent, the tasks it sent are deselected,
@@ -114,10 +108,10 @@ shape PromptEditorShape:
         the view, is never counted.
 
         The Mode section filters by the mode each task was sent in, one option
-        per task mode in the @{PromptModesScope}'s order, "Code", "Chain",
+        per task mode in the @{PromptModes}'s order, "Code", "Chain",
         "Spec", and "Freeform", each with a small dot in its mode's colour
         before its label. The Other mode section filters by where a task stands with the other mode, as the
-        @{PromptSendingScope} says, with "Can send to Spec" for tasks that
+        @{PromptSending} says, with "Can send to Spec" for tasks that
         offer Send to Spec, "Can send to Code" for those that offer Send to
         Code, "Sent" for those already sent to the other mode or being sent
         there, and "Marked done" for those marked done by hand.
@@ -136,7 +130,7 @@ shape PromptEditorShape:
         them. A chain whose steps are hidden in part keeps its parent row
         above the steps still shown, and is hidden with its parent only when
         none of its steps shows. Day dividers show only above a day with a
-        task shown, as the @{TasksTabScope} says. The row's count still counts every previous task,
+        task shown, as the @{TasksTab} says. The row's count still counts every previous task,
         and while any option is checked, the Previous group's heading, after
         its count, reads " · N shown", N counting the previous tasks the
         filters show. A hidden task
@@ -145,7 +139,7 @@ shape PromptEditorShape:
         With every task filtered out, the list reads "No previous tasks match
         these filters", muted, centred. The filters are kept while the list is
         closed and opened again, and each open project keeps its own, as the
-        @{OpenProjectsScope} says, but they are not saved with the project.
+        @{OpenProjects} says, but they are not saved with the project.
 
     chainedTasks:
         A prompt sent in Chain runs as steps, each saved in the history as a
@@ -153,12 +147,12 @@ shape PromptEditorShape:
         then the same prompt sent to Code, told what the spec step did; and,
         when the chain asks for a post-build spec update, the same prompt sent
         to Spec once more, told what the code step did. Each step knows the
-        one it was sent from, as the @{PromptSendingScope} says. Only the
+        one it was sent from, as the @{PromptSending} says. Only the
         steps the chain sends itself belong to it; a task sent to the other
         mode by hand, or resent, from one of its steps is a task of its own.
 
         Each step runs in the lane of the work it does, as the
-        @{PromptSendingScope} says: the Chain task and its spec follow-up in
+        @{PromptSending} says: the Chain task and its spec follow-up in
         the spec lane, the code step in the code lane. A step is sent once the
         step before it finishes, never before, and takes its place in its
         lane's queue by when its chain was sent, not when the step itself was:
@@ -180,18 +174,18 @@ shape PromptEditorShape:
         was cancelled is never sent.
 
         Each step also runs where the work of its lane runs, as the
-        @{ContainerEnvironmentScope} says: the spec steps in a container
+        @{ContainerEnvironment} says: the spec steps in a container
         holding the spec and no code, the code step always on the host, with
         its protected locations. Each carries on its own
-        lane's conversation, as the @{HarnessIntegrationScope} says, so a step
+        lane's conversation, as the @{HarnessIntegration} says, so a step
         is told what the step before it did only through its prompt: the
         Chain prompt as typed and that step's final output, as the
-        @{ModeSystemPromptsScope} says.
+        @{ModeSystemPrompts} says.
 
         In the previous tasks list, a chain's steps are grouped under one
         parent item, so they read as parts of a single chain. The parent is a
         heading row in the list, tinted the Chain colour, as the
-        @{PromptModesScope} colours it, a little more strongly than a single
+        @{PromptModes} colours it, a little more strongly than a single
         task's tint: a joined chain icon, the first line of the prompt, and at
         its right how many steps it has, "2 steps" or "3 steps". Its status is
         the chain's as a whole, worked out only from its steps as they
@@ -235,14 +229,18 @@ shape PromptEditorShape:
         to, and a chain never counts a task that isn't one of its steps.
 
         While a chain is Running, it is listed in the Running group of the
-        right sidebar's Tasks tab, expanded, as the @{TasksTabScope} says; while
+        right sidebar's Tasks tab, expanded, as the @{TasksTab} says; while
         Queued, in the Queued group; and once over, among the previous
+        A chain with a step paused and none running reads Paused, and is
+        listed with the running tasks, expanded, until it is resumed or
+        cancelled.
+
         tasks. It has
         no checkbox, Resend, or Send to the other mode of its own, and
         clicking it doesn't open anything.
 
         In the right sidebar's Tasks tab, a chain is one row, as the
-        @{TasksTabScope} says, never expanded in the list. Its steps are
+        @{TasksTab} says, never expanded in the list. Its steps are
         shown once it is opened, each as an item of its own, with its
         status, Resend, and whatever else a task offers, opening onto its
         own prompt, table, and changed files, labelled by what it did,
@@ -287,21 +285,11 @@ shape PromptEditorShape:
         view, its header and output show as they do for a task just sent,
         and the previous tasks, their row's count, and the chain grouping
         follow it. The header shows
-        its status, with a spinner while it is under way, the name of the
-        hidden anchor it was compiled from, and the compiled markdown the
-        harness actually received, which scrolls once it gets tall. Until it
-        has compiled, the prompt as typed is shown instead. At its right, a
-        Resend button sends it again, as the @{PromptSendingScope} says. The
-        header shows the prompt the task was sent with, however much is sent to
-        it while it runs; what is sent is shown in its output.
-
-        However long the compiled prompt, a prompt sent with its spec slices
-        included, the header lays out only what is in view: the prompt is
-        split into its blocks of markdown, paragraphs, headings, lists, and
-        code blocks, each drawn as it scrolls into view, as the rows of a
-        table are, so a long prompt costs no more to show, scroll, or
-        animate than a short one. The header is as tall as the prompt up to
-        where it starts to scroll.
+        a single slim line, as the @{MessageList}'s sent prompt says: a bar
+        in its mode's colour, its status and time, its summary, and a Stop
+        and a View all button, never the prompt itself or the compiled
+        markdown, which are seen in the Tasks tab. Messages sent to it while
+        it runs are shown in its output.
 
     rawPrompt:
         Beside the latest task's Resend button, a small ghost button with a
@@ -325,14 +313,14 @@ shape PromptEditorShape:
           every placeholder filled in and every injected prompt in its place,
           the spec-reading prompt, and the code-to-spec prompt with the code
           task's prompt and final output, as the
-          @{ModeSystemPromptsScope} says; or "No system prompt" when none was
+          @{ModeSystemPrompts} says; or "No system prompt" when none was
           sent, as for Freeform.
         - User prompt: the compiled prompt the harness received, with its spec
           slices when it was sent with them.
         \\
 
         For a harness that takes no system prompt of its own, where it is given
-        ahead of the prompt, as the @{HarnessIntegrationScope} says, the modal
+        ahead of the prompt, as the @{HarnessIntegration} says, the modal
         shows the one text it was given, headed "Prompt", with a single Copy
         button. A prompt sent with attached images ends with a third section,
         "Attached images", listing the path of each saved image, one to a
@@ -357,25 +345,25 @@ shape PromptEditorShape:
         from the history. A task saved before this was recorded shows its
         system prompt as "Not recorded".
 
-    queue: @{QueueListScope}
+    queue: @{QueueList}
 
     projects:
         Tasks, the queue, and the auto-send switch belong to their project, as
-        the @{OpenProjectsScope} says: the view shows the tasks and queue of the
+        the @{OpenProjects} says: the view shows the tasks and queue of the
         project on screen, while those of other open projects carry on in the
         background. A project's queues only ever send into that project.
 
     buildingTheSpec:
-        A task builds the spec before it is sent, as the @{PromptModesScope}
+        A task builds the spec before it is sent, as the @{PromptModes}
         says, since the task may be the one to fix the spec, its output
         starting with an error saying the build failed when it does. A Spec
         task, or a Chain prompt's spec step, builds it again on the host once
-        it is over, as the @{PromptSendingScope} says, so the next step, and
+        it is over, as the @{PromptSending} says, so the next step, and
         every task after it, reads the spec as that run left it.
 
     history:
         Every task sent is saved in the prompt history with the project's data,
-        as the @{ProjectDataScope} says, and its record once its run is over.
+        as the @{ProjectData} says, and its record once its run is over.
         Opening the project, the first time in a launch, brings back every
         task in order, with its output
         replayed from that record. The record keeps each message sent to the
@@ -386,10 +374,11 @@ shape PromptEditorShape:
 
         Every question asked from the Ask tab is logged the same way, but among
         the questions instead, so it never comes back as a task: it comes back
-        in the @{AskConversationScope}. The record is saved when the run is
+        in the @{AskConversation}. The record is saved when the run is
         over, and also when the question is stopped while it runs, with as
         much as the harness had done. A question
         that fails before it reaches the harness is logged too, with the error
         in its record.
 
-    chatInput: @{ChatInputScope}
+    chatInput: @{ChatInput}
+

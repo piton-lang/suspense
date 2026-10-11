@@ -1,0 +1,6 @@
+- [With Ask selected, the Ask conversation takes the Chat tab's place, filling the body beneath the tab bar and above the chat input; the body never splits](.claude/reference/scope/application/Body.md#ask-mode)
+- [With Ask selected, the Chat tab reads "Ask" in Ask's colour](.claude/reference/scope/application/Body.md#ask-mode)
+- [Selecting another mode brings the message list back as it was left; Ask again brings the conversation back scrolled where it was; the switch is at once, nothing sliding](.claude/reference/scope/application/Body.md#ask-mode)
+- [A file or task tab shows its file or task in any mode; selecting Ask while one is shown selects the Chat tab](.claude/reference/scope/application/Body.md#ask-mode)
+- [The chat input runs along the bottom beneath the Ask conversation too](.claude/reference/scope/application/Body.md#contents)
+- [The conversation's questions and answers sit in a column at most 760px wide, centred in the body](.claude/reference/scope/prompt-mode/ask-conversation/index.md#description)

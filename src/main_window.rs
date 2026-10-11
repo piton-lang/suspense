@@ -8,7 +8,10 @@ use std::path::PathBuf;
 use gpui_kit::component::button::ButtonVariant;
 use gpui_kit::component::dialog::DialogButtonProps;
 use gpui_kit::component::resizable::{ResizableState, h_resizable, resizable_panel};
-use gpui_kit::component::{ActiveTheme, Root, WindowExt as _};
+use gpui_kit::assets::IconName;
+use gpui_kit::component::spinner::Spinner;
+use gpui_kit::component::{ActiveTheme, Icon, Root, Sizable as _, WindowExt as _, h_flex};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::activity::{Job, JobKind, RevealJob};
@@ -58,10 +61,9 @@ const MIN_SPLIT_WIDTH: Pixels = px(240.);
 const SIDEBAR_WIDTH: Pixels = px(260.);
 const MIN_SIDEBAR_WIDTH: Pixels = px(160.);
 
-/// The shortest the file tree can be dragged, above the git panel.
-const MIN_FILE_TREE_HEIGHT: Pixels = px(80.);
 
-actions!(suspense, [Dismiss, TogglePalette]);
+
+actions!(suspense, [Dismiss, TogglePalette, ShowFilesView, ShowGitView, ShowRunView]);
 
 /// Esc closes what the window has open to dismiss, and otherwise goes on to
 /// wherever the keyboard is; it is bound without a context, so it matches
@@ -75,6 +77,19 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-p", TogglePalette, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-p", TogglePalette, None),
+        // The left sidebar's views, as clicking their buttons does.
+        #[cfg(target_os = "macos")]
+        KeyBinding::new("cmd-shift-e", ShowFilesView, None),
+        #[cfg(target_os = "macos")]
+        KeyBinding::new("cmd-shift-g", ShowGitView, None),
+        #[cfg(target_os = "macos")]
+        KeyBinding::new("cmd-shift-r", ShowRunView, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-shift-e", ShowFilesView, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-shift-g", ShowGitView, None),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-shift-r", ShowRunView, None),
     ]);
     crate::palette::bind_keys(cx);
     ribbon::bind_keys(cx);
@@ -97,7 +112,17 @@ pub struct MainWindow {
     /// The tallest the git panel grows, beneath the file tree, once the edge
     /// between them has been dragged; until then, half the sidebar. It is
     /// never taller than its contents need.
-    git_height: Option<Pixels>,
+    /// The left sidebar's view showing, and whether it is collapsed to its
+    /// view bar, kept while the application runs, the same for every
+    /// project.
+    left_view: LeftView,
+    left_collapsed: bool,
+    /// How many tasks had started when the Run view was last shown.
+    run_seen: usize,
+    /// Whether a task ran, and how many had started, as the Run button last
+    /// showed it, and how many files Git's badge last counted.
+    run_state: (bool, usize),
+    git_badge: usize,
     /// A changed file's diff, or the new project form, floating over the
     /// window in an inset panel.
     diff: Option<Entity<DiffView>>,
@@ -244,8 +269,17 @@ impl MainWindow {
         let sidebar = cx.new(ProjectTree::new);
         let prompt_mode = cx.new(|cx| PromptMode::new(window, cx));
         let mut subscriptions = vec![
-            // The ribbon's activity spinner follows whatever is running.
-            cx.observe(&prompt_mode, |this, _, cx| this.refresh_jobs(cx)),
+            // The ribbon's activity spinner follows whatever is running, and
+            // the left sidebar's Run button and view what tasks do.
+            cx.observe(&prompt_mode, |this, prompt_mode, cx| {
+                this.refresh_jobs(cx);
+                let run = (prompt_mode.read(cx).task_running(), prompt_mode.read(cx).runs_started());
+                let run_shown = this.left_view == LeftView::Run && !this.left_collapsed;
+                if run_shown || run != this.run_state {
+                    this.run_state = run;
+                    cx.notify();
+                }
+            }),
             // A file a task changed, between its snapshots.
             cx.subscribe_in(
                 &prompt_mode,
@@ -313,6 +347,15 @@ impl MainWindow {
                 }
             }),
         ];
+        let git_panel = cx.new(|cx| GitPanel::new(window, cx));
+        // Git's badge counts the files not yet committed as they change.
+        subscriptions.push(cx.observe(&git_panel, |this, git_panel, cx| {
+            let count = git_panel.read(cx).uncommitted();
+            if count != this.git_badge {
+                this.git_badge = count;
+                cx.notify();
+            }
+        }));
         subscriptions.push(Self::intercept_focus_chat(window, cx));
         subscriptions.push(Self::intercept_walkthrough_keys(window, cx));
         // While the inset panel is open, nothing beneath it can take focus:
@@ -354,12 +397,16 @@ impl MainWindow {
         Self {
             ribbon,
             sidebar,
-            git_panel: cx.new(|cx| GitPanel::new(window, cx)),
+            git_panel,
             prompt_mode,
             palette: None,
             _palette_subscription: None,
             sidebar_split: cx.new(|_| ResizableState::default()),
-            git_height: None,
+            left_view: LeftView::Files,
+            left_collapsed: false,
+            run_seen: 0,
+            run_state: (false, 0),
+            git_badge: 0,
             diff: None,
             new_project: None,
             import_project: None,
@@ -2100,89 +2147,197 @@ impl MainWindow {
     }
 }
 
-impl MainWindow {
-    /// The file tree, with the git panel beneath it while it shows, the tree
-    /// taking what it leaves. The git panel shrinks to fit its contents,
-    /// growing up to half the sidebar, or, once the edge between them is
-    /// dragged, up to where it was dragged. The git panel's header's change of colour is that edge, so no
-    /// line is drawn there, but one shows while it is hovered or dragged.
-    fn render_project_sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
-        if !self.git_panel.read(cx).is_shown() {
-            return div()
-                .size_full()
-                .child(self.sidebar.clone())
-                .into_any_element();
+/// The left sidebar's views, as the LeftSidebarScope says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LeftView {
+    Files,
+    Git,
+    Run,
+}
+
+impl LeftView {
+    const ALL: [LeftView; 3] = [LeftView::Files, LeftView::Git, LeftView::Run];
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Files => "Files",
+            Self::Git => "Git",
+            Self::Run => "Run",
         }
-        let ring = cx.theme().ring;
-        use gpui_kit::base::ElementExt as _;
-        let edge = div()
-            .id("git-resize")
-            .group("git-resize")
-            .absolute()
-            .top(-GIT_EDGE_REACH)
-            .left_0()
-            .right_0()
-            .h(GIT_EDGE_REACH * 2.)
-            .flex()
-            .items_center()
-            .cursor_row_resize()
-            .on_prepaint(|bounds, _, cx| {
-                crate::hit_areas::register_resize("git-resize".into(), bounds, cx)
-            })
-            .child(
-                div()
-                    .w_full()
-                    .h(px(1.))
-                    .group_hover("git-resize", |line| line.bg(ring)),
-            )
-            .on_drag(GitResize, |_, _, _, cx| cx.new(|_| gpui_kit::EmptyView));
-        // Lets UI tests find the sidebar; inert in normal builds.
-        gpui_kit::TestSupportExt::test_support(gpui_kit::component::v_flex().id("project-sidebar"))
-            .size_full()
-            .on_drag_move(
-                cx.listener(|this, event: &DragMoveEvent<GitResize>, _, cx| {
-                    let bounds = event.bounds;
-                    // The tree keeps its least height, the git panel its header.
-                    let most = (bounds.size.height - MIN_FILE_TREE_HEIGHT)
-                        .max(crate::git_panel::MIN_HEIGHT);
-                    let height = (bounds.bottom() - event.event.position.y)
-                        .clamp(crate::git_panel::MIN_HEIGHT, most);
-                    if this.git_height != Some(height) {
-                        this.git_height = Some(height);
-                        cx.notify();
-                    }
-                }),
-            )
-            .child(div().flex_1().min_h_0().child(self.sidebar.clone()))
-            .children(crate::sidebar::between(
-                true,
-                crate::git_panel::COLOUR_IS_EDGE,
-                cx,
-            ))
-            .child(
-                gpui_kit::component::v_flex()
-                    .relative()
-                    .w_full()
-                    // As tall as its contents, up to its most, giving way to
-                    // the tree however the window is resized.
-                    .flex_shrink(1.)
-                    .min_h(crate::git_panel::MIN_HEIGHT)
-                    .max_h(match self.git_height {
-                        Some(most) => most.into(),
-                        None => relative(crate::git_panel::MAX_SHARE),
-                    })
-                    .child(self.git_panel.clone())
-                    .child(gpui_kit::TestSupportExt::test_support(edge)),
-            )
-            .into_any_element()
+    }
+
+    fn icon(self) -> IconName {
+        match self {
+            Self::Files => IconName::FolderClosed,
+            Self::Git => IconName::GitBranch,
+            Self::Run => IconName::CirclePlay,
+        }
+    }
+
+    fn shortcut(self) -> &'static str {
+        let (mac, other) = match self {
+            Self::Files => ("Cmd+Shift+E", "Ctrl+Shift+E"),
+            Self::Git => ("Cmd+Shift+G", "Ctrl+Shift+G"),
+            Self::Run => ("Cmd+Shift+R", "Ctrl+Shift+R"),
+        };
+        if cfg!(target_os = "macos") { mac } else { other }
+    }
+
+    fn id(self) -> &'static str {
+        match self {
+            Self::Files => "left-view-files",
+            Self::Git => "left-view-git",
+            Self::Run => "left-view-run",
+        }
     }
 }
 
-/// Dragging the edge between the file tree and the git panel.
-struct GitResize;
+/// How wide the left sidebar's view bar is, and each of its buttons.
+const VIEW_BAR_WIDTH: Pixels = px(40.);
 
-/// How far either side of the edge above the git panel reaches for a drag.
-const GIT_EDGE_REACH: Pixels = px(3.);
+impl MainWindow {
+    /// Shows `view`, as clicking its button does: the view already showing
+    /// collapses the sidebar to its view bar, and any view expands it again.
+    pub fn pick_left_view(&mut self, view: LeftView, cx: &mut Context<Self>) {
+        if self.left_collapsed {
+            self.left_collapsed = false;
+        } else if self.left_view == view {
+            self.left_collapsed = true;
+        }
+        self.left_view = view;
+        cx.notify();
+    }
+
+    /// The view bar down the left sidebar's left edge: a button per view,
+    /// the one showing marked with the accent, Git's counting the files not
+    /// yet committed, Run's spinning while a task runs and dotted once one
+    /// has started since it was last shown.
+    fn render_view_bar(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let (muted, foreground, accent, hover, border) = (
+            theme.muted_foreground,
+            theme.foreground,
+            theme.accent,
+            theme.list_hover,
+            theme.border,
+        );
+        let darkest = crate::theme::color(crate::theme::palette(cx).darkest);
+        let uncommitted = self.git_badge;
+        let prompt_mode = self.prompt_mode.read(cx);
+        let (running, started) = (prompt_mode.task_running(), prompt_mode.runs_started());
+        let buttons = LeftView::ALL.into_iter().map(|view| {
+            let showing = view == self.left_view && !self.left_collapsed;
+            let badge: Option<AnyElement> = match view {
+                LeftView::Git if uncommitted > 0 => Some(
+                    div()
+                        .absolute()
+                        .bottom(px(5.))
+                        .right(px(4.))
+                        .min_w(px(14.))
+                        .h(px(14.))
+                        .px(px(3.))
+                        .rounded_full()
+                        .bg(accent)
+                        .text_color(theme.accent_foreground)
+                        .text_size(px(9.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(uncommitted.to_string())
+                        .into_any_element(),
+                ),
+                LeftView::Run if running => Some(
+                    div()
+                        .absolute()
+                        .bottom(px(4.))
+                        .right(px(4.))
+                        .child(Spinner::new().xsmall())
+                        .into_any_element(),
+                ),
+                LeftView::Run if started > self.run_seen => Some(
+                    div()
+                        .absolute()
+                        .bottom(px(8.))
+                        .right(px(8.))
+                        .size(px(6.))
+                        .rounded_full()
+                        .bg(accent)
+                        .into_any_element(),
+                ),
+                _ => None,
+            };
+            let tip = format!("{} ({})", view.name(), view.shortcut());
+            let button = div()
+                .id(view.id())
+                .relative()
+                .size(VIEW_BAR_WIDTH)
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .hover(move |button| button.bg(hover))
+                .tooltip(move |window, cx| {
+                    gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(window, cx)
+                })
+                // Its press never takes focus from the chat input.
+                .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
+                .on_click(cx.listener(move |this, _, _, cx| this.pick_left_view(view, cx)))
+                .when(showing, |button| {
+                    button.child(div().absolute().left_0().top_0().bottom_0().w(px(2.)).bg(accent))
+                })
+                .child(
+                    Icon::new(view.icon())
+                        .size(px(20.))
+                        .text_color(if showing { foreground } else { muted }),
+                )
+                .children(badge);
+            // Lets UI tests find each button; inert in normal builds.
+            gpui_kit::TestSupportExt::test_support(button).into_any_element()
+        });
+        gpui_kit::TestSupportExt::test_support(gpui_kit::component::v_flex().id("left-view-bar"))
+            .flex_none()
+            .w(VIEW_BAR_WIDTH)
+            .h_full()
+            .bg(darkest)
+            .border_r_1()
+            .border_color(border)
+            .children(buttons)
+            .into_any_element()
+    }
+
+    /// The view showing beside the view bar: the file tree, the git panel,
+    /// or the running task's panels, each filling the view.
+    fn render_left_view(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let view: AnyElement = match self.left_view {
+            LeftView::Files => self.sidebar.clone().into_any_element(),
+            LeftView::Git => {
+                if self.git_panel.read(cx).is_shown() {
+                    self.git_panel.clone().into_any_element()
+                } else {
+                    div()
+                        .size_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child("Not a Git repository")
+                        .into_any_element()
+                }
+            }
+            LeftView::Run => {
+                // Shown, nothing started since is waiting to be seen.
+                self.run_seen = self.prompt_mode.read(cx).runs_started();
+                self.prompt_mode
+                    .update(cx, |prompt_mode, cx| prompt_mode.render_run_view(window, cx))
+            }
+        };
+        gpui_kit::TestSupportExt::test_support(gpui_kit::component::v_flex().id("project-sidebar"))
+            .size_full()
+            .child(view)
+            .into_any_element()
+    }
+}
 
 impl Render for MainWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -2338,6 +2493,9 @@ impl Render for MainWindow {
             .on_action(cx.listener(|this, _: &ViewDivergenceReports, window, cx| {
                 this.open_divergence(Opening::ViewReports, window, cx)
             }))
+            .on_action(cx.listener(|this, _: &ShowFilesView, _, cx| this.pick_left_view(LeftView::Files, cx)))
+            .on_action(cx.listener(|this, _: &ShowGitView, _, cx| this.pick_left_view(LeftView::Git, cx)))
+            .on_action(cx.listener(|this, _: &ShowRunView, _, cx| this.pick_left_view(LeftView::Run, cx)))
             .on_action(cx.listener(|this, _: &ribbon::ShowTab1, _, cx| this.show_ribbon_tab(0, cx)))
             .on_action(cx.listener(|this, _: &ribbon::ShowTab2, _, cx| this.show_ribbon_tab(1, cx)))
             .on_action(cx.listener(|this, _: &ribbon::ShowTab3, _, cx| this.show_ribbon_tab(2, cx)))
@@ -2354,18 +2512,27 @@ impl Render for MainWindow {
                 div().flex_1().min_h_0().child(
                     // One `children` call for every panel: the group's
                     // `children` replaces panels added before it.
-                    h_resizable("sidebar-split")
-                        .with_state(&self.sidebar_split)
-                        .with_handle_appearance(crate::hit_areas::resize_edges("sidebar-split"))
-                        .children([
-                            resizable_panel()
-                                .size(SIDEBAR_WIDTH)
-                                .size_range(MIN_SIDEBAR_WIDTH..Pixels::MAX)
-                                .child(self.render_project_sidebar(cx)),
-                            resizable_panel()
-                                .size_range(MIN_SPLIT_WIDTH..Pixels::MAX)
-                                .child(self.prompt_mode.clone()),
-                        ]),
+                    // The view bar, always there, then the view picked
+                    // beside it, unless collapsed, the body the rest.
+                    h_flex().size_full().child(self.render_view_bar(cx)).child(
+                        div().flex_1().min_w_0().h_full().child(if self.left_collapsed {
+                            div().size_full().child(self.prompt_mode.clone()).into_any_element()
+                        } else {
+                            h_resizable("sidebar-split")
+                                .with_state(&self.sidebar_split)
+                                .with_handle_appearance(crate::hit_areas::resize_edges("sidebar-split"))
+                                .children([
+                                    resizable_panel()
+                                        .size(SIDEBAR_WIDTH)
+                                        .size_range(MIN_SIDEBAR_WIDTH..Pixels::MAX)
+                                        .child(self.render_left_view(window, cx)),
+                                    resizable_panel()
+                                        .size_range(MIN_SPLIT_WIDTH..Pixels::MAX)
+                                        .child(self.prompt_mode.clone()),
+                                ])
+                                .into_any_element()
+                        }),
+                    ),
                 ),
             )
             .children(self.render_panel(window, cx))
@@ -6623,342 +6790,46 @@ mod tests {
         cx.update(|cx| assert_eq!(chat.read(cx).value(cx).as_ref(), ""));
     }
 
-    /// The git panel shrinks to fit its contents beneath the file tree. With
-    /// more than fits, it grows to half the sidebar, its body scrolling
-    /// beneath its header; once the edge above it is dragged, it grows up to
-    /// where it was dragged instead, but never past what its contents need.
+    /// The project tree sits in a sidebar along the left, before prompt mode.
+    /// The left sidebar's view bar shows one view at a time, Files to start
+    /// with: clicking another view's button shows it, clicking the one
+    /// showing collapses the sidebar to the bar, and any button expands it.
     #[gpui_kit::test]
-    async fn the_git_panel_fits_its_contents(cx: &mut TestAppContext) {
-        use gpui_kit::{point, px};
-        let dir = std::env::temp_dir().join(format!("suspense-git-resize-{}", std::process::id()));
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::create_dir_all(dir.join("spec")).unwrap();
-        std::fs::write(dir.join("piton.config.pi"), "root: ./spec\n").unwrap();
-        std::fs::write(dir.join("spec/index.pi"), "a: 1\n").unwrap();
-        let git = |args: &[&str]| {
-            let output = crate::process::command("git")
-                .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
-                .args(args)
-                .current_dir(&dir)
-                .output()
-                .unwrap();
-            assert!(output.status.success(), "git {args:?}: {output:?}");
-        };
-        git(&["init", "-q", "-b", "main"]);
-        git(&["config", "core.autocrlf", "false"]);
-        git(&["add", "."]);
-        git(&["commit", "-q", "-m", "first"]);
-        std::fs::write(dir.join("spec/index.pi"), "a: 2\n").unwrap();
-
+    async fn the_view_bar_picks_and_collapses_the_left_views(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
-            crate::theme::init(cx);
             piton_syntax::init();
             ProjectDirectory::init(cx);
-            ProjectDirectory::set(dir.clone(), cx);
         });
         let window = cx.add_window(|window, cx| {
             let view = cx.new(|cx| MainWindow::new(window, cx));
             Root::new(view, window, cx)
         });
-        let handle: gpui_kit::AnyWindowHandle = window.into();
-        cx.wait_for(handle, Duration::from_secs(5), |window, _| {
-            window.try_find("git-header").is_some()
-        })
-        .await;
-        gpui_kit::VisualTestContext::from_window(handle, cx)
-            .simulate_resize(gpui_kit::size(px(1000.), px(800.)));
-        let frame = |cx: &mut TestAppContext| {
-            for _ in 0..3 {
-                cx.run_until_parked();
-                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
-                    .unwrap();
-            }
-        };
-        let bounds = |id: &'static str, cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, _| window.find(id).bounds())
-                .unwrap()
-        };
-        let notes = |count: usize, cx: &mut TestAppContext| {
-            for ix in 0..count {
-                crate::commit_notes::add(&dir, &format!("Note {ix}")).unwrap();
-            }
-            cx.update(crate::commit_notes::changed);
-            frame(cx);
-        };
-        let fits = |cx: &mut TestAppContext| {
-            let (panel, body) = (bounds("git-panel", cx), bounds("git-body", cx));
-            (panel.size.height - crate::git_panel::HEADER_HEIGHT - body.size.height).abs() < px(1.)
-        };
-        frame(cx);
-        let sidebar = bounds("project-sidebar", cx);
-        let half = sidebar.size.height * crate::git_panel::MAX_SHARE;
-
-        // With little in it, it is only as tall as that, along the bottom.
-        let start = bounds("git-panel", cx);
-        assert!(fits(cx), "the git panel {start:?} doesn't fit its contents");
-        assert!(start.size.height < half, "the git panel starts {start:?}");
-        assert_eq!(start.bottom(), sidebar.bottom());
-
-        // Dragged up, it grows no taller than its contents need.
-        cx.update_window(handle, |_, window, cx| {
-            let edge = point(start.center().x, start.top());
-            window.drag(edge, edge - point(px(0.), px(100.)), cx);
-        })
-        .unwrap();
-        frame(cx);
-        assert_eq!(
-            bounds("git-panel", cx),
-            start,
-            "dragged up past its contents"
-        );
-
-        // With more in it than fits there, it grows as far as it was dragged,
-        // only its notes scrolling: the message and buttons stay fixed along
-        // its bottom.
-        notes(40, cx);
-        let dragged = bounds("git-panel", cx);
-        assert!(
-            (dragged.size.height - start.size.height - px(100.)).abs() < px(2.),
-            "with more notes than fit, the git panel is {dragged:?}"
-        );
-        let first_note = |cx: &mut TestAppContext| {
-            cx.update_window(handle, |_, window, _| {
-                (0..200usize)
-                    .filter_map(|id| window.try_find(("commit-note", id)))
-                    .map(|note| note.bounds())
-                    .min_by(|a, b| a.top().partial_cmp(&b.top()).unwrap())
-                    .unwrap()
-            })
-            .unwrap()
-        };
-        let (footer, note) = (bounds("git-footer", cx), first_note(cx));
-        assert!(
-            footer.bottom() <= dragged.bottom() && footer.top() >= dragged.top(),
-            "the message and buttons {footer:?} aren't within the panel {dragged:?}"
-        );
-        cx.update_window(handle, |_, window, cx| {
-            window.scroll(
-                "git-scroll",
-                gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-2000.))),
-                cx,
-            );
-        })
-        .unwrap();
-        frame(cx);
-        assert!(
-            first_note(cx).top() < note.top(),
-            "the notes didn't scroll: {note:?} then {:?}",
-            first_note(cx)
-        );
-        assert_eq!(
-            bounds("git-footer", cx),
-            footer,
-            "the message and buttons moved as the notes scrolled"
-        );
-        let summary = bounds("git-summary", cx);
-        assert!(summary.top() >= dragged.top(), "the summary scrolled away");
-
-        // Dragged past half the sidebar, it grows past half too.
-        cx.update_window(handle, |_, window, cx| {
-            let edge = point(dragged.center().x, dragged.top());
-            window.drag(edge, point(edge.x, sidebar.top() + half - px(50.)), cx);
-        })
-        .unwrap();
-        frame(cx);
-        let tall = bounds("git-panel", cx);
-        assert!(tall.size.height > half, "dragged past half, it is {tall:?}");
-
-        // Once its notes are gone, it shrinks to fit again.
-        std::fs::remove_file(crate::commit_notes::file(&dir)).unwrap();
-        cx.update(crate::commit_notes::changed);
-        frame(cx);
-        assert_eq!(bounds("git-panel", cx), start, "without its notes");
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    /// Until the edge above it is dragged, the git panel grows to half the
-    /// sidebar at most.
-    #[gpui_kit::test]
-    async fn the_git_panel_grows_to_half_the_sidebar(cx: &mut TestAppContext) {
-        use gpui_kit::px;
-        let dir = std::env::temp_dir().join(format!("suspense-git-half-{}", std::process::id()));
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::create_dir_all(dir.join("spec")).unwrap();
-        std::fs::write(dir.join("piton.config.pi"), "root: ./spec\n").unwrap();
-        std::fs::write(dir.join("spec/index.pi"), "a: 1\n").unwrap();
-        let git = |args: &[&str]| {
-            let output = crate::process::command("git")
-                .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
-                .args(args)
-                .current_dir(&dir)
-                .output()
-                .unwrap();
-            assert!(output.status.success(), "git {args:?}: {output:?}");
-        };
-        git(&["init", "-q", "-b", "main"]);
-        git(&["config", "core.autocrlf", "false"]);
-        git(&["add", "."]);
-        git(&["commit", "-q", "-m", "first"]);
-        std::fs::write(dir.join("spec/index.pi"), "a: 2\n").unwrap();
-        for ix in 0..40 {
-            crate::commit_notes::add(&dir, &format!("Note {ix}")).unwrap();
-        }
-
-        cx.update(|cx| {
-            gpui_kit::init(cx);
-            crate::theme::init(cx);
-            piton_syntax::init();
-            ProjectDirectory::init(cx);
-            ProjectDirectory::set(dir.clone(), cx);
-        });
-        let window = cx.add_window(|window, cx| {
-            let view = cx.new(|cx| MainWindow::new(window, cx));
-            Root::new(view, window, cx)
-        });
-        let handle: gpui_kit::AnyWindowHandle = window.into();
-        cx.wait_for(handle, Duration::from_secs(5), |window, _| {
-            window.try_find("git-header").is_some()
-        })
-        .await;
-        gpui_kit::VisualTestContext::from_window(handle, cx)
-            .simulate_resize(gpui_kit::size(px(1000.), px(800.)));
-        for _ in 0..3 {
-            cx.run_until_parked();
-            cx.update_window(handle, |_, window, cx| window.render_frame(cx))
-                .unwrap();
-        }
-        let (sidebar, panel, scroll, body) = cx
-            .update_window(handle, |_, window, _| {
-                (
-                    window.find("project-sidebar").bounds(),
-                    window.find("git-panel").bounds(),
-                    window.find("git-scroll").bounds(),
-                    window.find("git-body").bounds(),
-                )
-            })
-            .unwrap();
-        let half = sidebar.size.height * crate::git_panel::MAX_SHARE;
-        assert!(
-            (panel.size.height - half).abs() < px(1.),
-            "the git panel is {panel:?} in {sidebar:?}"
-        );
-        assert_eq!(panel.bottom(), sidebar.bottom());
-        assert!(
-            body.size.height > scroll.size.height,
-            "its body {body:?} fits in {scroll:?}"
-        );
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    /// In a git repository, the git panel sits beneath the file tree with no
-    /// line between them: the tree on the darkest surface runs straight into
-    /// the panel's header on the ribbon's tab row colour, whose change of
-    /// colour is the edge, in dark and light mode alike.
-    #[gpui_kit::test]
-    async fn no_line_lies_between_the_tree_and_the_git_panel(cx: &mut TestAppContext) {
-        use gpui_kit::component::{Theme, ThemeMode};
-        let dir =
-            std::env::temp_dir().join(format!("suspense-sidebar-edge-{}", std::process::id()));
-        std::fs::remove_dir_all(&dir).ok();
-        for folder in [".claude", "assets", "spec/lib", "src", "targets"] {
-            std::fs::create_dir_all(dir.join(folder)).unwrap();
-        }
-        for (file, text) in [
-            ("piton.config.pi", "root: ./spec\ncodeRoot: ./src\n"),
-            (".gitignore", "targets/\n"),
-            ("spec/index.pi", "a: 1\n"),
-            ("spec/lib/index.pi", "b: 2\n"),
-            ("src/main.rs", "fn main() {}\n"),
-            ("targets/out", "\n"),
-        ] {
-            std::fs::write(dir.join(file), text).unwrap();
-        }
-        let git = |args: &[&str]| {
-            let output = crate::process::command("git")
-                .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
-                .args(args)
-                .current_dir(&dir)
-                .output()
-                .unwrap();
-            assert!(output.status.success(), "git {args:?}: {output:?}");
-        };
-        git(&["init", "-q", "-b", "main"]);
-        git(&["config", "core.autocrlf", "false"]);
-        git(&["add", "."]);
-        git(&["commit", "-q", "-m", "first"]);
-        std::fs::write(dir.join("src/main.rs"), "fn main() { go() }\n").unwrap();
-        std::fs::write(dir.join("assets/new.txt"), "new\n").unwrap();
-        crate::commit_notes::add(
-            &dir,
-            "Rewrite Editor spec with marquee selection and push/pull",
-        )
-        .unwrap();
-
-        cx.update(|cx| {
-            gpui_kit::init(cx);
-            crate::theme::init(cx);
-            piton_syntax::init();
-            ProjectDirectory::init(cx);
-            ProjectDirectory::set(dir.clone(), cx);
-        });
-        let window = cx.add_window(|window, cx| {
-            let view = cx.new(|cx| MainWindow::new(window, cx));
-            Root::new(view, window, cx)
-        });
-        let handle: gpui_kit::AnyWindowHandle = window.into();
-        cx.wait_for(handle, Duration::from_secs(5), |window, _| {
-            window.try_find("git-header").is_some()
-                && window.try_find(("project-entry", 0usize)).is_some()
-        })
-        .await;
-        gpui_kit::VisualTestContext::from_window(handle, cx)
-            .simulate_resize(gpui_kit::size(gpui_kit::px(1000.), gpui_kit::px(974.)));
-        for mode in [ThemeMode::Dark, ThemeMode::Light] {
-            cx.update(|cx| Theme::change(mode, None, cx));
-            for _ in 0..3 {
-                cx.run_until_parked();
-                cx.update_window(handle, |_, window, cx| window.render_frame(cx))
-                    .unwrap();
-            }
+        let handle = window.into();
+        cx.wait_for(handle, TIMEOUT, |window, _| window.try_find("project-tree").is_some())
+            .await;
+        let click = |id: &'static str, cx: &mut TestAppContext| {
             cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
-                crate::double_borders::assert_none(window);
-                let palette = crate::theme::palette(cx);
-                let tree = window.find("project-tree").bounds();
-                let header = window.find("git-header").bounds();
-                assert!(
-                    (header.top() - tree.bottom()).abs() < gpui_kit::px(0.5),
-                    "{mode:?}: something lies between the tree, ending at {:?}, and the \
-                     header, starting at {:?}",
-                    tree.bottom(),
-                    header.top()
-                );
-                let frame = crate::frame_image::Frame::of(window);
-                // Straight down across the edge, clear of the scroll column:
-                // the tree's colour, then the header's, and nothing between.
-                let x = tree.left() + gpui_kit::px(100.);
-                let edge = header.top().as_f32().round() as i32;
-                for dy in -3..3 {
-                    let y = gpui_kit::px((edge + dy) as f32 + 0.5);
-                    let expected = if dy < 0 {
-                        palette.darkest
-                    } else {
-                        palette.ribbon_tabs
-                    };
-                    assert_eq!(
-                        frame.at(gpui_kit::point(x, y)),
-                        expected,
-                        "{mode:?}: {dy}px from the edge between the tree and the git panel"
-                    );
-                }
+                window.click(id, cx);
             })
             .unwrap();
-        }
-        std::fs::remove_dir_all(&dir).ok();
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| window.render_frame(cx)).unwrap();
+        };
+        let shown = |id: &'static str, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, _| window.try_find(id).is_some()).unwrap()
+        };
+        click("left-view-run", cx);
+        assert!(!shown("project-tree", cx), "Files still shows beside Run");
+        assert!(shown("run-view-empty", cx), "Run doesn't say no task is running");
+        click("left-view-run", cx);
+        assert!(!shown("project-sidebar", cx), "the sidebar didn't collapse");
+        assert!(shown("left-view-bar", cx), "the view bar went with it");
+        click("left-view-files", cx);
+        assert!(shown("project-tree", cx), "Files didn't show again");
     }
 
-    /// The project tree sits in a sidebar along the left, before prompt mode.
     #[gpui_kit::test]
     async fn sidebar_is_left_of_prompt_mode(cx: &mut TestAppContext) {
         cx.update(|cx| {
@@ -6987,9 +6858,13 @@ mod tests {
             crate::double_borders::assert_none(window);
             let sidebar = window.find("project-tree").bounds();
             let send = window.find("send").bounds();
+            // Beside the view bar along the window's left edge.
+            let bar = window.find("left-view-bar").bounds();
+            assert!(bar.left() <= gpui_kit::px(1.), "the view bar is not along the left: {bar:?}");
             assert!(
-                sidebar.left() <= gpui_kit::px(1.) && sidebar.size.width > gpui_kit::px(0.),
-                "sidebar is not along the left: {sidebar:?}"
+                (sidebar.left() - super::VIEW_BAR_WIDTH).abs() <= gpui_kit::px(1.)
+                    && sidebar.size.width > gpui_kit::px(0.),
+                "sidebar is not beside the view bar: {sidebar:?}"
             );
             assert!(
                 send.left() >= sidebar.right(),
@@ -7642,8 +7517,7 @@ mod tests {
         });
         let handle: gpui_kit::AnyWindowHandle = window.into();
         cx.wait_for(handle, Duration::from_secs(5), |window, _| {
-            window.try_find("git-header").is_some()
-                && window.try_find(("project-entry", 0usize)).is_some()
+            window.try_find(("project-entry", 0usize)).is_some()
                 && window.try_find("project-tree-scroll-column").is_some()
         })
         .await;

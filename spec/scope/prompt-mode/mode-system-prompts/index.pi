@@ -1,36 +1,30 @@
 use /lib
-from /scope/container-environment import ContainerEnvironmentScope
-from /scope/harness-integration import HarnessIntegrationScope
-from /scope/new-project import NewProjectScope
-from /scope/project-data import ProjectDataScope
-from /scope/project-locations import ProjectLocationsScope
-from /scope/prompt-mode/ask-conversation import AskConversationScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/prompt-mode/sending import PromptSendingScope
-from /scope/settings-window import SettingsWindowScope
-from /scope/spec-build import SpecBuildScope
-from /ui/components/right-sidebar import RightSidebarScope
+from /scope/container-environment import ContainerEnvironment
+from /scope/harness-integration import HarnessIntegration
+from /scope/new-project import NewProject
+from /scope/project-data import ProjectData
+from /scope/project-locations import ProjectLocations
+from /scope/prompt-mode/ask-conversation import AskConversation
+from /scope/prompt-mode/modes import PromptModes
+from /scope/prompt-mode/sending import PromptSending
+from /scope/settings-window import SettingsWindow
+from /scope/spec-build import SpecBuild
+from /ui/components/left-sidebar import LeftSidebar
 
-export scope ModeSystemPromptsScope:
-    concept: {ModeSystemPromptsConcept}
-
-concept ModeSystemPromptsConcept:
+export feature ModeSystemPrompts:
     pitch:
         The system prompt each mode sends, which tells the harness what kind of
         work a prompt is, and which each project can make its own.
 
-    shape: {ModeSystemPromptsShape}
-
-shape ModeSystemPromptsShape:
     description:
         What a prompt tells the harness besides itself comes in two parts. The
         system template is the conversation's system prompt: the same for
         every prompt of a conversation, whatever its mode, so the harness's
         prompt cache holds when the mode changes. Each lane's tasks, and the
         questions, carry on a conversation of their own, as the
-        @{HarnessIntegrationScope} says, and each fills the system template in
+        @{HarnessIntegration} says, and each fills the system template in
         for what its runs can see, so it stays the same within each. Each of the
-        @{PromptModesScope} but Freeform has instructions of its own, which
+        @{PromptModes} but Freeform has instructions of its own, which
         change from one prompt to the next, and so go in the prompt's own
         message, in a block marked <task-instructions> at its head. A
         prompt's hidden anchor has a systemPrompt property, alongside its
@@ -42,7 +36,7 @@ shape ModeSystemPromptsShape:
         can reference the spec, with these placeholders, each written after a
         dollar sign and inside braces like a Piton interpolation:
 
-        - CODE_LOCATION and SPEC_LOCATION, the code location and the spec location, as the @{ProjectLocationsScope} says
+        - CODE_LOCATION and SPEC_LOCATION, the code location and the spec location, as the @{ProjectLocations} says
         - HARNESS_DIRECTORY, the directory of the harness in use
         - SPEC_READING, the spec-reading prompt, injected where it is written
         - PITON_FLUENCY_FILE, the path of the fluency file, from the project directory, as the pitonFluency below says
@@ -59,7 +53,7 @@ shape ModeSystemPromptsShape:
 
         Every path a placeholder is filled in with points where the run that
         is sent it finds that file, whether it runs on the host or in a
-        container, as the @{ContainerEnvironmentScope} says. So each is
+        container, as the @{ContainerEnvironment} says. So each is
         written relative to the project directory, the directory every run
         works in, the project directory itself on the host and `/workspace`
         in a container: CODE_LOCATION and SPEC_LOCATION as `./` and the
@@ -72,11 +66,11 @@ shape ModeSystemPromptsShape:
         directory for.
 
         A run fills CODE_LOCATION and SPEC_LOCATION in only with what it can
-        see, as the @{ContainerEnvironmentScope} says. A run of the spec
+        see, as the @{ContainerEnvironment} says. A run of the spec
         lane, a Spec task or a Chain prompt's spec step, can't see the code
         location, and fills CODE_LOCATION in with nothing, its instructions and
         system template alike, unless the project lets its Spec runs read
-        the code, as the @{ContainerEnvironmentScope} says, when it fills
+        the code, as the @{ContainerEnvironment} says, when it fills
         CODE_LOCATION in as a question does, and is told, on a paragraph of
         its own, that the code there is read only, for reading what the spec
         describes, never for changing, and, where they may read the whole
@@ -99,10 +93,10 @@ shape ModeSystemPromptsShape:
         all.
 
         HARNESS_DIRECTORY is the directory the harness that runs the prompt,
-        as the @{HarnessIntegrationScope} says, reads its agentic Markdown and
+        as the @{HarnessIntegration} says, reads its agentic Markdown and
         reference files from, written without a leading ./: .claude for
         Claude Code, .opencode for OpenCode, and .codex for Codex, the
-        directories the @{NewProjectScope} names for them.
+        directories the @{NewProject} names for them.
 
     readingTheSpec:
         In every mode, the harness learns what the spec says from its
@@ -138,8 +132,8 @@ shape ModeSystemPromptsShape:
         the system prompt: only work that writes Piton is pointed at it.
 
         It is written to the fluency file, `.suspense/fluency.md` in the
-        project's data, as the @{ProjectDataScope} says, each time the
-        application runs a spec build in the project, as the @{SpecBuildScope}
+        project's data, as the @{ProjectData} says, each time the
+        application runs a spec build in the project, as the @{SpecBuild}
         says, so it keeps in step with the project's piton and its
         FLUENCY_PROMPT.md. A Spec or Chain prompt sent before the file has
         ever been written has it written before the prompt is compiled. What
@@ -180,11 +174,11 @@ shape ModeSystemPromptsShape:
         the application when it is built, as they are, so a build always
         ships with whatever it says, and a build can't be made without it.
         It is not among the prompts a project saves or the
-        @{SettingsWindowScope} edits.
+        @{SettingsWindow} edits.
 
         It is written to the Suspense fluency file,
         `.suspense/suspense-fluency.md` in the project's data, as the
-        @{ProjectDataScope} says, before any Code, Chain, Spec, or Ask prompt
+        @{ProjectData} says, before any Code, Chain, Spec, or Ask prompt
         is compiled, whenever the file isn't there or doesn't hold what the
         application ships, so it keeps in step with the application rather
         than the project. It is written as text, never read as Piton, holds
@@ -195,7 +189,7 @@ shape ModeSystemPromptsShape:
         the user, each of these in a short paragraph of its own.
 
         \\
-        - that Suspense is an application for working on a project whose spec, written in Piton, describes its code, and that a prompt is sent to the harness in one of five modes, in the order and with the meanings the PromptModesScope gives: Code changes the code and leaves the spec as it is, Chain changes the spec and then the code to match, Spec changes the spec and leaves the code as it is, Ask asks a question and changes nothing, and Freeform passes a prompt to the harness exactly as typed
+        - that Suspense is an application for working on a project whose spec, written in Piton, describes its code, and that a prompt is sent to the harness in one of five modes, in the order and with the meanings the PromptModes gives: Code changes the code and leaves the spec as it is, Chain changes the spec and then the code to match, Spec changes the spec and leaves the code as it is, Ask asks a question and changes nothing, and Freeform passes a prompt to the harness exactly as typed
         - that Code, Chain, Spec, and Freeform prompts are tasks, run in a spec lane and a code lane, one task at a time in each, queueing behind tasks of their own lane, and that questions run at once and never queue
         - that a Chain prompt runs as two steps: a spec step, which writes the prompt into the spec, then a code step, sent the prompt and what the spec step replied, which changes the code to match the spec as built, and that each step is its own run, in its own lane
         - that Suspense adds each mode's instructions to a prompt itself, in a block marked <task-instructions> at its head, and the spec's references and the understanding file with them, so a prompt written for a mode is only what the user wants done, in the user's own terms, and never holds a <task-instructions> block, steps the mode already takes, or instructions about building, checking, or the understanding file
@@ -229,20 +223,20 @@ shape ModeSystemPromptsShape:
         itself use every placeholder but SPEC_READING, which in it is left as
         written. One left with nothing but blank space leaves SPEC_READING
         filled in with nothing. Like the templates, each project has its own,
-        saved with its data, as the @{ProjectDataScope} says, in
+        saved with its data, as the @{ProjectData} says, in
         spec-reading.md beside them, and edited in the
-        @{SettingsWindowScope}; with no file yet the project uses its default.
+        @{SettingsWindow}; with no file yet the project uses its default.
 
     codeToSpec:
         The code-to-spec prompt is given to a Code task sent to Spec, as the
-        @{PromptSendingScope} says, after the Spec instructions. It may use
+        @{PromptSending} says, after the Spec instructions. It may use
         every placeholder the instructions may, filled in the same way, and
         two of its own: CODE_PROMPT, filled in with the code task's prompt as
         it was typed, and CODE_RESULT, with the code task's final output, or
         with a line saying the code task left none. What fills them in is
         taken as text, never read as Piton. Like the spec-reading prompt, each
         project has its own, saved with its data in code-to-spec.md beside the
-        templates, and edited in the @{SettingsWindowScope}; with no file yet
+        templates, and edited in the @{SettingsWindow}; with no file yet
         the project uses its default.
 
         The spec-to-code prompt is given in the same way to the code step a
@@ -252,7 +246,7 @@ shape ModeSystemPromptsShape:
 
     cardFormat:
         Every question is told how an answer hands back prompts and questions
-        in the forms the @{AskConversationScope} shows as cards, so whenever
+        in the forms the @{AskConversation} shows as cards, so whenever
         the user asks for a prompt, it comes back as a card they can send to
         Code, Chain, or Spec. It is not a project's to edit or leave out: the
         application adds it to each question's <task-instructions> block,
@@ -268,17 +262,30 @@ shape ModeSystemPromptsShape:
         Whenever the user asks you for a prompt, or your answer suggests one for them to send, give each prompt as a fenced code block whose info string is `suspense-prompt` and the mode it is for, one of `code`, `chain`, `spec`, `ask`, or `freeform`, such as ```` ```suspense-prompt chain ````, holding only the prompt's text, ready to send, never as plain text, a quote, or any other code block, since only this form lets the user send it from your answer. Pick the mode that fits the work, `chain` when it changes both the spec and the code; the user can send it to Code, Chain, or Spec all the same. When you need the user to answer something before you can go on, write the question as a fenced code block whose info string is `suspense-question`, the question on its first lines and then, if there are answers to pick from, one per line, each starting with `- `. Use these blocks only for prompts and questions meant for the user, never for code or examples.
         \\
 
+    resuming:
+        The resume prompt is the message given to a paused task when it is
+        resumed, as the @{PromptSending} says, sent on its own as the next
+        message of the task's conversation, never compiled as a prompt. Like
+        the injected prompts, each project has its own, saved with its data
+        in resume.md beside the templates, and edited in the
+        @{SettingsWindow}; with no file yet the project uses its default,
+        which says:
+
+        \\
+        Your previous run on this task was interrupted before it finished. Any step you were in the middle of, such as an edit, a command, or a build, may not have completed, and files may have changed since. Before carrying on, check the state of what you were working on: re-read the files you were changing and re-run any check you need. Then carry on from where you left off; don't start the task over or redo work that is already done.
+        \\
+
     saving:
         Each project has its own system template, instructions, and injected
-        prompts, saved with its data, as the @{ProjectDataScope} says, a
+        prompts, saved with its data, as the @{ProjectData} says, a
         Markdown file each, system.md for the system template, code.md,
         combined.md for Chain, spec.md, and ask.md for the modes, and edited
-        in the @{SettingsWindowScope}. One with no file yet gives its default.
+        in the @{SettingsWindow}. One with no file yet gives its default.
 
     understandingFile:
         Each Code, Chain, or Spec task has an understanding file: the short
         list of constraints the harness has taken from the spec for it, which
-        the @{RightSidebarScope} shows as it changes. It is saved
+        the @{LeftSidebar}'s Run view shows as it changes. It is saved
         beside the task's history record, with the same name and the
         extension `.understanding.md`, written by the harness itself. Nothing
         else writes it, and nothing is there until the harness writes it. Each
@@ -369,3 +376,4 @@ shape ModeSystemPromptsShape:
         The defaults are only where a project starts, and what resetting a
         prompt puts back. A project whose prompts were saved before a default
         changed keeps them as they are.
+

@@ -1,27 +1,21 @@
 use /lib
-from /scope/container-environment import ContainerEnvironmentScope
-from /scope/harness-integration import HarnessIntegrationScope
-from /scope/project-data import ProjectDataScope
+from /scope/container-environment import ContainerEnvironment
+from /scope/harness-integration import HarnessIntegration
+from /scope/project-data import ProjectData
 from /scope/prompt-mode import PromptEditor
-from /scope/prompt-mode/chat-input import ChatInputScope
+from /scope/prompt-mode/chat-input import ChatInput
 from /scope/prompt-mode/message-list import MessageList
-from /scope/prompt-mode/mode-system-prompts import ModeSystemPromptsScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /scope/spec-build import SpecBuildScope
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPrompts
+from /scope/prompt-mode/modes import PromptModes
+from /scope/spec-build import SpecBuild
 
-export scope PromptSendingScope:
-    concept: {PromptSendingConcept}
-
-concept PromptSendingConcept:
+export feature PromptSending:
     pitch:
         How a prompt gets to the harness, whether written in the chat input or
         sent on the application's behalf.
 
-    shape: {PromptSendingShape}
-
-shape PromptSendingShape:
     description:
-        A prompt is sent in one of the @{PromptModesScope}, with anything
+        A prompt is sent in one of the @{PromptModes}, with anything
         attached to it. Sending is never blocked by the harness working.
 
     tasks:
@@ -31,21 +25,21 @@ shape PromptSendingShape:
         attachments, until its turn comes.
 
         When a task is actually sent, the spec is built ahead of it, as the
-        @{SpecBuildScope} says, the task showing "Building" until the build is
+        @{SpecBuild} says, the task showing "Building" until the build is
         over; then its hidden anchor is compiled and run. It heads the
         @{MessageList} as the latest task, and is saved in the prompt history,
-        as the @{ProjectDataScope} says. A prompt that fails to compile or run
+        as the @{ProjectData} says. A prompt that fails to compile or run
         fails its task, and doesn't stop its queue.
 
         A task whose mode runs in a container, a Spec task or a Chain
         prompt's spec step or spec follow-up, is run in one, as the
-        @{ContainerEnvironmentScope} says, showing "Preparing environment"
+        @{ContainerEnvironment} says, showing "Preparing environment"
         while its image is built; one that can't be, as where Podman isn't
         installed, fails as a task that can't be run does, and is never run on
         the host instead. A Code task and a Chain prompt's code step always
         run on the host, and never need Podman. Once a Spec task or a Chain
         prompt's spec step is over, however it ended, the spec is built
-        again on the host, as the @{SpecBuildScope} says.
+        again on the host, as the @{SpecBuild} says.
 
     lanes:
         Tasks run in two lanes, the code lane and the spec lane, each with a
@@ -71,15 +65,15 @@ shape PromptSendingShape:
     questions:
         A question, a prompt in Ask, never queues: it runs straight away, even
         while the harness is working on a task or other questions, joins the
-        questions stacked above the @{ChatInputScope}'s tabs, and is saved
+        questions stacked above the @{ChatInput}'s tabs, and is saved
         among the questions asked. Every question runs in a container that
         holds the code, the spec source, and the compiled reference, each
-        read only, as the @{ContainerEnvironmentScope} says, and fails, never
+        read only, as the @{ContainerEnvironment} says, and fails, never
         running on the host, where that can't be done.
 
     sendingToATask:
         While a task is running, more can be sent to it, as to a terminal
-        session, from the @{ChatInputScope}'s "Send to task", as it says. It
+        session, from the @{ChatInput}'s "Send to task", as it says. It
         goes to the latest task, whose output is shown; a task running in the
         other lane, among the previous tasks, isn't sent to. What
         is sent is written as a hidden anchor and compiled like any prompt,
@@ -89,7 +83,7 @@ shape PromptSendingShape:
         the spec, but the spec isn't built first, and its systemPrompt isn't
         sent, since the run already has the one it began with. It goes to the
         running task's run as a message of its own, as the
-        @{HarnessIntegrationScope} says, and is not a task of its own: it
+        @{HarnessIntegration} says, and is not a task of its own: it
         doesn't head the @{MessageList}, isn't among the previous tasks, and
         can't be resent. It is shown in the task's output and kept with its
         record, as the @{PromptEditor} says. A message that fails to compile
@@ -108,9 +102,10 @@ shape PromptSendingShape:
     resending:
         A prompt sent before can be sent again, from a Resend button: a small
         ghost button with a rotating-arrow icon, whose tooltip says it sends
-        the prompt again as it was sent. It sits at the right of the latest
-        task's header, and of the heading of each previous task and previous
-        answer, beside its chevron; clicking it never opens or closes the item.
+        the prompt again as it was sent. It sits among an open task's actions in
+        the right sidebar's Tasks tab, and at the right of the heading of
+        each previous answer, beside its chevron, never in a task's header in
+        the message list; clicking it never opens or closes the item.
 
         Resending sends the prompt as it was typed, in the mode it was sent in,
         with the text that was attached to it, and sliced or not as it was, as
@@ -126,8 +121,10 @@ shape PromptSendingShape:
     cancelling:
         A task under way can be cancelled, from a Cancel button: a small
         ghost button with a stop icon, whose tooltip says "Cancel this task",
-        at the right of the selected task's header, beside its Resend
-        button, shown only while the task is building, compiling, or running.
+        among an open task's actions in the Tasks tab, and, as "Stop", at
+        the right of the selected task's header, as the @{MessageList}'s
+        sent prompt says, shown only while the task is building, compiling,
+        or running.
         With more than one task under way, each of the others is a compact
         row in the header, as the @{MessageList} says, with the same Cancel
         button at its right, and clicking it never selects the row. A task
@@ -145,13 +142,63 @@ shape PromptSendingShape:
         The task in the other lane, and questions, are not cancelled with
         it.
 
+    pausing:
+        A running task can be paused and resumed. A Pause button, a small
+        ghost button with a pause icon, whose tooltip says "Pause this
+        task", sits beside Cancel wherever Cancel does, shown while the task
+        is running. Pausing stops the harness's run, its process ended as
+        cancelling ends it, and leaves the task in the history as "Paused":
+        its output, its conversation, and the snapshot taken as it first
+        started are kept, and nothing it changed is undone. A paused task is
+        not under way: its lane is free, and its queue carries on with the
+        next prompt, as after any task.
+
+        A paused task offers Resume, a small ghost button with a play icon,
+        in place of Pause, wherever its actions are. Resume carries on the
+        same task, never a new one: it is not saved in the history again and
+        keeps its name. It carries on the task's own conversation, as the
+        @{HarnessIntegration} says, with a message telling the harness that
+        its run was interrupted, that any step it was in the middle of may
+        not have finished, and that files may have changed since, so it
+        checks what it needs before carrying on from where it left off rather
+        than starting over. The message is the application's own, from the
+        @{ModeSystemPrompts}, not the user's, and it is not compiled as a
+        prompt; the spec is not built again ahead of it. A resumed task takes
+        its place in its lane's queue as a task sent at the time it was first
+        sent: it runs as soon as its lane is free, ahead of every prompt sent
+        after it was first sent.
+
+        While it is paused, its status reads "Paused", its time stops, and
+        it is listed among the previous tasks, or, for a chain step, with its
+        chain. Once resumed, its output carries on beneath what it had, a
+        muted row marking where it was paused and resumed, its time counts on
+        from where it stopped, counting only while it runs, and its changed
+        files and their diffs span the whole task, from the snapshot taken
+        when it first started to the one taken when it finally ends. It can
+        be paused and resumed any number of times, and cancelled while
+        paused, which ends it as Cancelled. A paused task whose conversation
+        can no longer be carried on resumes as a new conversation, as the
+        @{HarnessIntegration} says, told the task's prompt and its output so
+        far.
+
+        A paused Chain step resumes as that step, and the chain carries on
+        after it as ever, its next step sent once it finishes. While one of
+        its steps is paused and none runs, the chain reads Paused.
+
+        A task also pauses this way, rather than failing, when it stops
+        because the harness's usage limit was reached, as the harness says
+        in its result or its errors: it reads "Paused" with a muted note
+        saying the usage limit was reached and when it resets, if the harness
+        says, and waits to be resumed by hand. Paused tasks are kept across
+        restarts and can be resumed after one.
+
     sendingToTheOtherMode:
         A task sent in Code alone can be sent to Spec, and one sent in Spec
         alone can be sent to Code, from a small ghost button beside its Resend
         button, tinted the colour of the mode it sends to, whose tooltip says
         "Send to Spec" or "Send to Code". It sits wherever Resend does for a
-        task, at the right of the latest task's header and of the heading of
-        each previous task, and clicking it never opens or closes the item.
+        task, among an open task's actions in the Tasks tab, never in a
+        task's header in the message list.
         Tasks sent in Chain, questions, and prompts whose mode isn't known
         don't offer it.
 
@@ -162,7 +209,7 @@ shape PromptSendingShape:
         A Code task sent to Spec is also told what the code task did, so the
         spec can be written from it. Its system prompt is Spec's, followed, on
         a paragraph of its own, by the code-to-spec prompt of the
-        @{ModeSystemPromptsScope}, which says that the prompt was first sent to
+        @{ModeSystemPrompts}, which says that the prompt was first sent to
         change the code, and now the spec is to be written to describe what was
         built, and holds the code task's prompt, as it was typed, and its final
         output: the reply text after the code task's last tool call, all of it
@@ -181,8 +228,8 @@ shape PromptSendingShape:
         sent there once that has succeeded, and every task sent in Code or
         Spec alone keeps its button in the same place either way: once the
         task sent from it has finished as Done, its Send to Spec or Send to
-        Code button is greyed out and disabled, in the latest task's header
-        and in its heading among the previous tasks, its tooltip reading
+        Code button is greyed out and disabled, in an open task's actions
+        in the Tasks tab, its tooltip reading
         "Sent to Spec" or "Sent to Code". The batch actions neither count nor send
         it, though it can still be selected. While the task sent from it is
         waiting in the queue, building, compiling, or running, the button is
@@ -204,8 +251,8 @@ shape PromptSendingShape:
         A task that was itself sent from the other mode is complete: its
         prompt has been through both the code and the spec, so it never offers
         to be sent back. Its Send to Spec or Send to Code button is greyed out
-        and disabled for good, in the latest task's header and in its heading
-        among the previous tasks, its tooltip reading "Complete, sent here
+        and disabled for good, in an open task's actions in the Tasks
+        tab, its tooltip reading "Complete, sent here
         from Code" or "Complete, sent here from Spec". Being complete wins
         over every other state, sent, being sent, or marked done. Right-clicking it opens no
         menu, since it can't be marked not done, and the batch actions neither
@@ -215,8 +262,8 @@ shape PromptSendingShape:
 
         A task can also be marked as sent by hand, for a prompt whose other
         half was written some other way. Right-clicking its Send to Spec or
-        Send to Code button, enabled or not, in the latest task's header or in
-        its heading among the previous tasks, opens a small context menu there
+        Send to Code button, enabled or not, in an open task's actions in the
+        Tasks tab, opens a small context menu there
         with "Mark as done", with a check icon, or, on a task marked so, "Mark
         as not done", with a rotating-arrow icon; one menu is open at a time,
         and closing it gives the focus back. Only these buttons have it, so
@@ -227,7 +274,7 @@ shape PromptSendingShape:
         nothing; marking it not done enables it again, unless a task sent
         from it is still under way or finished as Done. Right-clicking never
         opens or closes the item. The mark is saved with the task in the
-        project's data, as the @{ProjectDataScope} says, in its history
+        project's data, as the @{ProjectData} says, in its history
         record, changing nothing else in it, so it is kept across restarts. A
         task with no record yet, left "Not recorded", is given a record
         holding only the mark, and still reloads as "Not recorded", marked. A
@@ -236,3 +283,4 @@ shape PromptSendingShape:
         while that record is being saved is saved again after it. The batch
         actions treat a task marked done as one already sent: they neither
         count nor send it, though it can still be selected.
+

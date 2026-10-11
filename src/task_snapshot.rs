@@ -35,6 +35,28 @@ pub fn repo_top(project_dir: &Path) -> Option<PathBuf> {
     Some(PathBuf::from(top.trim_end_matches(['\n', '\r'])))
 }
 
+/// Where `project_dir` lies in its repository, as a path from the
+/// repository's top ending in `/`; empty at the top itself.
+fn prefix(project_dir: &Path) -> Result<String> {
+    let mut command = crate::process::command("git");
+    command
+        .args(["rev-parse", "--show-prefix"])
+        .current_dir(project_dir);
+    Ok(run(command, "find the project in its repository")?
+        .trim_end_matches(['\n', '\r'])
+        .to_string())
+}
+
+/// The pathspec of the project's working tree: the whole repository where
+/// the project is its top, otherwise only the project's own folder.
+fn project_pathspec(prefix: &str) -> String {
+    if prefix.is_empty() {
+        ":/".into()
+    } else {
+        format!(":(top){prefix}")
+    }
+}
+
 /// Git, run in `top` against the private index of `project_dir`.
 fn git(top: &Path, project_dir: &Path) -> Command {
     let mut command = crate::process::command("git");
@@ -57,8 +79,9 @@ fn run(mut command: Command, what: &str) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// Snapshots the working tree of the repository `project_dir` is in, as git
-/// sees it, `.gitignore` followed, and pins the tree under
+/// Snapshots the project's working tree, as git sees it, `.gitignore`
+/// followed: the files in `project_dir` alone, never the rest of a larger
+/// repository it is a folder of. Pins the tree under
 /// `refs/suspense/<task>/<which>`. Returns the tree's hash.
 pub fn take(project_dir: &Path, task: &str, which: &str) -> Result<String> {
     let top = repo_top(project_dir).context("the project isn't a git repository")?;
@@ -74,8 +97,17 @@ pub fn take(project_dir: &Path, task: &str, which: &str) -> Result<String> {
         .status_logged()
         .is_ok_and(|status| status.success());
     let index = index.strip_prefix(&top).unwrap_or(&index);
+    let prefix = prefix(project_dir)?;
+    // Anything outside the project an earlier snapshot's index held is
+    // dropped from it, so the tree holds the project's files alone.
+    if !prefix.is_empty() {
+        let mut drop = git(&top, project_dir);
+        drop.args(["rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", ":/"])
+            .arg(format!(":(top,exclude){prefix}"));
+        run(drop, "leave out what is outside the project")?;
+    }
     let mut add = git(&top, project_dir);
-    add.args(["add", "-A", "--", ":/"]);
+    add.args(["add", "-A", "--"]).arg(project_pathspec(&prefix));
     if !ignored {
         add.arg(format!(":(top,exclude){}", index.display()))
             .arg(format!(":(top,exclude){}.lock", index.display()));
@@ -124,12 +156,17 @@ pub struct Change {
     pub from: Option<PathBuf>,
 }
 
-/// The files that changed between the trees `before` and `after`, in path
-/// order, as `git diff --name-status` gives them.
-pub fn changes(top: &Path, before: &str, after: &str) -> Result<Vec<Change>> {
+/// The files in `project_dir` that changed between the trees `before` and
+/// `after`, by their paths from the repository's top, `top`, in path order,
+/// as `git diff --name-status` gives them. Nothing outside the project is
+/// listed, even where a snapshot taken before they were kept to the project
+/// holds it.
+pub fn changes(top: &Path, project_dir: &Path, before: &str, after: &str) -> Result<Vec<Change>> {
+    let prefix = prefix(project_dir)?;
     let mut diff = crate::process::command("git");
     diff.current_dir(top)
-        .args(["diff", "--name-status", "-z", "-M", before, after]);
+        .args(["diff", "--name-status", "-z", "-M", before, after, "--"])
+        .arg(project_pathspec(&prefix));
     let mut changes = parse(&run(diff, "list the changed files")?);
     changes.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(changes)
@@ -293,7 +330,7 @@ mod tests {
         std::fs::write(dir.join("ignored.txt"), "no\n").unwrap();
         let after = take(&dir, "Prompt_a", "after").unwrap();
 
-        let changed = changes(&dir, &before, &after).unwrap();
+        let changed = changes(&dir, &dir, &before, &after).unwrap();
         let listed: Vec<_> = changed
             .iter()
             .map(|c| (c.kind.letter(), c.path.display().to_string()))
@@ -335,6 +372,44 @@ mod tests {
             run(refs, "refs").unwrap(),
             "refs/suspense/Prompt_a/after\nrefs/suspense/Prompt_a/before\n"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A project that is a folder of a larger repository snapshots its own
+    /// working tree alone: files beside it are neither in its snapshots nor
+    /// listed as changed, even where its private index once held them.
+    #[test]
+    fn a_subfolder_project_snapshots_only_its_own_files() {
+        let dir = std::env::temp_dir().join(format!("suspense-snapshot-sub-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("project")).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
+        let project = dir.join("project");
+        git_in(&dir, &["init", "-q"]);
+        git_in(&dir, &["config", "core.autocrlf", "false"]);
+        std::fs::write(dir.join("outside.txt"), "one\n").unwrap();
+        std::fs::write(project.join("inside.txt"), "one\n").unwrap();
+        // An index from before snapshots kept to the project, holding the
+        // file beside it.
+        let mut whole = git(&dir, &project);
+        std::fs::create_dir_all(project.join(".suspense")).unwrap();
+        whole.args(["add", "-A", "--", ":/"]);
+        run(whole, "add").unwrap();
+
+        let before = take(&project, "Prompt_s", "before").unwrap();
+        std::fs::write(dir.join("outside.txt"), "two\n").unwrap();
+        std::fs::write(dir.join("beside.txt"), "new\n").unwrap();
+        std::fs::write(project.join("inside.txt"), "two\n").unwrap();
+        let after = take(&project, "Prompt_s", "after").unwrap();
+
+        assert!(contents(&dir, &after, Path::new("outside.txt")).is_none());
+        assert!(contents(&dir, &after, Path::new("beside.txt")).is_none());
+        let listed: Vec<_> = changes(&dir, &project, &before, &after)
+            .unwrap()
+            .into_iter()
+            .map(|c| (c.kind.letter(), c.path.display().to_string()))
+            .collect();
+        assert_eq!(listed, [("M", "project/inside.txt".to_string())]);
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -1,26 +1,20 @@
 use /lib
-from /scope/project-data import ProjectDataScope
-from /scope/project-directory import ProjectDirectoryScope
+from /scope/project-data import ProjectData
+from /scope/project-directory import ProjectDirectory
 from /scope/prompt-mode import PromptEditor
-from /scope/prompt-mode/chat-input import ChatInputScope
-from /scope/running-activity import RunningActivityScope
+from /scope/prompt-mode/chat-input import ChatInput
+from /scope/running-activity import RunningActivity
 from /ui/components/project-indicator import ProjectIndicator
 
-export scope OpenProjectsScope:
-    concept: {OpenProjectsConcept}
-
-concept OpenProjectsConcept:
+export feature OpenProjects:
     pitch:
         Every project opened since the application started stays open behind
         the one on screen, so switching projects never stops or loses the work
         running in another.
 
-    shape: {OpenProjectsShape}
-
-shape OpenProjectsShape:
     description:
         Only one project is on screen at a time, the one of the
-        @{ProjectDirectoryScope}. Every other project opened since the
+        @{ProjectDirectory}. Every other project opened since the
         application started stays open in the background until it quits, each
         with its own work, which carries on running there and is shown live as
         soon as that project is on screen again.
@@ -29,7 +23,7 @@ shape OpenProjectsShape:
         What a project's work is, kept apart for each open project:
         - its tasks, from the @{PromptEditor}: the latest task and its output, the previous tasks, whether the harness is working on one, and the conversation tasks carry on
         - its queue, whether it is expanded, and its auto-send switch
-        - its questions, from the @{ChatInputScope}'s Ask tab: every question, running or finished, in the Ask conversation, and the conversation questions carry on
+        - its questions, from the @{ChatInput}'s Ask tab: every question, running or finished, in the Ask conversation, and the conversation questions carry on
         - a spec build run on its own in it
         - a divergence analysis, a rescope search, or a run target of it, each in its minimizable panel
 
@@ -72,7 +66,7 @@ shape OpenProjectsShape:
 
     switching:
         A project's history, answers, and queue are loaded from its data, as the
-        @{ProjectDataScope} says, the first time it is opened in a launch, and
+        @{ProjectData} says, the first time it is opened in a launch, and
         kept from then on, so switching back to it loads nothing again and
         shows it just as it was left, with whatever has happened since.
 
@@ -88,4 +82,5 @@ shape OpenProjectsShape:
         A project is busy while the harness is working on one of its tasks or
         questions, or a spec build runs on its own in it. The
         @{ProjectIndicator} marks the busy projects, and the
-        @{RunningActivityScope} lists their work.
+        @{RunningActivity} lists their work.
+

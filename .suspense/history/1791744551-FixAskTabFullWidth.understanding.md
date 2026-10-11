@@ -1,0 +1,4 @@
+- [In Ask mode the Ask conversation fills the Chat tab beneath the tab bar and above the chat input](.claude/reference/scope/application/Body.md#ask-mode)
+- [The Ask conversation has a 32px "Questions" header with its count](.claude/reference/scope/prompt-mode/ask-conversation/index.md#description)
+- [Answers are laid out at the chat's full width, with no box](.claude/reference/scope/prompt-mode/message-list/index.md#messages)
+- [The Ask conversation spans the full width of its space, never a narrower centred column](.claude/reference/scope/prompt-mode/ask-conversation/index.md#description)

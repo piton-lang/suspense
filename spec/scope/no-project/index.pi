@@ -1,19 +1,13 @@
 use /lib
-from /scope/project-directory import ProjectDirectoryScope
+from /scope/project-directory import ProjectDirectory
 
-export scope NoProjectStateScope:
-    concept: {NoProjectStateConcept}
-
-concept NoProjectStateConcept:
+export feature NoProjectState:
     pitch:
         How the parts of the application that need a project behave before one
         is open: quietly, saying what opening a project would let them do.
 
-    shape: {NoProjectStateShape}
-
-shape NoProjectStateShape:
     description:
-        Until a @{ProjectDirectoryScope} is open, nothing that needs one does
+        Until a @{ProjectDirectory} is open, nothing that needs one does
         anything, or fails for want of one.
 
     views:
@@ -28,3 +22,4 @@ shape NoProjectStateShape:
 
     opening:
         As soon as a project opens, each comes to life by itself.
+

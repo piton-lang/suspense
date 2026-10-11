@@ -1,0 +1,8 @@
+- [The left sidebar runs the window's full height beneath the ribbon, left of the body and chat input](.claude/reference/ui/components/left-sidebar/index.md#description)
+- [A sidebar is resized by dragging its inner edge, starting 260px wide, no narrower than 160](.claude/reference/ui/components/left-sidebar/index.md#sidebar)
+- [The left sidebar has a VS Code-style view bar of Files, Git, and Run, one view showing at a time](.claude/reference/ui/components/left-sidebar/index.md#view-bar)
+- [The Run view holds referenced files, understanding, and subagents, sized and resized as before](.claude/reference/ui/components/left-sidebar/index.md#run-view)
+- [The Git panel fills its own view, no longer beneath the file tree](.claude/reference/ui/components/git-panel/index.md#git-panel-scope)
+- [The right sidebar holds only the tasks, with no tab row](.claude/reference/ui/components/right-sidebar/index.md#description)
+- [The right sidebar shows while a task runs or is queued, or when opened by hand](.claude/reference/ui/components/right-sidebar/index.md#showing)
+- [Sidebar panel headers are 32px, the change of colour the only edge](.claude/reference/ui/components/right-sidebar/index.md#look)

@@ -1,0 +1,6 @@
+- [Today each time the Tasks tab is shown it scrolls so Running, or the start of Queued, is in view](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [An open task takes the tab's place; its back arrow and Escape go back to the list as it was left](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [An open chain lists its steps in its Steps section; clicking a step opens the chain](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [Sections' expanded state is kept per open project while the app runs](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [Scroll position is clamped to its ends and kept in whole device pixels](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [The list and each open task remember their scroll across opening, back, sliding, and project switches, anchored to the top row](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)

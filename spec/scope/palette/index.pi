@@ -1,35 +1,28 @@
 use /lib
 use /ui
-from /scope/about import AboutScope
-from /scope/debug-log import DebugLogScope
-from /scope/harness-integration/baked-prompts import BakedSystemPromptsScope
-from /scope/harness-integration/catalog import HarnessCatalogScope
-from /scope/import-project import ImportProjectScope
-from /scope/new-project import NewProjectScope
-from /scope/no-project import NoProjectStateScope
-from /scope/open-file import OpenFileScope
-from /scope/project-directory import ProjectDirectoryScope
-from /scope/project-locations import ProjectLocationsScope
-from /scope/project/open-project import OpenProjectScope
-from /scope/prompt-mode/chat-input import ChatInputScope
-from /scope/settings-window import SettingsWindowScope
-from /scope/spec-build import SpecBuildScope
-from /ui/components/scrollbar import ScrollbarScope
-from /ui/components/task-table import TaskTableScope
+from /scope/about import About
+from /scope/debug-log import DebugLog
+from /scope/harness-integration/baked-prompts import BakedSystemPrompts
+from /scope/harness-integration/catalog import HarnessCatalog
+from /scope/import-project import ImportProject
+from /scope/new-project import NewProject
+from /scope/no-project import NoProjectState
+from /scope/open-file import OpenFile
+from /scope/project-directory import ProjectDirectory
+from /scope/project-locations import ProjectLocations
+from /scope/project/open-project import OpenProject
+from /scope/prompt-mode/chat-input import ChatInput
+from /scope/settings-window import SettingsWindow
+from /scope/spec-build import SpecBuild
+from /ui/components/scrollbar import Scrollbar
+from /ui/components/task-table import TaskTable
 
-export ui-component PaletteScope:
-    pitch: {PaletteConcept.pitch}
-    shape: {PaletteConcept.shape}
-
-concept PaletteConcept:
+export ui-component Palette:
     pitch:
         A popover for finding anything in the application by fuzzy searching
         for it: the project's files, the application's own commands, and the
         harness's commands, skills, and agents.
 
-    shape: {PaletteShape}
-
-shape PaletteShape:
     description:
         A popover near the top of the window, over a dimmed backdrop: a tab bar
         using gpui-kit's default tab styling, a search field beneath it, and the
@@ -58,11 +51,11 @@ shape PaletteShape:
             the search field.
 
         files:
-            Every file in the selected @{ProjectDirectoryScope}, listed as the
-            @{ProjectLocationsScope} lists the files under a folder. Picking a
-            file opens it, as the @{OpenFileScope} says. Until a project is
+            Every file in the selected @{ProjectDirectory}, listed as the
+            @{ProjectLocations} lists the files under a folder. Picking a
+            file opens it, as the @{OpenFile} says. Until a project is
             picked the tab reads "No project open", as the
-            @{NoProjectStateScope} says.
+            @{NoProjectState} says.
 
         fileSearch:
             On the Files tab, Ctrl+Enter (Cmd+Enter on macOS) sends the search
@@ -74,7 +67,7 @@ shape PaletteShape:
             "No results. Press Enter to perform an agentic search." in place of
             "No matches".
             While the search runs, the results area shows its
-            @{TaskTableScope}, scrolling with a @{ScrollbarScope} with no lock
+            @{TaskTable}, scrolling with a @{Scrollbar} with no lock
             to the bottom. When it
             finishes, a single file closes the palette and opens that file,
             several files show a "Multiple results were found" alert, and no
@@ -85,7 +78,7 @@ shape PaletteShape:
 
         fileSearchSystemPrompt:
             The search's system prompt, file-search.pi, of the
-            @{BakedSystemPromptsScope}, is appended to the harness's own. It
+            @{BakedSystemPrompts}, is appended to the harness's own. It
             tells the harness we're really trying to find the one file being
             asked for, giving several only when they are all equally what was
             asked for; to only read and never change anything; and to stop as
@@ -93,35 +86,35 @@ shape PaletteShape:
             priority, preferring a match from an earlier place over an equally
             good match from a later one: the spec location; the code location;
             `.suspense`; then `.claude`, the locations being those of the
-            @{ProjectLocationsScope}. The harness's final reply is only JSON
+            @{ProjectLocations}. The harness's final reply is only JSON
             listing the files by path relative to the project, and paths that
             don't exist are dropped.
 
         system:
             The application's own commands, each doing what its toolbar control
             or shortcut does: "New Project…" and "Import Project…", which open
-            the @{NewProjectScope} and the @{ImportProjectScope} as the ribbon's
+            the @{NewProject} and the @{ImportProject} as the ribbon's
             commands do, "Open Project…", which opens the
-            @{OpenProjectScope}, "Build", "Dark mode" or
+            @{OpenProject}, "Build", "Dark mode" or
             "Light mode" (whichever is not the current one), "Settings…", which
-            opens the @{SettingsWindowScope}, "About Suspense", which opens the
-            @{AboutScope}, "Collect debug info" and "Open debug log", as the
-            @{DebugLogScope} says, and "Quit". Build builds the spec
-            on its own, as the @{SpecBuildScope} says.
+            opens the @{SettingsWindow}, "About Suspense", which opens the
+            @{About}, "Collect debug info" and "Open debug log", as the
+            @{DebugLog} says, and "Quit". Build builds the spec
+            on its own, as the @{SpecBuild} says.
 
         commands:
-            The commands of the @{HarnessCatalogScope}.
+            The commands of the @{HarnessCatalog}.
 
         skills:
-            The skills of the @{HarnessCatalogScope}.
+            The skills of the @{HarnessCatalog}.
 
         agents:
-            The agents of the @{HarnessCatalogScope}.
+            The agents of the @{HarnessCatalog}.
 
         mentions:
             A command, skill, or agent shows its description when it has one.
-            Picking one inserts it into the @{ChatInputScope} at the cursor as a
-            mention, as the @{HarnessCatalogScope} says, with a space before it
+            Picking one inserts it into the @{ChatInput} at the cursor as a
+            mention, as the @{HarnessCatalog} says, with a space before it
             when the cursor follows other text. Focus then moves to the chat
             input.
 

@@ -1,0 +1,4 @@
+- [Every feature now states its pitch and its properties directly, with no concept or shape beneath it](.claude/reference/scope/application/index.md#pitch)
+- [Components still carry How To Build and Theme sections](.claude/reference/ui/components/right-sidebar/tasks/index.md#how-to-build)
+- [The Spec tab's New Scope, Concept, and Shape commands are product features for users' own specs](.claude/reference/scope/spec-components/index.md#components)
+- [The build-application skill builds the application feature](.claude/skills/build-application/SKILL.md)

@@ -1,26 +1,19 @@
 use /lib
 use /ui
-from /scope/editor import EditorScope
-from /scope/git import GitScope
-from /scope/open-file import OpenFileScope
-from /scope/user-preferences import UserPreferencesScope
-from /ui/components/scrollbar import ScrollbarScope
+from /scope/editor import Editor
+from /scope/git import Git
+from /scope/open-file import OpenFile
+from /scope/user-preferences import UserPreferences
+from /ui/components/scrollbar import Scrollbar
 
-export ui-component DiffViewScope:
-    pitch: {DiffViewConcept.pitch}
-    shape: {DiffViewConcept.shape}
-
-concept DiffViewConcept:
+export ui-component DiffView:
     pitch:
         A view of one file's uncommitted changes: the file as of the last
-        commit, from the @{GitScope}, against the file as it is on disk.
+        commit, from the @{Git}, against the file as it is on disk.
 
-    shape: {DiffViewShape}
-
-shape DiffViewShape:
     description:
         A header along the top, and beneath it the changes, which scroll with
-        a @{ScrollbarScope}. It fills whatever holds it, and follows the
+        a @{Scrollbar}. It fills whatever holds it, and follows the
         file as it changes on disk.
 
     snapshots:
@@ -39,7 +32,7 @@ shape DiffViewShape:
         buttons to step to the previous and next change; a switch between
         "Side by side" and "Unified", each with an icon, the chosen one shown
         selected; a button that opens the file instead, as the
-        @{OpenFileScope} says; and a
+        @{OpenFile} says; and a
         close button.
 
     layouts:
@@ -56,7 +49,7 @@ shape DiffViewShape:
             number in the old file and in the new, either blank where the line
             isn't in that version.
 
-        The chosen layout is one of the @{UserPreferencesScope}, starting side
+        The chosen layout is one of the @{UserPreferences}, starting side
         by side.
 
     lines:
@@ -87,13 +80,12 @@ shape DiffViewShape:
 
     merging:
         It can also merge two versions of a file being edited, as the
-        @{EditorScope} opens it when the file changed on disk while it had
+        @{Editor} opens it when the file changed on disk while it had
         unsaved changes. Then its left side is the file as it now is on disk,
         headed "On disk", and its right side the editor's unsaved text, headed
         "Mine", in either layout, so it shows the changes that would turn what
         is on disk into the editor's text. It follows the file on disk as it
         changes, keeping each change's choice where the change is still there.
-
 
         choosing:
             Each change has two small buttons beside it, at its top: "Use

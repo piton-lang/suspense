@@ -1,8 +1,8 @@
 use /lib
-from /scope/prompt-mode/sending import PromptSendingScope
-from /ui/components/right-sidebar import RightSidebarScope
+from /scope/prompt-mode/sending import PromptSending
+from /ui/components/left-sidebar import LeftSidebar
 
-export shape MessageListRunningTasksShape:
+export anchor MessageListRunningTasks:
     description:
         The header heads the view with every task under way, not only the
         latest, that is the latest task, and every other task building, compiling,
@@ -24,7 +24,7 @@ export shape MessageListRunningTasksShape:
         right, 8 pixels in: its status label and elapsed time, as every
         task's are, then the first line of its prompt, as it was typed, in
         small text, cut off with an ellipsis, then, at its right, its Cancel
-        button while it is under way, as the @{PromptSendingScope} gives every
+        button while it is under way, as the @{PromptSending} gives every
         task one, and nothing else: no compiled prompt, no hidden anchor's
         name, no Resend or Send to the other mode, no output, and no changed
         files. Its tooltip gives the prompt's first lines and the mode it was
@@ -39,7 +39,7 @@ export shape MessageListRunningTasksShape:
         the bottom was on, while another is selected, so selecting it again
         shows it just as it was left, locked tables showing all that arrived
         meanwhile. The selected task's header keeps its mode's colour, as the
-        latest task's always has, and the @{RightSidebarScope} shows the selected
+        latest task's always has, and the @{LeftSidebar}'s Run view shows the selected
         task's referenced spec, understanding, and subagents while it runs,
         and the other running task's once it has finished while another
         still runs.

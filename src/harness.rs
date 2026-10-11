@@ -130,6 +130,10 @@ pub enum HarnessEvent {
     /// The plan limits the harness reported, each with the share used so
     /// far; a limit not among them is as it was.
     Limits(Vec<PlanLimit>),
+    /// How long the conversation has spent waiting on the model, in
+    /// milliseconds, every run before it in that conversation included, as
+    /// Claude Code's result reports it.
+    ApiTime(u64),
     /// The model the run uses.
     Model(String),
     /// The conversation it was to carry on, by its id, couldn't be: the
@@ -214,6 +218,9 @@ pub struct Protected {
     /// The other files attached to the run's prompt, on the host, which
     /// must be there before it runs. Not kept off anything.
     pub files: Vec<PathBuf>,
+    /// Where the run's conversation's session is copied once it is over:
+    /// the `.session` folder beside its history record.
+    pub session_copy: Option<PathBuf>,
 }
 
 /// Runs the harness once as [`send`] does, giving it `images` alongside the
@@ -348,6 +355,28 @@ fn start(
             // Nothing more can be sent once the run is over, however it ended.
             if let Some(feed) = &feed {
                 feed.end();
+            }
+            // Its conversation's session, as the run left it, copied into the
+            // project's data beside its history record.
+            let session = SEEN_SESSION
+                .with(|seen| seen.borrow_mut().take())
+                .or_else(|| resume.as_ref().map(|resume| resume.session.clone()));
+            if let (Some(kept), Some(session)) = (&protected.session_copy, session) {
+                let (began, id) = Agent::of_session(&session);
+                let contained = protected
+                    .container
+                    .as_ref()
+                    .filter(|_| container::active())
+                    .map(container::Plan::as_on_host);
+                if began == agent
+                    && let Some((root, cwd)) = sessions_of(agent, &project_dir, contained.as_ref())
+                    && let Err(err) = crate::session_keep::keep(agent, &root, &cwd, id, kept)
+                {
+                    crate::debug_log::log(
+                        Some(&project_dir),
+                        format!("couldn't keep session {id}: {err}"),
+                    );
+                }
             }
             // A run stopped on purpose ended as it was asked to.
             if let Err(err) = result
@@ -1172,6 +1201,23 @@ fn run(
         },
         None => None,
     };
+    // A conversation whose session the harness no longer has is put back
+    // from the project's latest copy first, so it carries on with its
+    // context.
+    if let Some((id, _)) = &resume
+        && let Some((root, cwd)) = sessions_of(agent, project_dir, contained)
+        && !crate::session_keep::has(agent, &root, &cwd, id)
+    {
+        let restored = crate::session_keep::restore(agent, &root, &cwd, id, project_dir);
+        crate::debug_log::log(
+            Some(project_dir),
+            format!(
+                "session {id} missing from {}: {}",
+                root.display(),
+                if restored { "put back from the project's copy" } else { "no copy to put back" }
+            ),
+        );
+    }
     let mut command = crate::process::command(program);
     command.envs(agent.env().iter().copied());
     let mut input = prompt_as_given(agent, prompt, system_prompt, resume.is_some());
@@ -1192,6 +1238,9 @@ fn run(
                 // must apply.
                 "--system-prompt-snapshot",
                 "off",
+                // Never deleting a session for its age, passed with the run.
+                "--settings",
+                crate::session_keep::CLAUDE_SETTINGS,
             ]);
             // The model chosen, as Claude Code's alias for it.
             if let Some(model) = &protected.model {
@@ -1431,6 +1480,9 @@ fn run(
         };
         for event in std::iter::once(HarnessEvent::Output(line)).chain(events) {
             let event = replying.take(event);
+            if let HarnessEvent::Session(session) = &event {
+                SEEN_SESSION.with(|seen| *seen.borrow_mut() = Some(session.clone()));
+            }
             if matches!(event, HarnessEvent::Finished { .. }) {
                 last = Some(event);
                 last_at.get_or_insert_with(std::time::Instant::now);
@@ -1580,7 +1632,29 @@ pub fn forget_login(agent: Agent) {
 /// The harnesses known to be logged in in their containers.
 static KNOWN: Mutex<Vec<Agent>> = Mutex::new(Vec::new());
 
+/// Where `agent` keeps its sessions for a run in `project_dir`, in the
+/// container `contained` if it runs in one: the sessions folder and the
+/// working directory the run's sessions are kept under.
+fn sessions_of(
+    agent: Agent,
+    project_dir: &Path,
+    contained: Option<&container::Plan>,
+) -> Option<(PathBuf, PathBuf)> {
+    match contained {
+        Some(plan) => Some((
+            crate::session_keep::sessions_root(agent, plan.sessions.as_deref())?,
+            PathBuf::from(container::WORKSPACE),
+        )),
+        None => Some((
+            crate::session_keep::sessions_root(agent, None)?,
+            project_dir.to_path_buf(),
+        )),
+    }
+}
+
 thread_local! {
+    /// The session this thread's run of the harness last reported.
+    static SEEN_SESSION: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
     /// The system's out-of-memory kills as this thread's run of the harness
     /// started, to tell whether it was ended for the machine running out
     /// of memory.
@@ -1637,6 +1711,8 @@ pub fn one_off_command(project_dir: &Path) -> Command {
             "--tools",
             "Read,Glob,Grep",
             "--no-session-persistence",
+            "--settings",
+            crate::session_keep::CLAUDE_SETTINGS,
             "--output-format",
             "stream-json",
             "--verbose",
@@ -1675,6 +1751,8 @@ pub fn ask_quickly(project_dir: &Path, prompt: &str) -> Result<String> {
                 "--tools",
                 "",
                 "--no-session-persistence",
+                "--settings",
+                crate::session_keep::CLAUDE_SETTINGS,
             ]);
             command.current_dir(project_dir);
             command
@@ -2194,6 +2272,7 @@ fn parse_claude(event: &Value) -> Vec<HarnessEvent> {
             .collect(),
         Some("result") => claude_spent(event)
             .into_iter()
+            .chain(event.get("duration_api_ms").and_then(Value::as_u64).map(HarnessEvent::ApiTime))
             .chain([HarnessEvent::Finished {
                 is_error: event
                     .get("is_error")
@@ -2438,6 +2517,7 @@ pub(crate) mod tests {
                 unread: unread.map(PathBuf::from),
                 container: None,
                 files: Vec::new(),
+                session_copy: None,
             })
         };
         assert_eq!(
@@ -2702,6 +2782,18 @@ wait
                     },
                     tally: Tally::More,
                 },
+                HarnessEvent::Finished {
+                    is_error: false,
+                    result: String::new()
+                },
+            ]
+        );
+        // Its time waiting on the model, as the conversation's running total.
+        assert_eq!(
+            parse(&json!({ "type": "result", "is_error": false, "result": "",
+                "duration_ms": 9000, "duration_api_ms": 4200 })),
+            [
+                HarnessEvent::ApiTime(4200),
                 HarnessEvent::Finished {
                     is_error: false,
                     result: String::new()
@@ -3971,6 +4063,7 @@ done
             unread: Some(dir.join("src")),
             container: Some(plan),
             files: Vec::new(),
+            session_copy: None,
         };
         let super::Run { mut events, .. } = super::send_task(
             "Go.".into(),

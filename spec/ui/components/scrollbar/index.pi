@@ -1,17 +1,11 @@
 use /lib
 use /ui
 
-export ui-component ScrollbarScope:
-    concept: {ScrollbarConcept}
-
-concept ScrollbarConcept:
+export ui-component Scrollbar:
     pitch:
         A permanent scrollbar for any list that scrolls, laid out as a narrow
         column of its own beside the list rather than over it.
 
-    shape: {ScrollbarShape}
-
-shape ScrollbarShape:
     description:
         A narrow column along the right of the list, always shown, whether or not the list has anything to scroll. It
         is the list's only scrollbar: no scrollbar is laid over the list, or
@@ -144,3 +138,4 @@ shape ScrollbarShape:
         the way to lock or unlock it wherever the list is: pressing it to lock
         scrolls the list to the bottom, and pressing it to unlock leaves the
         list unlocked until it is next scrolled to the bottom by hand.
+

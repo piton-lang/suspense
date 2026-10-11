@@ -1,35 +1,29 @@
 use /lib
 use /ui
 use /ui/components/sidebar/Panel
-from /scope/editor import EditorScope
-from /scope/git import GitScope
-from /scope/no-project import NoProjectStateScope
-from /scope/open-file import OpenFileScope
-from /scope/project-directory import ProjectDirectoryScope
-from /scope/project-locations import ProjectLocationsScope
-from /scope/prompt-mode/modes import PromptModesScope
-from /ui/components/diff-view import DiffViewScope
-from /ui/components/scrollbar import ScrollbarScope
+from /scope/editor import Editor
+from /scope/git import Git
+from /scope/no-project import NoProjectState
+from /scope/open-file import OpenFile
+from /scope/project-directory import ProjectDirectory
+from /scope/project-locations import ProjectLocations
+from /scope/prompt-mode/modes import PromptModes
+from /ui/components/diff-view import DiffView
+from /ui/components/scrollbar import Scrollbar
 
-export panel FileTreeScope:
+export panel FileTree:
     height: fill
     scrolls: true
 
-    concept: {FileTreeConcept}
-
-concept FileTreeConcept:
     pitch:
         A tree view of the files and folders in the current
-        @{ProjectDirectoryScope}, for finding a file and opening it.
+        @{ProjectDirectory}, for finding a file and opening it.
 
-    shape: {FileTreeShape}
-
-shape FileTreeShape:
     description:
         Folders are listed before files, both by name, and a folder's contents
-        are shown when it is expanded. It scrolls with a @{ScrollbarScope}.
+        are shown when it is expanded. It scrolls with a @{Scrollbar}.
         Until a project is picked it reads "No project open", as the
-        @{NoProjectStateScope} says.
+        @{NoProjectState} says.
 
     look:
         The tree sits on the darkest surface, #111111 in dark mode, a step
@@ -45,9 +39,9 @@ shape FileTreeShape:
         across it; a .pi file's is a
         code file icon, and the project's piton.config.pi a settings file icon
         in the theme's orange. Icons are in muted text colour, except that the
-        spec location's folder, as the @{ProjectLocationsScope} says, and its
+        spec location's folder, as the @{ProjectLocations} says, and its
         .pi files take Spec's colour, and the code location's folder takes
-        Code's colour, of the @{PromptModesScope}, each on its icon alone. A
+        Code's colour, of the @{PromptModes}, each on its icon alone. A
         folder or file whose name starts with a dot, other than a .gitignore
         or similar file, and anything git ignores, is dimmed, name and icon
         both, as tertiary text is; the dimming wins over the name's git status
@@ -70,7 +64,7 @@ shape FileTreeShape:
         place.
 
     gitStatus:
-        Each name is coloured by its status in the @{GitScope}, in that
+        Each name is coloured by its status in the @{Git}, in that
         status's color; unchanged names keep the default color, and a folder
         shows the status it takes from its contents, so a change stays visible
         while its folder is collapsed.
@@ -78,11 +72,11 @@ shape FileTreeShape:
     diffButton:
         A new, untracked, or modified file has a small diff button, an icon
         with a "Show the changes" tooltip, at the right end of its row.
-        Clicking it opens the file's @{DiffViewScope} rather than the file
+        Clicking it opens the file's @{DiffView} rather than the file
         itself.
 
     opening:
-        Clicking a file opens it, as the @{OpenFileScope} says.
+        Clicking a file opens it, as the @{OpenFile} says.
 
     contextMenu:
         Right-clicking a file or folder, or the empty space beneath the rows,
@@ -119,12 +113,12 @@ shape FileTreeShape:
         rather than moving them, and <Enter> does nothing. If the file system
         refuses, the input stays, saying why the same way.
 
-        A new file is created empty and opens, as the @{OpenFileScope} says. A
+        A new file is created empty and opens, as the @{OpenFile} says. A
         new folder is created, and shown selected. A renamed file or folder
         keeps its place in the tree's order by its new name, stays selected,
         and a folder stays expanded if it was. A file open in a tab that is
         renamed, or is inside a renamed folder, follows it to its new path,
-        in the same tab, keeping any unsaved changes, as the @{EditorScope}
+        in the same tab, keeping any unsaved changes, as the @{Editor}
         says of a file renamed on disk.
 
     deleting:
@@ -137,3 +131,4 @@ shape FileTreeShape:
         notification titled "Could not delete" says why.
 
         The tree then refreshes as it does for any change on disk.
+

@@ -1,8 +1,8 @@
 use /lib
-from /scope/project-locations import ProjectLocationsScope
-from /scope/prompt-mode/modes import PromptModesScope
+from /scope/project-locations import ProjectLocations
+from /scope/prompt-mode/modes import PromptModes
 
-export shape TaskTableOutcomeShape:
+export anchor TaskTableOutcome:
     description:
         Once a run is over, its final summary is headed by a row of small
         tags saying what the run did, so what came of any prompt, a task or a
@@ -21,7 +21,7 @@ export shape TaskTableOutcomeShape:
         Each tag is shown only when it applies, worked out from what the run
         did, not from what it was asked or what it said:
 
-        - "Wrote spec", in Spec's colour, when it wrote or edited a file in the spec location, as the @{ProjectLocationsScope} says, or under .claude/reference
+        - "Wrote spec", in Spec's colour, when it wrote or edited a file in the spec location, as the @{ProjectLocations} says, or under .claude/reference
         - "Wrote code", in Code's colour, when it wrote or edited a file in the code location, the project config's codeRoot
         - "Wrote files", in the theme's muted grey, when it wrote or edited a file in neither, outside the project's own data in .suspense
         - "Answered", in Ask's colour, when it wrote or edited no file at all, or only files in .suspense, and gave a final summary, as a question almost always does
@@ -37,7 +37,7 @@ export shape TaskTableOutcomeShape:
         writing or editing it, with a file tool or a shell command, as the
         referenced spec works them out, a subagent's included; a file only
         read never counts. Each colour is its mode's, as the
-        @{PromptModesScope} colours it, including any colour chosen in the
+        @{PromptModes} colours it, including any colour chosen in the
         theme editor. The label is in the colour at full strength, on a faint
         tint of it, about a sixth of its strength, readable in light and dark
         mode.
