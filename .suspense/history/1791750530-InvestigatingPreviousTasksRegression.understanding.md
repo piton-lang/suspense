@@ -1,0 +1,5 @@
+- [Previous tasks are listed in the Tasks tab's Previous section; a row opens the task there and its output in a body tab](.claude/reference/scope/prompt-mode/index.md#previous-tasks)
+- [Opening a task that has run also opens it in a body tab of its own, unless the Chat tab shows it](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [The Chat tab shows only the running tasks, or the last finished while none runs](.claude/reference/scope/application/Body.md#task-tabs)
+- [The Previous section starts collapsed each time a project is opened](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [A chain is one row in Previous, its steps shown once it is opened](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)

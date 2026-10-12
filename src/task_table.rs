@@ -237,7 +237,7 @@ pub(crate) struct Reply {
     /// it was worked out for, beside the line.
     raw_styles: RefCell<VecDeque<Option<(usize, Arc<JsonStyles>)>>>,
     pub(crate) done: bool,
-    /// While its container's image is being built.
+    /// While its sandbox is being made.
     pub(crate) preparing: bool,
     /// What has to be done before the run can go, shown after the error it
     /// fails with, so it is the last thing the run says.
@@ -272,9 +272,8 @@ pub(crate) enum ReplyPart {
     Notice(Notice),
     /// A message sent to the run while it works, as typed.
     Sent(String),
-    /// Something that has to be done before the run can go, as Podman's
-    /// machine started or the harness logged in in its container, with a
-    /// button that does it.
+    /// What a run that couldn't start offers, as its sandbox's
+    /// documentation, with a button that opens it.
     Action(RunAction),
 }
 
@@ -289,29 +288,18 @@ fn harness_error(result: &str) -> String {
     }
 }
 
-/// What has to be done before a run in a container can go, which its row
-/// offers to do, as the ContainerEnvironmentScope says.
+/// What a run that couldn't start offers, from its row: for one whose
+/// sandbox couldn't be applied, the sandbox's documentation, as the
+/// SandboxScope says.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RunAction {
-    /// Podman installed, from its installation instructions for the
-    /// platform, opened in the browser.
-    InstallPodman,
-    /// Podman's machine set up or started.
-    Machine(crate::container::MachineAction),
-    /// The harness the run needed, as named, logged in in its container.
-    LogIn(crate::agent::Agent),
-    /// What the application can do itself about the container's image that
-    /// couldn't be built.
-    Build(crate::container::BuildFix),
+    SandboxDocs,
 }
 
 impl RunAction {
     pub(crate) fn label(self) -> SharedString {
         match self {
-            RunAction::InstallPodman => "Install Podman".into(),
-            RunAction::Machine(action) => action.label().into(),
-            RunAction::LogIn(_) => "Log in".into(),
-            RunAction::Build(fix) => fix.label().into(),
+            RunAction::SandboxDocs => "Sandbox documentation".into(),
         }
     }
 }
@@ -692,6 +680,11 @@ impl Reply {
     }
 
     /// How many tool calls the output holds.
+    /// The row of the tool call `id`, if it is one of its own.
+    pub(crate) fn row_of_tool(&self, id: &str) -> Option<usize> {
+        (0..self.rows.len()).find(|&ix| matches!(self.row(ix), Some(OutputRow::Tool(call)) if call.id == id))
+    }
+
     pub(crate) fn tool_calls(&self) -> usize {
         (0..self.rows.len())
             .filter(|&ix| matches!(self.row(ix), Some(OutputRow::Tool(_))))
@@ -858,19 +851,11 @@ impl Reply {
             }
             HarnessEvent::Preparing => self.preparing = true,
             HarnessEvent::Prepared => self.preparing = false,
-            HarnessEvent::PodmanUnavailable(action) => {
+            // A run whose sandbox couldn't be applied, never started.
+            HarnessEvent::Failed(error) if error.starts_with(crate::sandbox::REFUSED) && self.preparing => {
                 self.preparing = false;
-                // Without a machine to see to, Podman isn't installed.
-                self.pending_action =
-                    Some(action.map_or(RunAction::InstallPodman, RunAction::Machine));
-            }
-            HarnessEvent::BuildFailed(fix) => {
-                self.preparing = false;
-                self.pending_action = fix.map(RunAction::Build);
-            }
-            HarnessEvent::LoginNeeded(agent) => {
-                self.preparing = false;
-                self.pending_action = Some(RunAction::LogIn(agent));
+                self.pending_action = Some(RunAction::SandboxDocs);
+                return self.apply(HarnessEvent::Failed(error));
             }
             HarnessEvent::TextStarted => self
                 .parts
@@ -957,6 +942,7 @@ impl Reply {
             | HarnessEvent::Limits(_)
             | HarnessEvent::Model(_)
             | HarnessEvent::ApiTime(_)
+            | HarnessEvent::ThinkingDelta(_)
             | HarnessEvent::ToolCalled { .. }
             | HarnessEvent::ToolOutput { .. }
             | HarnessEvent::SubagentStarted { .. }
@@ -1475,6 +1461,8 @@ pub(crate) struct TableView<'a> {
 pub(crate) struct TaskTable {
     list: MeasuredList,
     sync: RefCell<TableSync>,
+    /// A tool call to scroll to, by its id, once the table is next laid out.
+    reveal: RefCell<Option<String>>,
     /// The density it was last drawn at.
     density: Cell<Density>,
 }
@@ -1484,6 +1472,7 @@ impl TaskTable {
         Self {
             list: MeasuredList::new(OVERDRAW),
             sync: RefCell::default(),
+            reveal: RefCell::default(),
             density: Cell::new(Density::Regular),
         }
     }
@@ -1503,6 +1492,12 @@ impl TaskTable {
 
     pub(crate) fn scroll_to_top(&self) {
         self.list.scroll_to_top();
+    }
+
+    /// Scrolls to the row of the tool call `id` once the table is next laid
+    /// out: where its steps are collapsed, to them.
+    pub(crate) fn reveal_tool(&self, id: &str) {
+        *self.reveal.borrow_mut() = Some(id.to_string());
     }
 
     /// Whether the end of the output, where the raw tail is, was in view when
@@ -1573,6 +1568,18 @@ impl TaskTable {
                     *sync = TableSync::default();
                 }
                 sync.update(&self.list, 0, view.table, reply, layout, cx);
+            }
+            if let Some(id) = self.reveal.borrow_mut().take()
+                && let Some(row) = reply.row_of_tool(&id)
+            {
+                let item = layout
+                    .item_of(row)
+                    .or_else(|| layout.steps.map(|(start, ..)| start))
+                    .unwrap_or(row);
+                self.list.state().scroll_to(ListOffset {
+                    item_ix: item,
+                    offset_in_item: px(0.),
+                });
             }
             if view.lock.as_ref().is_some_and(|(locked, _)| *locked) {
                 self.list.scroll_to_end();

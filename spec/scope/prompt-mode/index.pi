@@ -5,7 +5,7 @@ from ./chat-input import ChatInput
 from ./message-list import MessageList
 from /ui/components/right-sidebar import TasksTab
 from ./queue-list import QueueList
-from /scope/container-environment import ContainerEnvironment
+from /scope/sandbox import Sandbox
 from /scope/harness-integration import HarnessIntegration
 from /scope/no-project import NoProjectState
 from /scope/open-projects import OpenProjects
@@ -173,21 +173,19 @@ export ui-component PromptEditor:
         there, ending the chain. A step whose chain step before it failed or
         was cancelled is never sent.
 
-        Each step also runs where the work of its lane runs, as the
-        @{ContainerEnvironment} says: the spec steps in a container
-        holding the spec and no code, the code step always on the host, with
-        its protected locations. Each carries on its own
+        Each step also runs under the sandbox of the work it does, as the
+        @{Sandbox} says: the spec steps under the Spec profile, which can't
+        reach the code, and the code step under the Code profile, which can't
+        reach the spec's source. Each carries on its own
         lane's conversation, as the @{HarnessIntegration} says, so a step
         is told what the step before it did only through its prompt: the
         Chain prompt as typed and that step's final output, as the
         @{ModeSystemPrompts} says.
 
-        In the previous tasks list, a chain's steps are grouped under one
-        parent item, so they read as parts of a single chain. The parent is a
-        heading row in the list, tinted the Chain colour, as the
-        @{PromptModes} colours it, a little more strongly than a single
-        task's tint: a joined chain icon, the first line of the prompt, and at
-        its right how many steps it has, "2 steps" or "3 steps". Its status is
+        In the Tasks tab, a chain is one row, as the @{TasksTab} says,
+        holding its steps, so they read as parts of a single chain: a joined
+        chain icon, the first line of the prompt, and at its right how many
+        steps it has, "2 steps" or "3 steps". Its status is
         the chain's as a whole, worked out only from its steps as they
         actually are, never from what the chain might still do: Running,
         with its spinner and its time counting, while one of its steps is
@@ -280,8 +278,8 @@ export ui-component PromptEditor:
         the first chain's code step heads the view while it runs, not the
         second chain's finished spec step, and the second chain's code step
         heads it in turn once it is sent. A task still running in the other
-        lane that is not the latest is among the previous tasks, shown
-        running there, as any previous task is. Whichever task heads the
+        lane that is not the latest is a compact row in the header and in
+        the Tasks tab's Running section, never among the previous tasks. Whichever task heads the
         view, its header and output show as they do for a task just sent,
         and the previous tasks, their row's count, and the chain grouping
         follow it. The header shows

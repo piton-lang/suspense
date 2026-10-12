@@ -251,7 +251,7 @@ pub struct CompiledPrompt {
     /// in the order they were attached; never part of the prompt's text.
     pub images: Vec<PathBuf>,
     /// The other files attached to it, on the host, which its text names
-    /// and a run in a container is given.
+    /// and a run's sandbox grants it, read only.
     pub files: Vec<PathBuf>,
     /// The model it goes to, as its harness is told it; none for the
     /// harness's own.
@@ -1094,17 +1094,16 @@ pub fn code_read_only(code: &str, whole: bool) -> String {
     told
 }
 
-/// Which of the project's locations a run in `mode` can see, the code and
-/// the spec: in a container, only what is mounted, as the
-/// ContainerEnvironmentScope says; on the host, both.
+/// Which of the project's locations a run in `mode` fills in, the code and
+/// the spec, as the ModeSystemPromptsScope says: a run of the spec lane
+/// fills in the code only where its sandbox lets it read it; every other
+/// run fills in both.
 pub fn seen_locations(mode: Option<SendMode>, project_dir: &Path) -> (bool, bool) {
-    use crate::container::RunKind;
-    match RunKind::of(mode) {
+    use crate::sandbox::ProfileKind;
+    match ProfileKind::of(mode) {
         // The code only where the project lets its Spec runs read it.
-        Some(RunKind::Spec) => (crate::project_settings::spec_reads_code(project_dir), true),
-        // A question sees both, read only.
-        Some(RunKind::Question) => (true, true),
-        None => (true, true),
+        ProfileKind::Spec => (crate::project_settings::spec_reads_code(project_dir), true),
+        _ => (true, true),
     }
 }
 
@@ -1113,7 +1112,7 @@ pub fn seen_locations(mode: Option<SendMode>, project_dir: &Path) -> (bool, bool
 fn locations_for(mode: Option<SendMode>, project_dir: &Path) -> Result<(String, String)> {
     let (sees_code, sees_spec) = seen_locations(mode, project_dir);
     // Relative to the project directory, so they point where the run finds
-    // them, on the host or in a container.
+    // them.
     let code = if sees_code {
         system_prompts::relative_location(&config_value(project_dir, "codeRoot")?, project_dir)
     } else {
@@ -1195,7 +1194,7 @@ fn filled_instructions(
     if template.trim().is_empty() {
         return Ok(None);
     }
-    // Only what the run sees in its container is named.
+    // Only what the run's sandbox lets it see is named.
     let (code, spec) = locations_for(mode, project_dir)?;
     // The fluency file, where it has been written.
     let fluency_file = crate::piton_fluency::file(project_dir)
@@ -1865,7 +1864,7 @@ mod tests {
             .filter(|mode| *mode != SendMode::Freeform)
         {
             let given = instructions(mode, &project_dir).unwrap().unwrap();
-            // Only the locations its run can see in its container are named:
+            // Only the locations its run's sandbox lets it see are named:
             // a Spec or Chain run sees no code; a question sees both.
             let (code, spec) = match mode {
                 SendMode::Spec | SendMode::Both => ("", "./spec"),
@@ -2090,7 +2089,7 @@ mod tests {
         .unwrap();
 
         let spec = instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
-        // Given to a spec run, which can't see the code in its container.
+        // Given to a spec run, whose sandbox keeps it off the code.
         let handoff = system_prompts::fill_instructions(
             system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec),
             "",

@@ -1,7 +1,7 @@
 //! The project's own settings, in `.suspense/settings.json`, as the
 //! ProjectDataScope says: the harness its runs go to, as the
 //! HarnessIntegrationScope says, and whether its Spec runs may read the
-//! code, as the ContainerEnvironmentScope says. A project without the file, or with one
+//! code, as the SandboxScope says. A project without the file, or with one
 //! that doesn't read back, has every setting off.
 
 use std::path::{Path, PathBuf};

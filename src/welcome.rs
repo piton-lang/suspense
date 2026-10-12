@@ -14,13 +14,12 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex,
+    ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::agent::{self, Agent};
-use crate::container::{self, MachineAction, Platform, PodmanState};
 use crate::project_directory::ProjectDirectory;
 
 actions!(suspense, [OpenWelcome]);
@@ -49,28 +48,20 @@ pub enum Check {
     Git,
     Piton,
     Harness,
-    Podman,
-    PodmanMachine,
-    Containers,
+    Sandbox,
     HarnessLogin,
 }
 
 impl Check {
-    /// The checks on `platform`, in order: the Podman machine only where
-    /// Podman runs one.
-    pub fn all(platform: Platform) -> Vec<Check> {
-        [
+    /// The checks, in order.
+    pub fn all() -> Vec<Check> {
+        vec![
             Check::Git,
             Check::Piton,
             Check::Harness,
-            Check::Podman,
-            Check::PodmanMachine,
-            Check::Containers,
+            Check::Sandbox,
             Check::HarnessLogin,
         ]
-        .into_iter()
-        .filter(|check| *check != Check::PodmanMachine || platform.has_machine())
-        .collect()
     }
 
     pub fn name(self) -> &'static str {
@@ -78,24 +69,15 @@ impl Check {
             Check::Git => "Git",
             Check::Piton => "Piton",
             Check::Harness => "Harness",
-            Check::Podman => "Podman",
-            Check::PodmanMachine => "Podman machine",
-            Check::Containers => "Containers",
+            Check::Sandbox => "Sandbox",
             Check::HarnessLogin => "Harness login",
         }
     }
 
-    /// The checks it waits for, among `checks`: the machine for Podman,
-    /// Containers for every check above it, the login for Containers.
+    /// The checks it waits for, among `checks`: the login for the harness.
     pub fn waits_for(self, checks: &[Check]) -> Vec<Check> {
         match self {
-            Check::PodmanMachine => vec![Check::Podman],
-            Check::Containers => checks
-                .iter()
-                .copied()
-                .take_while(|check| *check != Check::Containers)
-                .collect(),
-            Check::HarnessLogin => vec![Check::Containers],
+            Check::HarnessLogin if checks.contains(&Check::Harness) => vec![Check::Harness],
             _ => Vec::new(),
         }
     }
@@ -103,8 +85,7 @@ impl Check {
     /// What it says, muted, while it waits for the checks before it.
     fn waiting(self) -> &'static str {
         match self {
-            Check::PodmanMachine => "Needs Podman",
-            Check::HarnessLogin => "Needs Containers",
+            Check::HarnessLogin => "Needs the harness",
             _ => "Needs the checks above",
         }
     }
@@ -115,10 +96,9 @@ impl Check {
 pub enum Fix {
     /// A page opened in the browser, with the button's label.
     Link(&'static str, String),
-    /// Setting up or starting Podman's machine.
-    Machine(MachineAction),
-    /// Logging the harness in, in its container.
-    LogIn,
+    /// A terminal opened in the project to run the harness's own login
+    /// command, as named.
+    OpenTerminal(&'static str),
 }
 
 /// How a check stands.
@@ -138,11 +118,12 @@ pub enum Status {
 }
 
 /// Runs a check. Blocking: called off the UI thread.
-pub type Probe = Arc<dyn Fn(Check, Agent, Platform, Option<PathBuf>) -> Status + Send + Sync>;
+pub type Probe = Arc<dyn Fn(Check, Agent, Option<PathBuf>) -> Status + Send + Sync>;
 
-/// Runs `check` for real, with `agent` the harness in use, on `platform`,
-/// in the project `project_dir`, if one is open. Blocking.
-pub fn probe(check: Check, agent: Agent, platform: Platform, project_dir: Option<PathBuf>) -> Status {
+/// Runs `check` for real, with `agent` the harness in use, in the project
+/// `project_dir`, if one is open. Blocking.
+pub fn probe(check: Check, agent: Agent, project_dir: Option<PathBuf>) -> Status {
+    let _ = &project_dir;
     match check {
         Check::Git => found_or(
             "git",
@@ -159,83 +140,47 @@ pub fn probe(check: Check, agent: Agent, platform: Platform, project_dir: Option
                 "https://github.com/piton-lang/piton-rs".into(),
             )],
         ),
-        Check::Harness => match found_or(
+        Check::Harness => found_or(
             agent.command(),
             agent.label(),
-            "Suspense needs it, since Code tasks run it on the host. Install it, or choose another harness.",
+            "Suspense needs it, since every task and question runs it on the host. Install it, or choose another harness.",
             vec![Fix::Link("Install", agent::install_url(agent).into())],
-        ) {
-            // Muted, never an error: it runs another version in its
-            // container.
-            Status::Passed(Some(found)) => Status::Passed(Some(match container::version_note(agent) {
-                Some(note) => format!("{found} · {note}"),
-                None => found,
-            })),
-            status => status,
-        },
-        Check::Podman => found_or(
-            &container::podman().to_string_lossy(),
-            "Podman",
-            "Suspense needs it, since Spec tasks, a Chain prompt's spec steps, and questions run in a container. Install it, then check again.",
-            vec![Fix::Link("Install Podman", platform.install_url().into())],
         ),
-        Check::PodmanMachine => match within(move || container::podman_state(platform)) {
+        // The platform's sandbox backend can enforce the profiles, or no
+        // task or question will run; never offered to run without.
+        Check::Sandbox => match within(crate::sandbox::status) {
             Err(why) => failed(why, Vec::new()),
-            Ok(PodmanState::Ready(_)) => Status::Passed(Some("Running".into())),
-            Ok(PodmanState::NoMachine) => failed(
-                "Podman has no machine to run containers in. Suspense needs one running for its containers.".into(),
-                vec![Fix::Machine(MachineAction::SetUp)],
-            ),
-            Ok(PodmanState::MachineStopped) => failed(
-                "Podman's machine isn't running. Suspense needs it running for its containers.".into(),
-                vec![Fix::Machine(MachineAction::Start)],
-            ),
-            Ok(PodmanState::Missing) => failed("Podman isn't installed.".into(), Vec::new()),
-        },
-        Check::Containers => match within(container::check_access) {
-            Err(why) => failed(why, Vec::new()),
-            Ok(Ok(())) => Status::Passed(None),
-            Ok(Err(said)) => failed(
-                format!("Podman couldn't be accessed, so Suspense can't run its containers. Podman said: {said}"),
-                Vec::new(),
+            Ok(Ok(enforces)) => Status::Passed(Some(enforces)),
+            Ok(Err(refused)) => failed(
+                format!(
+                    "{}. No task or question will run until the sandbox can.",
+                    refused.message
+                ),
+                vec![Fix::Link("Sandbox documentation", crate::sandbox::DOCUMENTATION.into())],
             ),
         },
-        Check::HarnessLogin => {
-            let dir = login_dir(project_dir);
-            let read = within(move || {
-                let Some(image) = container::built_image(&dir) else {
-                    return Ok(None);
-                };
-                container::logged_in(agent, &image, platform).map(Some)
-            });
-            let log_in = vec![Fix::LogIn];
-            match read {
-                Err(why) => failed(why, Vec::new()),
-                Ok(Ok(Some(true))) => Status::Passed(Some("Logged in".into())),
-                Ok(Ok(Some(false))) => failed(
-                    format!(
-                        "{} isn't logged in in its container, so it can't run Spec tasks or questions. Log in once; it stays logged in for every project.",
-                        agent.label()
-                    ),
-                    log_in,
+        // Logged in on the host, as its own status command says.
+        Check::HarnessLogin => match within(move || crate::harness_login::logged_in(agent)) {
+            Err(why) => failed(why, Vec::new()),
+            Ok(Ok(true)) => Status::Passed(Some("Logged in".into())),
+            Ok(Ok(false)) => failed(
+                format!(
+                    "{} isn't logged in. Log in with `{}`; it stays logged in for every project.",
+                    agent.label(),
+                    crate::harness_login::login_command(agent)
                 ),
-                Ok(Ok(None)) => failed(
-                    format!(
-                        "The container {} runs in hasn't been prepared yet, so its login can't be read. Log in to prepare it and log in.",
-                        agent.label()
-                    ),
-                    log_in,
-                ),
-                Ok(Err(err)) => failed(format!("{err:#}"), log_in),
-            }
-        }
+                vec![Fix::OpenTerminal(crate::harness_login::login_command(agent))],
+            ),
+            Ok(Err(err)) => failed(format!("{err:#}"), Vec::new()),
+        },
     }
 }
 
-/// Where a login reads its image from: the project open, else any
-/// directory, for the default image.
+/// Where a login's terminal opens: the project open, else the home folder.
 pub fn login_dir(project_dir: Option<PathBuf>) -> PathBuf {
-    project_dir.unwrap_or_else(std::env::temp_dir)
+    project_dir
+        .or_else(dirs::home_dir)
+        .unwrap_or_else(std::env::temp_dir)
 }
 
 fn failed(why: String, fixes: Vec<Fix>) -> Status {
@@ -390,14 +335,12 @@ pub mod preference {
 
 /// The welcome page.
 pub struct WelcomeView {
-    platform: Platform,
     probe: Probe,
     statuses: Vec<(Check, Status)>,
     /// Counts the runs, so a check run before Check again is forgotten.
     generation: usize,
-    /// What a Podman machine action prints, as it runs.
-    machine_output: Vec<String>,
-    machine_running: bool,
+    /// Why a terminal couldn't be opened, when it couldn't.
+    terminal_error: Option<String>,
     show_at_launch: bool,
     /// The project, if any, and its harness, the harness checks last ran
     /// for: run again by themselves once either changes.
@@ -420,18 +363,16 @@ impl Focusable for WelcomeView {
 impl WelcomeView {
     /// The page, its checks run for real, started straight away.
     pub fn new(cx: &mut Context<Self>) -> Self {
-        Self::with_probe(Platform::current(), Arc::new(probe), cx)
+        Self::with_probe(Arc::new(probe), cx)
     }
 
     /// The page, its checks run by `probe`, started straight away.
-    pub fn with_probe(platform: Platform, probe: Probe, cx: &mut Context<Self>) -> Self {
+    pub fn with_probe(probe: Probe, cx: &mut Context<Self>) -> Self {
         let mut this = Self {
-            platform,
             probe,
             statuses: Vec::new(),
             generation: 0,
-            machine_output: Vec::new(),
-            machine_running: false,
+            terminal_error: None,
             show_at_launch: preference::load(),
             checked_for: None,
             focus_handle: cx.focus_handle(),
@@ -469,7 +410,7 @@ impl WelcomeView {
     pub fn check_again(&mut self, cx: &mut Context<Self>) {
         self.generation += 1;
         self._tasks.clear();
-        self.statuses = Check::all(self.platform)
+        self.statuses = Check::all()
             .into_iter()
             .map(|check| (check, Status::Waiting))
             .collect();
@@ -561,8 +502,8 @@ impl WelcomeView {
         for check in ready {
             self.set(check, Status::Checking);
             let probe = self.probe.clone();
-            let (platform, project_dir) = (self.platform, project_dir.clone());
-            let run = cx.background_spawn(async move { probe(check, agent, platform, project_dir) });
+            let project_dir = project_dir.clone();
+            let run = cx.background_spawn(async move { probe(check, agent, project_dir) });
             let generation = self.generation;
             self._tasks.push(cx.spawn(async move |this, cx| {
                 let status = run.await;
@@ -593,69 +534,14 @@ impl WelcomeView {
         }
     }
 
-    /// Sets up or starts Podman's machine, showing what it prints, then
-    /// checks the machine again, and what waits on it.
-    fn run_machine(&mut self, action: MachineAction, cx: &mut Context<Self>) {
-        if self.machine_running {
-            return;
-        }
-        self.machine_running = true;
-        self.machine_output.clear();
-        let (tx, rx) = std::sync::mpsc::channel::<String>();
-        let run = cx.background_spawn(async move {
-            container::run_machine_action(action, &mut |line| {
-                tx.send(line).ok();
-            })
-        });
-        self._tasks.push(cx.spawn(async move |this, cx| {
-            let mut run = std::pin::pin!(run);
-            let result = loop {
-                let tick = cx.background_executor().timer(Duration::from_millis(100));
-                match futures::future::select(run.as_mut(), std::pin::pin!(tick)).await {
-                    futures::future::Either::Left((result, _)) => break result,
-                    futures::future::Either::Right(_) => {
-                        let lines: Vec<String> = rx.try_iter().collect();
-                        if !lines.is_empty() {
-                            this.update(cx, |this, cx| {
-                                this.machine_output.extend(lines);
-                                cx.notify();
-                            })
-                            .ok();
-                        }
-                    }
-                }
-            };
-            this.update(cx, |this, cx| {
-                this.machine_output.extend(rx.try_iter());
-                if let Err(err) = result {
-                    this.machine_output.push(format!("{err:#}"));
-                }
-                this.machine_running = false;
-                this.check_from(Check::PodmanMachine, cx);
-            })
-            .ok();
-        }));
+    /// Opens a terminal in the project running the harness's own login
+    /// command, `command`.
+    fn open_terminal(&mut self, command: &'static str, cx: &mut Context<Self>) {
+        let dir = login_dir(ProjectDirectory::get(cx));
+        self.terminal_error = crate::harness_login::open_terminal(&dir, command)
+            .err()
+            .map(|err| format!("{err:#}"));
         cx.notify();
-    }
-
-    /// Logs the harness in, in the login view, checking its login again,
-    /// and what waits on it, once it is.
-    fn log_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let agent = agent::current(cx);
-        crate::harness::forget_login(agent);
-        let this = cx.entity().downgrade();
-        crate::login_view::LoginView::open(
-            agent,
-            login_dir(ProjectDirectory::get(cx)),
-            window,
-            cx,
-            move |window, cx| {
-                use gpui_kit::component::WindowExt as _;
-                window.close_dialog(cx);
-                this.update(cx, |this, cx| this.check_from(Check::HarnessLogin, cx))
-                    .ok();
-            },
-        );
     }
 
     fn render_fix(&self, check: Check, fix: &Fix, cx: &mut Context<Self>) -> AnyElement {
@@ -669,23 +555,15 @@ impl WelcomeView {
                     .on_click(move |_, _, cx| cx.open_url(&url))
                     .into_any_element()
             }
-            Fix::Machine(action) => {
-                let action = *action;
-                Button::new(id("machine"))
+            Fix::OpenTerminal(command) => {
+                let command = *command;
+                Button::new(id("open-terminal"))
                     .small()
                     .primary()
-                    .label(action.label())
-                    .loading(self.machine_running)
-                    .disabled(self.machine_running)
-                    .on_click(cx.listener(move |this, _, _, cx| this.run_machine(action, cx)))
+                    .label("Open terminal")
+                    .on_click(cx.listener(move |this, _, _, cx| this.open_terminal(command, cx)))
                     .into_any_element()
             }
-            Fix::LogIn => Button::new(id("log-in"))
-                .small()
-                .primary()
-                .label("Log in")
-                .on_click(cx.listener(|this, _, window, cx| this.log_in(window, cx)))
-                .into_any_element(),
         }
     }
 
@@ -745,17 +623,10 @@ impl WelcomeView {
             }
             _ => None,
         };
-        let output = (check == Check::PodmanMachine && !self.machine_output.is_empty()).then(|| {
-            let theme = cx.theme();
-            v_flex()
-                .ml_6()
-                .p_2()
-                .rounded(theme.radius)
-                .bg(theme.muted)
-                .font_family(theme.mono_font_family.clone())
-                .text_xs()
-                .children(self.machine_output.iter().map(|line| div().child(line.clone())))
-        });
+        let output = (check == Check::HarnessLogin)
+            .then(|| self.terminal_error.clone())
+            .flatten()
+            .map(|error| div().ml_6().text_sm().text_color(cx.theme().danger).child(error));
         v_flex()
             .id(("welcome-check", ix))
             .gap_2()
@@ -890,7 +761,6 @@ mod tests {
     use gpui_kit::{AppContext as _, TestAppContext};
 
     use super::{Check, Fix, Status, WelcomeView, needing_attention, version_in};
-    use crate::container::Platform;
 
     #[test]
     fn versions_are_read_from_what_was_printed() {
@@ -903,24 +773,13 @@ mod tests {
 
     #[test]
     fn checks_go_in_order_and_wait_for_those_before_them() {
-        let linux = Check::all(Platform::Linux);
-        assert!(!linux.contains(&Check::PodmanMachine));
-        let mac = Check::all(Platform::MacOs);
+        let all = Check::all();
         assert_eq!(
-            mac,
-            [
-                Check::Git,
-                Check::Piton,
-                Check::Harness,
-                Check::Podman,
-                Check::PodmanMachine,
-                Check::Containers,
-                Check::HarnessLogin
-            ]
+            all,
+            [Check::Git, Check::Piton, Check::Harness, Check::Sandbox, Check::HarnessLogin]
         );
-        assert_eq!(Check::PodmanMachine.waits_for(&mac), [Check::Podman]);
-        assert_eq!(Check::Containers.waits_for(&mac).len(), 5);
-        assert_eq!(Check::HarnessLogin.waits_for(&mac), [Check::Containers]);
+        assert_eq!(Check::HarnessLogin.waits_for(&all), [Check::Harness]);
+        assert!(Check::Sandbox.waits_for(&all).is_empty());
     }
 
     /// Checks run, those waiting on a failed one never do, and the page says
@@ -928,35 +787,35 @@ mod tests {
     /// waiting on it, and Suspense is ready.
     #[gpui_kit::test]
     async fn checks_run_in_order_and_again_once_fixed(cx: &mut TestAppContext) {
-        let machine_up = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let installed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let probe: super::Probe = {
-            let machine_up = machine_up.clone();
-            Arc::new(move |check, _, _, _| match check {
-                Check::PodmanMachine if !machine_up.load(std::sync::atomic::Ordering::SeqCst) => {
+            let installed = installed.clone();
+            Arc::new(move |check, _, _| match check {
+                Check::Harness if !installed.load(std::sync::atomic::Ordering::SeqCst) => {
                     Status::Failed {
                         found: None,
-                        why: "stopped".into(),
-                        fixes: vec![Fix::Machine(crate::container::MachineAction::Start)],
+                        why: "missing".into(),
+                        fixes: vec![Fix::OpenTerminal("claude /login")],
                     }
                 }
                 _ => Status::Passed(Some("1.0".into())),
             })
         };
         cx.update(crate::project_directory::ProjectDirectory::init);
-        let view = cx.new(|cx| WelcomeView::with_probe(Platform::MacOs, probe, cx));
+        let view = cx.new(|cx| WelcomeView::with_probe(probe, cx));
         cx.run_until_parked();
         view.read_with(cx, |view, _| {
             let statuses = view.statuses();
             assert!(matches!(statuses[0].1, Status::Passed(_)));
-            assert!(matches!(statuses[4].1, Status::Failed { .. }));
-            // Containers and the login wait for the machine.
-            assert_eq!(statuses[5].1, Status::Waiting);
-            assert_eq!(statuses[6].1, Status::Waiting);
-            assert_eq!(needing_attention(statuses), 3);
+            assert!(matches!(statuses[2].1, Status::Failed { .. }));
+            assert!(matches!(statuses[3].1, Status::Passed(_)));
+            // The login waits for the harness.
+            assert_eq!(statuses[4].1, Status::Waiting);
+            assert_eq!(needing_attention(statuses), 2);
             assert!(!view.is_ready());
         });
-        machine_up.store(true, std::sync::atomic::Ordering::SeqCst);
-        view.update(cx, |view, cx| view.check_from(Check::PodmanMachine, cx));
+        installed.store(true, std::sync::atomic::Ordering::SeqCst);
+        view.update(cx, |view, cx| view.check_from(Check::Harness, cx));
         cx.run_until_parked();
         view.read_with(cx, |view, _| assert!(view.is_ready()));
     }

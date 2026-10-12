@@ -677,6 +677,19 @@ pub fn color(color: u32) -> Hsla {
     rgb(color).into()
 }
 
+/// The theme's chart colours, for telling kinds apart in a chart, in their
+/// fixed order: blue, amber, teal, violet, rose, lime, sky, orange, and a
+/// neutral grey for "other". Each is apart from the others in lightness as
+/// well as hue, and from the modes' and the status colours.
+pub fn chart_colors(dark: bool) -> [Hsla; 9] {
+    let colors: [u32; 9] = if dark {
+        [0x5b8def, 0xe0a63a, 0x2fb5a3, 0x9d7ce8, 0xe06c8f, 0xa6cc52, 0x7fd0f2, 0xe8844a, 0x8c8c8c]
+    } else {
+        [0x2f66c7, 0xa86f00, 0x0f8576, 0x6f4fc4, 0xbf3d66, 0x5f8a12, 0x1d8bbf, 0xc05a14, 0x737373]
+    };
+    colors.map(color)
+}
+
 /// A hue the spec names for what is shown, as the theme gives it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Hue {

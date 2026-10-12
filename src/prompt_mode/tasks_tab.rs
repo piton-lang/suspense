@@ -305,6 +305,8 @@ pub(super) struct TasksTab {
     pub(super) filter_menu: bool,
     /// Where the filter button was last drawn, the menu opening beneath it.
     pub(super) filter_button: Rc<Cell<Option<Bounds<Pixels>>>>,
+    /// The kind of time hovered in the open task's Time section.
+    pub(super) time_hover: Option<crate::time_breakdown::Kind>,
 }
 
 impl TasksTab {
@@ -334,6 +336,7 @@ impl TasksTab {
             focus: cx.focus_handle(),
             filter_menu: false,
             filter_button: Rc::new(Cell::new(None)),
+            time_hover: None,
         }
     }
 
@@ -565,7 +568,7 @@ fn figure(label: &'static str, value: impl IntoElement, cx: &App) -> AnyElement 
 }
 
 /// A section of an open task, headed by a small muted label.
-fn section(label: &'static str, cx: &App) -> Div {
+pub(super) fn section(label: &'static str, cx: &App) -> Div {
     v_flex().w_full().gap_1().px_3().py_2().child(
         div()
             .text_xs()
@@ -1785,6 +1788,10 @@ impl PromptMode {
             .child(column(STATUS_COLUMN, Some(status_mark(task.status, cx))))
             .children(label)
             .child(div().flex_1().min_w_0().truncate().child(first_line(&task.text)))
+            // How fast it is writing, beside its time, while it runs.
+            .children(
+                rate_label(("tasks-tab-rate", ix), task, None, cx).filter(|_| task.status.is_active()),
+            )
             .children(
                 task.took()
                     .map(|took| took_label(("tasks-tab-took", ix), took, cx)),
@@ -1927,7 +1934,17 @@ impl PromptMode {
                     Some(status_mark(task.status, cx)),
                     first_line(&task.text),
                     None,
-                    task.took().map(|took| took_label(("tasks-tab-step-took", ix), took, cx)),
+                    task.took().map(|took| {
+                        h_flex()
+                            .flex_none()
+                            .gap_2()
+                            .children(
+                                rate_label(("tasks-tab-step-rate", ix), task, None, cx)
+                                    .filter(|_| task.status.is_active()),
+                            )
+                            .child(took_label(("tasks-tab-step-took", ix), took, cx))
+                            .into_any_element()
+                    }),
                 )
             }
             StepRow::Queued(at) => {
@@ -2658,6 +2675,8 @@ impl PromptMode {
         if task.sent.mode == Some(SendMode::Both) {
             sections.push(self.render_chain_steps(ix, cx));
         }
+        // Where its time went, once it has started.
+        sections.extend(self.render_time_section(ix, cx));
         sections.extend([
             glance.into_any_element(),
             parameters.into_any_element(),
@@ -3113,7 +3132,7 @@ impl PromptMode {
 
     /// The chain's steps, its own and those added, in the order they run:
     /// the chain's own and added steps sent, then those still to come.
-    fn chain_step_ixs(&self, head: usize) -> Vec<(usize, StepKind)> {
+    pub(super) fn chain_step_ixs(&self, head: usize) -> Vec<(usize, StepKind)> {
         let layout = chain_layout(&self.tasks);
         let Some(step) = layout.step_of(head) else {
             return vec![(head, StepKind::Spec)];

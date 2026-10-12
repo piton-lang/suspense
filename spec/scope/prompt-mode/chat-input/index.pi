@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/sandbox import Sandbox
 from /scope/open-file import OpenFile
 from /scope/application/MainWindow import MainWindow
 from /scope/harness-integration import HarnessIntegration
@@ -840,10 +841,10 @@ export ui-component ChatInput:
             the harness receives ends, after any attached text, with a line
             reading "Attached files:" and each file's path, from the project
             directory, one per line, with its original name and size, so the
-            harness reads what it needs of them with its own tools. A run in a
-            container is given each attached file of its prompt read only, at
-            the same path under `/workspace`, mounted on its own, as a task's
-            understanding file is, and nothing else of `.suspense/attachments/`.
+            harness reads what it needs of them with its own tools. A run's sandbox
+            grants it each attached file of its prompt read only, on its own,
+            as a task's understanding file is, and nothing else of
+            `.suspense/attachments/`, as the @{Sandbox} says.
             A saved file that can't be found when the run starts fails it,
             saying so, before anything is run.
 

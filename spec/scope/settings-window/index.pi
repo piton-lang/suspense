@@ -1,7 +1,7 @@
 use /lib
 use /ui
 from /scope/project-data import ProjectData
-from ../container-environment import ContainerEnvironment
+from ../sandbox import Sandbox
 from ../harness-integration import HarnessIntegration
 from ../no-project import NoProjectState
 from ../project-data import ProjectData
@@ -19,7 +19,7 @@ export ui-component SettingsWindow:
     pitch:
         The application's settings, in sections picked from a sidebar: the
         system prompts each tab of the @{ChatInput} sends, the prompts
-        injected into them, the harness runs go to, the containers they run
+        injected into them, the harness runs go to, the sandbox they run
         in, and the application's updates.
 
     description:
@@ -31,7 +31,7 @@ export ui-component SettingsWindow:
     sidebar:
         Beneath the heading, down its left, a sidebar of vertical tabs, one
         per section, in order: "System prompts", "Injected prompts", "Agent",
-        "Containers", and "Updates", as the @{SelfUpdate} says. Each
+        "Sandbox", and "Updates", as the @{SelfUpdate} says. Each
         tab is a row across the sidebar's width reading the section's name,
         and the one picked is marked with the theme's accent. Clicking a tab
         picks its section, and the page beside the sidebar shows only that
@@ -114,40 +114,135 @@ export ui-component SettingsWindow:
         for each project, and offers none to pick. One that isn't installed can still be picked,
         and its runs fail saying why.
 
-    containers:
-        The "Containers" section is headed "Containers", with a muted line
-        beneath saying that Spec tasks, a Chain prompt's spec steps, and
-        questions always run in a container holding only what their mode may
-        use, and that Code tasks always run on the host, as the
-        @{ContainerEnvironment} says.
+    sandbox:
+        The "Sandbox" section is headed "Sandbox", with a muted line beneath
+        saying, in one sentence, that each run can reach only what its mode
+        allows, enforced by the operating system, as the @{Sandbox} says. It
+        is laid out as a column of cards, each a box on the theme's raised
+        surface with corners rounded 6 pixels and 12 pixels of padding, 16
+        pixels apart, each headed by its name in small semibold text, so
+        every part reads as a block of its own. From top to bottom come
+        Status, always shown; Who can see what, Code and spec, and Spec
+        tasks, for the open project; and Outside the sandbox, always shown.
+        With no project open, only Status and Outside the sandbox show, with
+        a muted line between them saying the rest is for a project, once
+        one is open.
 
-        Beneath it, for the open project, a checkbox reading "Let Spec tasks
-        read the code", unchecked to start with, and muted beneath it that
-        the code is mounted read only, so Spec tasks and a Chain prompt's
-        spec steps can read it but never change it. It is the project's,
-        saved with its data as soon as it is clicked, and shown only while a
-        project is open, taking effect from the next run.
+    sandboxStatus:
+        The Status card is one line: a dot, green while the sandbox can
+        enforce every profile here and red while it can't, then the
+        backend's name, "Landlock", "Seatbelt", or "AppContainer", and,
+        muted, what it enforces on this machine in plain words, as "files
+        and local sockets". At its right, a small ghost "Test" button runs
+        the short set of hostile checks the sandbox is tested with, in a
+        temporary project, showing a spinner meanwhile, and then a summary
+        beneath the line, "12 of 12 refused" in green, or "1 of 12 got
+        through" in the theme's error colour, which expands to list each
+        check with a tick or a cross. Where the sandbox can't run, the line
+        is in the theme's error colour and says why in plain words, as "This
+        kernel has no Landlock", that no task or question will run until it
+        can, and links to the sandbox's documentation; Test is then
+        disabled.
 
-        Beneath it, indented and shown only while it is checked, a second
-        checkbox reading "Also let them read the whole project", unchecked to
-        start with, and muted beneath it that the whole project directory is
-        mounted read only, but for its .git and .suspense folders. It is
-        saved the same way, and unchecking the first unchecks it too.
+    sandboxProfiles:
+        The Who can see what card is a small grid, so each run's reach is
+        seen at a glance: the project's areas down its left, and the modes
+        across its top, Code, Spec, Ask, and Freeform, each in its
+        mode's colour. Each cell is a small label: "Edit", on a faint tint of
+        the theme's success colour; "Read", on a faint tint of its accent; or
+        "No access", muted and untinted. Hovering a cell shows the paths it
+        covers. Beneath the grid, one muted line says what every mode can
+        reach outside the project, as "System and toolchains read only; the
+        harness's folders, build caches, and a temporary folder editable".
+        The grid follows the classification and the Spec tasks switches as
+        they change, so a change shows at once what it allows.
 
-        First, whether Podman can run them: "Podman" and its version, or
-        "Not installed" with the link to its installation instructions for
-        the platform, and on macOS and Windows, whether its machine is
-        running, with the button that sets it up or starts it, as the
-        @{ContainerEnvironment} says.
+        The grid is editable, for the open project: clicking a cell opens a
+        small menu beneath it of Edit, Read, and No access, the cell's level
+        ticked, and picking one sets it, the cell changing at once and the
+        project's profiles following, as the @{Sandbox} says. Each cell the
+        user has set is marked with a small dot in its corner, and its menu
+        has "Use default" too, which puts back what the profile gives it by
+        default. Only what the sandbox can enforce is offered: a choice that
+        would let a Code run read the spec source, or a Spec run change the
+        code, is shown disabled in its menu, its tooltip saying the
+        separation of code and spec is never relaxed, and Ask can never be given
+        Edit anywhere; what else each area allows is as its areas say. A "Reset grid" button beneath the grid, enabled while any
+        cell is set, puts every cell back to its default. Each change is
+        saved to `.suspense/sandbox.json` straight away and takes effect
+        from the next run. Setting the Code row to Read in the Spec column is
+        the same as the Spec tasks card's "Read the code" switch, and setting
+        Other files to Read there the same as "Read the whole project",
+        so the switches and the grid always agree.
 
-        Then a row for each harness, in the order of the Agent section: its
-        name, and muted beside it whether it is logged in in its container,
-        "Logged in" or "Not logged in", read from its volume each time the
-        settings open, and a "Log in again" button, which runs its login in a
-        container and shows the login view, as the
-        @{ContainerEnvironment} says, whether it is logged in or not.
-        These are the user's, not the project's, so they are the same with or
-        without a project open.
+    sandboxAreas:
+        Each area is a row of the grid, its name at its left and beneath it,
+        muted and cut off with an ellipsis, what it covers, its folders and
+        patterns as written, as `src/, tests/` or `**/*.pi`, the whole list in
+        its tooltip, so what a row means is never a guess. The areas are these,
+        in this order.
+
+        \\
+        - Code, the code roots and patterns of the Code and spec card
+        - Spec source, the spec roots and patterns of that card
+        - Compiled reference, the harness directory's reference folder, as `.claude/reference`
+        - Suspense data, the project's `.suspense` folder, where Suspense keeps the project's history, queue, prompts, and settings, as the ProjectData says
+        - each area the user has added, in the order added
+        - Other files, everything in the project none of the areas above covers, such as a README, build files, and scripts, listed as the top-level files and folders it holds, as `README.md, Cargo.toml, scripts/`
+        \\
+
+        An area can be added with "Add area" beneath the grid: a row to type
+        its name into, as "Docs" or "Assets", and then its folders and
+        patterns, chosen with the folder browser or typed, as the Code and
+        spec card adds them. Each added area has its own levels in each mode,
+        set as any cell is, starting at what Other files has, and is taken
+        out of Other files. Clicking an added area's name lets it be renamed,
+        its covered line lets its folders and patterns be edited, and a remove
+        button at its right, shown on hover, removes it, its files going
+        back into Other files. Code and Spec source are edited in the Code
+        and spec card, and Compiled reference and Suspense data can't be
+        changed in what they cover, only in their levels. An added area may
+        not cover anything classed as code or spec, nor the reference or
+        Suspense data: such a folder or pattern is marked in the theme's
+        error colour, saying which area already has it.
+
+        Suspense data can be given Edit only in Freeform, and is No access
+        in every other mode by default, but for the files a run is given on
+        their own, as its understanding file, which the grid notes beneath
+        the row. Other files and every added area can be given any level in
+        every mode but Ask, which can only Read.
+
+    sandboxClassification:
+        The Code and spec card says, muted, which parts of the project are
+        code and which are spec, and that a Code run can't open spec and a
+        Spec run can't open code. It holds two lists side by side, "Code",
+        headed in Code's colour, and "Spec", in Spec's, each a column of
+        rows, one per folder or pattern, in monospace, with a small remove
+        button at its right shown on hover. Beneath each list, "Add folder"
+        opens the folder browser in the project, and "Add pattern" adds a row
+        to type a pattern into, as `**/*.pi`, saved once Enter is pressed or
+        it loses focus. A row in both lists is marked in the theme's error
+        colour in each, with a line beneath the card saying runs won't start
+        until it is in one only. At the card's foot, a small ghost "Reset to
+        project locations" button is enabled only while the lists differ
+        from the project's code and spec locations. Each change is saved to
+        `.suspense/sandbox.json` straight away, as the @{Sandbox} says.
+
+    sandboxSpecTasks:
+        The Spec tasks card holds two switches, each a row with its label at
+        the left, a muted line under it saying what it does, and the switch
+        at the right: "Read the code", saying Spec tasks can read the code
+        but never change it, and, indented beneath it and shown only while
+        it is on, "Read the whole project", saying they can also read the
+        rest of the project, read only. Both start off, are saved with the
+        project, and take effect from the next run.
+
+    sandboxOutside:
+        The Outside the sandbox card lists, muted, in three short lines each
+        with a small icon, what the sandbox doesn't cover, so it is never
+        mistaken for protection: the network, the harness's own service, and
+        the clipboard, as the @{Sandbox}'s channels say, each with one plain
+        sentence saying why it matters.
 
     saving:
         The prompts, the system prompts and the injected ones, belong to the

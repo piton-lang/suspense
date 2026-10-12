@@ -181,6 +181,8 @@ pub struct Phases {
     done: Vec<(usize, crate::prompt_history::Phase)>,
     /// How many have begun.
     begun: usize,
+    /// Every phase so far, ended or not, for the task to show as they go.
+    shared: Option<crate::time_breakdown::SharedTimes>,
 }
 
 fn millis(time: std::time::SystemTime) -> u64 {
@@ -196,6 +198,34 @@ impl Phases {
             open: Vec::new(),
             done: Vec::new(),
             begun: 0,
+            shared: None,
+        }
+    }
+
+    /// Keeps `shared` up to date with every phase as it begins and ends, on
+    /// top of what it already holds.
+    pub fn sharing(mut self, shared: crate::time_breakdown::SharedTimes) -> Self {
+        self.shared = Some(shared);
+        self
+    }
+
+    /// Tells the shared phases, if any, what began or ended.
+    fn share(&self, key: &str, name: &str, began: std::time::SystemTime, ended: Option<std::time::SystemTime>) {
+        let Some(shared) = &self.shared else {
+            return;
+        };
+        let mut times = crate::time_breakdown::lock(shared);
+        let tool = name.contains("tool ").then(|| key.to_string());
+        let began = millis(began);
+        let ended = ended.map(millis);
+        match times.iter_mut().rev().find(|t| t.ended.is_none() && t.name == name && t.began == began) {
+            Some(open) => open.ended = ended,
+            None => times.push(crate::time_breakdown::Timed {
+                name: name.to_string(),
+                tool,
+                began,
+                ended,
+            }),
         }
     }
 
@@ -206,13 +236,9 @@ impl Phases {
 
     /// `name` has begun, known by `key` until it ends.
     pub fn begin_keyed(&mut self, key: impl Into<String>, name: impl Into<String>) {
-        self.open.push((
-            key.into(),
-            name.into(),
-            std::time::SystemTime::now(),
-            Instant::now(),
-            self.begun,
-        ));
+        let (key, name, now) = (key.into(), name.into(), std::time::SystemTime::now());
+        self.share(&key, &name, now, None);
+        self.open.push((key, name, now, Instant::now(), self.begun));
         self.begun += 1;
     }
 
@@ -227,8 +253,9 @@ impl Phases {
         let Some(at) = self.open.iter().position(|(open, ..)| open == key) else {
             return;
         };
-        let (_, name, began, started, order) = self.open.remove(at);
-        self.finish(order, name, began, started.elapsed(), how);
+        let (key, name, began, started, order) = self.open.remove(at);
+        let tool = name.contains("tool ").then_some(key);
+        self.finish(order, name, tool, began, started.elapsed(), how);
     }
 
     /// `name` took from `began` until now.
@@ -237,17 +264,20 @@ impl Phases {
             .duration_since(began)
             .unwrap_or_default();
         self.begun += 1;
-        self.finish(self.begun - 1, name.to_string(), began, lasted, how);
+        self.finish(self.begun - 1, name.to_string(), None, began, lasted, how);
     }
 
     fn finish(
         &mut self,
         order: usize,
         name: String,
+        tool: Option<String>,
         began: std::time::SystemTime,
         lasted: Duration,
         how: &str,
     ) {
+        let now = std::time::SystemTime::now();
+        self.share(tool.as_deref().unwrap_or(&name), &name, began, Some(now));
         let how = if how.is_empty() {
             String::new()
         } else {
@@ -262,7 +292,8 @@ impl Phases {
             crate::prompt_history::Phase {
                 name,
                 began_at: millis(began),
-                ended_at: millis(std::time::SystemTime::now()),
+                ended_at: millis(now),
+                tool,
             },
         ));
     }
@@ -283,7 +314,7 @@ impl Phases {
         done.into_iter().map(|(_, phase)| phase).collect()
     }
 
-    /// Follows a harness event: its first event, the container's
+    /// Follows a harness event: its first event, the sandbox's
     /// preparing, and each tool call by its kind and the path or command it
     /// acted on, never what the harness replied.
     pub fn follow(&mut self, event: &crate::harness::HarnessEvent) {
@@ -292,9 +323,9 @@ impl Phases {
             self.end("first event", "");
         }
         match event {
-            HarnessEvent::Preparing => self.begin("preparing the container"),
-            HarnessEvent::Prepared => self.end("preparing the container", ""),
-            HarnessEvent::ToolCalled { id, name, input, .. } => {
+            HarnessEvent::Preparing => self.begin("preparing the sandbox"),
+            HarnessEvent::Prepared => self.end("preparing the sandbox", ""),
+            HarnessEvent::ToolCalled { id, name, input, subagent } => {
                 let on = ["file_path", "path", "notebook_path", "command", "pattern", "url"]
                     .iter()
                     .find_map(|key| input.get(*key)?.as_str())
@@ -304,8 +335,11 @@ impl Phases {
                         format!(" {short}")
                     })
                     .unwrap_or_default();
+                // A subagent's own calls are told apart, as what the task
+                // waited on is the subagent.
+                let by = if *subagent { "subagent " } else { "" };
                 if !self.is_open(id) {
-                    self.begin_keyed(id.clone(), format!("tool {name}{on}"));
+                    self.begin_keyed(id.clone(), format!("{by}tool {name}{on}"));
                 }
             }
             HarnessEvent::ToolFinished { id, is_error } => {

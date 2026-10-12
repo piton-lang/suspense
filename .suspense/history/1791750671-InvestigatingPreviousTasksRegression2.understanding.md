@@ -1,0 +1,6 @@
+- [Chat shows only the task under way and those beside it, or the one that finished last; never any other task](.claude/reference/scope/application/Body.md#task-tabs)
+- [A task opened from the Tasks tab opens in a body tab of its own; opening the task Chat shows selects Chat](.claude/reference/scope/application/Body.md#task-tabs)
+- [A task's tab shows its header, output table, and changed files, scrolled to its top the first time](.claude/reference/scope/application/Body.md#task-tabs)
+- [A Previous row opens like any other, done, failed, cancelled, or not recorded alike, its output in a body tab at the same time](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [Every previous task can be read whole, however old, as long as its record is in the history](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [One whose record can't be read opens all the same, saying why, muted, in place of its output](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)

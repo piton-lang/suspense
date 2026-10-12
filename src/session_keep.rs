@@ -27,9 +27,8 @@ const DEPTH: usize = 6;
 /// user's own settings.
 pub const CLAUDE_SETTINGS: &str = r#"{"cleanupPeriodDays":3650000}"#;
 
-/// Where `agent` keeps its sessions for a run: the conversation's sessions
-/// folder it mounts, for a run in a container, or the harness's own folder
-/// on the host.
+/// Where `agent` keeps its sessions for a run: the harness's own folder on
+/// the host, or `mounted`, where a test gives its own.
 pub fn sessions_root(agent: Agent, mounted: Option<&Path>) -> Option<PathBuf> {
     if let Some(mounted) = mounted {
         return Some(mounted.to_path_buf());

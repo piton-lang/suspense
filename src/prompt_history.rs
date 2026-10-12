@@ -120,6 +120,9 @@ pub struct Phase {
     pub name: String,
     pub began_at: u64,
     pub ended_at: u64,
+    /// A tool call's id, for one that is a tool call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool: Option<String>,
 }
 
 impl RunRecord {
@@ -203,6 +206,8 @@ pub struct SavedPrompt {
     pub anchor: HiddenAnchor,
     pub text: String,
     pub record: Option<RunRecord>,
+    /// Why its record couldn't be read, where it has one that couldn't.
+    pub record_error: Option<String>,
     /// When it was sent, in seconds since the Unix epoch, from its file's
     /// name; zero when that doesn't say.
     pub sent_at: u64,
@@ -352,9 +357,14 @@ fn load_dir(dir: &Path) -> Vec<SavedPrompt> {
         .into_iter()
         .filter_map(|(sent_at, file)| {
             let (anchor, text) = HiddenAnchor::parse(&fs::read_to_string(&file).ok()?)?;
-            let record = fs::read_to_string(record_path(&file))
-                .ok()
-                .and_then(|json| serde_json::from_str(&json).ok());
+            let (record, record_error) = match fs::read_to_string(record_path(&file)) {
+                Ok(json) => match serde_json::from_str(&json) {
+                    Ok(record) => (Some(record), None),
+                    Err(err) => (None, Some(format!("Its record couldn't be read: {err}"))),
+                },
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => (None, None),
+                Err(err) => (None, Some(format!("Its record couldn't be read: {err}"))),
+            };
             let recorded_at = fs::metadata(record_path(&file))
                 .and_then(|meta| meta.modified())
                 .ok();
@@ -362,6 +372,7 @@ fn load_dir(dir: &Path) -> Vec<SavedPrompt> {
                 anchor,
                 text,
                 record,
+                record_error,
                 sent_at,
                 recorded_at,
             })
@@ -424,6 +435,13 @@ mod tests {
 
         fs::remove_file(file.with_extension("json")).unwrap();
         assert!(load(&project_dir)[0].record.is_none());
+        assert!(load(&project_dir)[0].record_error.is_none());
+
+        // A record that can't be read says why.
+        fs::write(file.with_extension("json"), "{ not a record").unwrap();
+        let unreadable = &load(&project_dir)[0];
+        assert!(unreadable.record.is_none());
+        assert!(unreadable.record_error.as_deref().is_some_and(|why| why.starts_with("Its record couldn't be read")));
     }
 
     /// A task's mark, done by hand for sending to the other mode, is saved

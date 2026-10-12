@@ -1,22 +1,16 @@
 //! What a task's mode keeps it off, as the HarnessIntegrationScope's
-//! protected locations say. A run in a container is kept off what isn't
-//! mounted into it, and that is the only enforcement there is. A run on the
-//! host, a Code task or a Chain prompt's code step, is only nudged: told,
-//! where its harness takes rules, not to edit the spec location, nor read
-//! it. Nothing is ever put back, restored, or deleted, and nothing is
-//! watched to undo what happens; spec files a Code task's tool calls report
-//! changing are named in a passive notice, left as it left them.
+//! protected locations say. Its sandbox is what enforces it, as the
+//! SandboxScope says; a Code task, or a Chain prompt's code step, is also
+//! told, where its harness takes rules, not to edit the spec location, nor
+//! read it, as a courtesy, so it doesn't waste a turn trying. Nothing is
+//! ever put back, restored, or deleted, and nothing is watched to undo what
+//! happens; spec files a Code task's tool calls report changing are named
+//! in a passive notice, left as it left them.
 
 use std::path::PathBuf;
 
 use crate::chat_input::SendMode;
 use crate::project_tree::Locations;
-
-/// The mode a run sent in `mode` is nudged for: its own on the host, and
-/// none in a container, where nothing it may not change is mounted.
-pub fn guarded(mode: Option<SendMode>, in_container: bool) -> Option<SendMode> {
-    mode.filter(|_| !in_container)
-}
 
 /// The location a task sent in `mode` on the host is told it may not edit:
 /// the spec, for a Code task, and none for the rest.
@@ -31,8 +25,8 @@ pub fn protected(mode: SendMode, locations: &Locations) -> Option<PathBuf> {
 /// spec from its compiled reference: the spec's source, for a Code task.
 pub fn unread(mode: SendMode, locations: &Locations) -> Option<PathBuf> {
     match mode {
-        // A question runs in a container that holds the spec's source read
-        // only, for `piton slice`, and is told nothing of keeping off it.
+        // A question may read the spec's source, read only, and is told
+        // nothing of keeping off it.
         SendMode::Code => locations.spec.clone(),
         SendMode::Ask | SendMode::Both | SendMode::Spec | SendMode::Freeform => None,
     }
@@ -82,11 +76,4 @@ mod tests {
         );
     }
 
-    /// A run in a container is guarded for nothing, and told off reading
-    /// nothing; on the host it keeps its rule.
-    #[test]
-    fn containerised_runs_are_not_guarded() {
-        assert_eq!(super::guarded(Some(SendMode::Code), true), None);
-        assert_eq!(super::guarded(Some(SendMode::Code), false), Some(SendMode::Code));
-    }
 }

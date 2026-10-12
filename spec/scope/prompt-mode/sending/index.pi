@@ -1,5 +1,5 @@
 use /lib
-from /scope/container-environment import ContainerEnvironment
+from /scope/sandbox import Sandbox
 from /scope/harness-integration import HarnessIntegration
 from /scope/project-data import ProjectData
 from /scope/prompt-mode import PromptEditor
@@ -31,13 +31,10 @@ export feature PromptSending:
         as the @{ProjectData} says. A prompt that fails to compile or run
         fails its task, and doesn't stop its queue.
 
-        A task whose mode runs in a container, a Spec task or a Chain
-        prompt's spec step or spec follow-up, is run in one, as the
-        @{ContainerEnvironment} says, showing "Preparing environment"
-        while its image is built; one that can't be, as where Podman isn't
-        installed, fails as a task that can't be run does, and is never run on
-        the host instead. A Code task and a Chain prompt's code step always
-        run on the host, and never need Podman. Once a Spec task or a Chain
+        Every task runs under the sandbox of its mode's profile, as the
+        @{Sandbox} says, showing "Preparing" while its sandbox and filtered
+        repository are made; one whose sandbox can't be applied fails as a
+        task that can't be run does, and is never run unrestricted instead. Once a Spec task or a Chain
         prompt's spec step is over, however it ended, the spec is built
         again on the host, as the @{SpecBuild} says.
 
@@ -66,10 +63,10 @@ export feature PromptSending:
         A question, a prompt in Ask, never queues: it runs straight away, even
         while the harness is working on a task or other questions, joins the
         questions stacked above the @{ChatInput}'s tabs, and is saved
-        among the questions asked. Every question runs in a container that
-        holds the code, the spec source, and the compiled reference, each
-        read only, as the @{ContainerEnvironment} says, and fails, never
-        running on the host, where that can't be done.
+        among the questions asked. Every question runs under the Question
+        profile, which can read the code, the spec source, and the compiled
+        reference, and change none of them, as the @{Sandbox} says, and
+        fails, never running unrestricted, where that can't be done.
 
     sendingToATask:
         While a task is running, more can be sent to it, as to a terminal

@@ -1,0 +1,7 @@
+- [The Who can see what grid has areas down its left, modes across its top, cells reading Edit, Read, or No access](.claude/reference/scope/settings-window/index.md#sandbox-profiles)
+- [The grid follows the classification and Spec tasks switches as they change](.claude/reference/scope/settings-window/index.md#sandbox-profiles)
+- [Profiles are chosen by the application, never by the run](.claude/reference/scope/sandbox/index.md#profiles)
+- [Code runs never reach the spec source; Spec runs never the code, unless allowed to read it](.claude/reference/scope/sandbox/index.md#profiles)
+- [The project's classification is saved in .suspense/sandbox.json](.claude/reference/scope/sandbox/index.md#classification)
+- [Contradictory policies refuse to run rather than run weaker](.claude/reference/scope/sandbox/index.md#fail-closed)
+- [Grid cells can be set per mode and area, saved in sandbox.json, never past the code/spec separation](.claude/reference/scope/settings-window/index.md#sandbox-profiles)

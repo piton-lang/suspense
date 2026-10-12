@@ -106,7 +106,7 @@ pub fn owned_outside_reference(project_dir: &Path) -> Vec<String> {
 
 /// Lists again, in the project's manifest, each of `owned`, files outside
 /// the reference folders the build owned, that a build in a Spec run's
-/// container left out, having no code location to place them in, while the
+/// sandbox left out, having no code location to place them in, while the
 /// file is still there: so the host's next build still owns what it wrote,
 /// and isn't stopped by it.
 pub fn keep_owned(project_dir: &Path, owned: &[String]) {

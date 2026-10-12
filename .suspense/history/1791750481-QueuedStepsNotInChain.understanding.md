@@ -1,0 +1,4 @@
+- [The Time section splits a task's time into kinds, each in a chart colour](.claude/reference/ui/components/right-sidebar/tasks/index.md#time-breakdown)
+- [The bar, legend, and timeline show each kind's share of the task's time](.claude/reference/ui/components/right-sidebar/tasks/index.md#time-breakdown)
+- [Paused time and the gap between a chain's steps are left out](.claude/reference/ui/components/right-sidebar/tasks/index.md#time-breakdown)
+- [Time in the queue is no kind in the chart, only a muted note beneath the timeline](.claude/reference/ui/components/right-sidebar/tasks/index.md#time-breakdown)

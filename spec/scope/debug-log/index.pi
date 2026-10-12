@@ -21,7 +21,7 @@ export feature DebugLog:
 
         \\
         - every child process the application starts: its command, its working directory, how long it took, and its exit status, with its standard error when it failed
-        - each task's and question's phases as they happen, each with how long it took: queued, spec build, snapshot, preparing the container, with its mounts and the podman command, harness started, the harness's first event, each tool call, its result, and the closing snapshot
+        - each task's and question's phases as they happen, each with how long it took: queued, spec build, snapshot, preparing the sandbox, with its profile, its grants, and the backend that applied it, harness started, the harness's first event, each tool call, its result, and the closing snapshot
         - each git status refresh, spec build, and language server start or restart, with how long it took
         - any time the window was unresponsive for more than 200 milliseconds, with how long
         - every panic, with its backtrace, written to the log before the application exits

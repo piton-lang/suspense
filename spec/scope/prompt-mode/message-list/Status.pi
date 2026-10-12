@@ -25,7 +25,7 @@ export anchor MessageListStatus:
         with "≈" before it, as "≈ 4:12", its tooltip saying it is
         approximate; one where neither can be told shows none.
 
-        Among the previous tasks, every task's heading shows how long it
+        In the Tasks tab, every task's row shows how long it
         took, as the latest task's header does, though not beside its status: done,
         failed, or cancelled alike, and a task still running there counting
         up. A chain's parent row shows the time its steps took together,
@@ -59,3 +59,14 @@ export anchor MessageListStatus:
         gives too little to work out, as a run that reported no output
         tokens, or took no measurable time, is left out rather than shown as
         zero.
+
+        The rate shows for every run that writes a reply, whatever it was
+        sent in, Code, Chain steps, Spec, Freeform, and questions alike,
+        whatever their sandbox. In a task's slim header it sits right
+        after the elapsed time, muted, before the summary, and in the Tasks
+        tab beside the time of a running row. It is worked out from the
+        streamed reply's own deltas as they arrive, and from the usage each
+        message reports, never only from the run's final result, so it shows
+        as soon as the reply begins and isn't waiting for the run to end; the
+        average once it ends is from the result's own figures, Claude Code's
+        `duration_api_ms` among them.

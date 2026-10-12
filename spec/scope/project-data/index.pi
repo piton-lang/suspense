@@ -1,7 +1,7 @@
 use /lib
 
 from /scope/prompt-mode/chat-input import ChatInput
-from /scope/container-environment import ContainerEnvironment
+from /scope/sandbox import Sandbox
 from /scope/harness-integration import HarnessIntegration
 from /scope/project-directory import ProjectDirectory
 from /scope/project-locations import ProjectLocations
@@ -29,13 +29,12 @@ export feature ProjectData:
         - `system-prompts/`: each mode's system prompt template, a Markdown file named after its mode, code.md, combined.md for Chain, spec.md, and ask.md, and the spec-reading prompt injected into them, spec-reading.md, and the resume prompt given to a resumed task, resume.md
         - `commit-notes.json`: the Git panel's commit notes
         - `run.json`: the project's run targets, as the @{RunTargets} says
-        - `settings.json`: the project's own settings, as the harness its runs go to, as the @{HarnessIntegration} says, whether its Spec runs may read the code, and whether they may read the whole project, as the @{ContainerEnvironment} says
+        - `settings.json`: the project's own settings, as the harness its runs go to, as the @{HarnessIntegration} says, whether its Spec runs may read the code, and whether they may read the whole project, as the @{Sandbox} says
         - `harness.json`: the last report the harness gave of the skills and agents it has
         - `fluency.md`: the project's Piton fluency, as `piton agent --print-fluency` printed it at the last spec build, generated rather than edited, for the Spec and Chain prompts to point at, as the @{ModeSystemPrompts} says
         - `suspense-fluency.md`: the Suspense fluency, as this application ships it, generated rather than edited, for the Code, Chain, Spec, and Ask prompts to point at, as the @{ModeSystemPrompts} says
         - `conversations.json`: which conversation of each lane's tasks, the spec lane's and the code lane's, and of the questions, was last left for a new one, as the @{HarnessIntegration} says, so it isn't carried on again once the project is reopened
-        - `sessions/`: the harness's sessions for each conversation run in a container, a folder per conversation, `spec` for the spec lane's and `questions` for the questions', each mounted into that conversation's runs only, as the @{ContainerEnvironment} says, so a conversation carries on across runs, restarts, and moves of the project
-        - `Containerfile`: written by hand, when the project has one, built FROM the application's default image to add what the project's runs need, such as its toolchains, as the @{ContainerEnvironment} says
+        - `sandbox.json`: the project's classification of its paths as code or spec, its code roots, spec roots, and patterns, as the @{Sandbox} says, kept with the project
 
         The draft, `.suspense-draft.pi`, isn't in `.suspense`: it is the prompt
         being written, as `piton lsp` is shown it, a document named as if it
@@ -51,20 +50,17 @@ export feature ProjectData:
         `.suspense/queue/`,
         the commit notes `.suspense/commit-notes.json`, the conversations left
         `.suspense/conversations.json`, whose conversations only this machine's
-        harness knows, the harness's sessions `.suspense/sessions/`, which
-        hold its transcripts, the snapshot index `.suspense/snapshot-index`,
+        harness knows, the snapshot index `.suspense/snapshot-index`,
         and the draft
         `.suspense-draft.pi` wherever it is, should it ever be written. Git
         ignores these, so they are never committed. Everything else, the prompt
         history, the questions, the divergence reports, the system prompts,
-        and the project's Containerfile, is kept with the project.
+        and the sandbox classification, is kept with the project.
 
-        The containers' images and volumes and the harnesses' logins belong
-        to this machine and to the application, never to the project, and
-        aren't in `.suspense` at all: Podman keeps them, as the
-        @{ContainerEnvironment} says. Losing them costs a login, never
-        anything of the project's. The harnesses' sessions are in
-        `.suspense`, in `.suspense/sessions/`, kept on this machine only.
+        The harnesses' logins belong to this machine and the user, kept where
+        each harness keeps them on the host, never in `.suspense`. Each run's
+        sandbox is made for it and removed after it, its temporary directory
+        and filtered repository included, so nothing of it stays.
 
     taskSnapshots:
         In a project that is a git repository, every task the harness runs

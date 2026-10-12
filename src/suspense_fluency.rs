@@ -19,7 +19,7 @@ use crate::hidden_anchor::APP_DIR;
 const FILE: &str = "suspense-fluency.md";
 
 /// What the application ships: plain text, with no placeholder and no path
-/// of any machine, so it reads the same on the host and in a container.
+/// of any machine, so it reads the same on every machine.
 pub const FLUENCY: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/.suspense/system-prompts/suspense-fluency.md"

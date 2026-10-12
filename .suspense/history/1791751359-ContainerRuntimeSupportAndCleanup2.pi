@@ -1,0 +1,71 @@
+
+export anchor ContainerRuntimeSupportAndCleanup2:
+    userPrompt:
+        \\\
+        We should support docker and/or podman, and on startup select whichever one is available if any.  Also provide an option to configure this in the containers page.
+
+        In the settings containers page, I'd also like to see a list of containers (and container resources like images) used by suspense and the ability to easily destroy them.  This should work across both docker and podman for whichever (or both) are installed.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            We should support docker and/or podman, and on startup select whichever one is available if any.  Also provide an option to configure this in the containers page.
+
+            In the settings containers page, I'd also like to see a list of containers (and container resources like images) used by suspense and the ability to easily destroy them.  This should work across both docker and podman for whichever (or both) are installed.
+            \\\
+        result:
+            \\\
+            Suspense now supports Docker as well as Podman, picks whichever is available, and lists its own container resources in Settings so you can delete them. `piton check` reports no problems and `piton build` wrote 84 files.
+
+            - **Runtime** (`.claude/reference/scope/container-environment/index.md#runtime`, `#choosing-runtime`):
+              - **Choosing:** containers run with Podman or Docker. Settings offers Automatic, Podman or Docker. Automatic picks whichever works at launch, preferring Podman when both do, and the choice is remembered for you.
+              - **Same rules either way:** everywhere else the spec says Podman now means whichever runtime is in use, with Docker's equivalents.
+              - **Running as you:** on Linux, Docker containers run as your user ID, and its login volumes are handed to you with a one-off `chown`.
+              - **Docker Desktop:** on macOS and Windows it stands in for the Podman machine, with a "Start Docker" button.
+            - **Labelling** (`#resources`): every container, image and volume Suspense creates is labelled `io.suspense.app=suspense` and named `suspense-…`. Suspense only ever touches resources with that label.
+            - **Settings → Containers** (`.claude/reference/scope/settings-window/index.md#containers`):
+              - **Runtime choice:** a picker, plus a status row for each of Podman and Docker.
+              - **Resources:** a list per installed runtime with total disk use. Each container, image and volume shows what it's for, its size, its age, and a Delete button.
+              - **Deleting:** "Delete all" works per runtime or for both. Every delete is confirmed and says what's lost: a running task stops, an image gets rebuilt, a login volume means logging in again.
+            - **Welcome checks:** they accept either runtime.
+
+            **My choices:** preferring Podman under Automatic, and the label and name scheme. Both are easy to change.
+
+            **Anchors the code should follow:** `ContainerEnvironment` `#runtime`, `#choosing-runtime`, `#user-and-files` and `#resources`; `SettingsWindow` `#containers`; `Welcome`'s container checks; and `UserPreferences`.
+            \\\
+
+    sentFrom: ContainerRuntimeSupportAndCleanup
+
+    model: opus

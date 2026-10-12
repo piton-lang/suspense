@@ -28,6 +28,7 @@
 
 mod ask_pane;
 mod tasks_tab;
+mod time_section;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -369,6 +370,9 @@ struct PromptTask {
     chain_stamp: Option<u128>,
     /// Its writing, as it streams in, followed while it runs here.
     meter: crate::output_rate::RateMeter,
+    /// Its phases and tool calls, as they begin and end, or as its record
+    /// keeps them: where its time went.
+    timing: crate::time_breakdown::SharedTimes,
     live: bool,
     /// When it was sent, once it was, and when it was over, once it is, so
     /// how long it took can be told; none for a task from the history whose
@@ -639,6 +643,7 @@ impl PromptTask {
             ran_here: false,
             chain_stamp: None,
             meter: Default::default(),
+            timing: Default::default(),
             live: false,
             started: None,
             ended: None,
@@ -701,6 +706,11 @@ impl PromptTask {
             .unwrap_or_default();
         let recorded_at = saved.recorded_at;
         let Some(record) = saved.record.filter(|record| !record.holds_only_the_mark()) else {
+            // It opens all the same, saying why there is nothing to show.
+            let why = saved.record_error.unwrap_or_else(|| {
+                "No record of its run was kept in the history.".to_string()
+            });
+            task.reply.push_notice(why, String::new());
             task.reply.stop();
             task.status = TaskStatus::Unrecorded;
             return task;
@@ -729,6 +739,8 @@ impl PromptTask {
         for event in record.events() {
             task.apply(event);
         }
+        *crate::time_breakdown::lock(&task.timing) =
+            record.phases.iter().map(crate::time_breakdown::Timed::from).collect();
         task.paused_for = Duration::from_millis(record.paused_ms);
         if record.cancelled {
             task.cancel();
@@ -1701,58 +1713,6 @@ fn queued_tooltip(text: &str) -> SharedString {
         lines.push("…");
     }
     lines.join("\n").into()
-}
-
-/// Asks before freeing Podman's disk space with `podman system prune`,
-/// then frees it in the background and calls `then`, as "Free up space"
-/// does; one that fails says why.
-pub(crate) fn confirm_free_space(
-    window: &mut Window,
-    cx: &mut App,
-    then: impl Fn(&mut Window, &mut App) + Clone + 'static,
-) {
-    window.open_alert_dialog(cx, move |alert, _, _| {
-        let then = then.clone();
-        alert
-            .title("Free up Podman's disk space?")
-            .description(
-                "This runs `podman system prune`, removing stopped containers, unused \
-                 networks, and images no container uses. Your harnesses' logins are kept.",
-            )
-            .footer(
-                DialogFooter::new()
-                    .child(
-                        Button::new("free-space-cancel")
-                            .outline()
-                            .label("Cancel")
-                            .on_click(|_, window, cx| window.close_dialog(cx)),
-                    )
-                    .child(
-                        Button::new("free-space-confirm")
-                            .primary()
-                            .label("Free up space")
-                            .on_click(move |_, window, cx| {
-                                window.close_dialog(cx);
-                                let then = then.clone();
-                                let freeing = cx.background_spawn(async { crate::container::free_space() });
-                                window
-                                    .spawn(cx, async move |cx| {
-                                        let freed = freeing.await;
-                                        cx.update(|window, cx| match freed {
-                                            Ok(()) => then(window, cx),
-                                            Err(err) => window.push_notification(
-                                                Notification::warning(format!("{err:#}"))
-                                                    .title("Couldn't free up space"),
-                                                cx,
-                                            ),
-                                        })
-                                        .ok();
-                                    })
-                                    .detach();
-                            }),
-                    ),
-            )
-    });
 }
 
 /// A task's tab's name: the first line of its prompt, cut off with an
@@ -6095,25 +6055,14 @@ impl PromptMode {
             Sending::Now(..) => std::mem::take(self.new_conversation_pending.of_mut(lane)),
             Sending::Resume(_) => false,
         };
-        // A task of the spec lane runs in a container, seeing only what it
-        // may use, as the ContainerEnvironmentScope says; Code, a chain's code
-        // step, and Freeform run on the host.
-        let container_kind = crate::container::RunKind::of(self.tasks[task_ix].mode);
-        // A conversation is only carried on where its sessions are kept: in
-        // the project's sessions folder in a container, or on the host.
-        let contained = container_kind.is_some();
+        // Every task runs natively under the sandbox of its mode's profile,
+        // seeing only what it may use, as the SandboxScope says.
+        let profile_kind = crate::sandbox::ProfileKind::of(self.tasks[task_ix].mode);
         // Resumed, it carries on its own conversation, not its lane's.
         let own_session = resuming.and_then(|ix| self.tasks[ix].session.as_ref().map(|id| id.to_string()));
         let resume = Session::resume(self.session.of(lane), &project_dir)
             .filter(|_| resuming.is_none())
-            .filter(|_| !new_conversation)
-            .filter(|_| {
-                self.session
-                    .of(lane)
-                    .as_ref()
-                    .and_then(|session| session.in_container)
-                    .is_none_or(|was| was == contained)
-            });
+            .filter(|_| !new_conversation);
         let resume = resume.or(own_session);
         let new_conversation = resume.is_none();
         let epoch = *self.session_epoch.of(lane);
@@ -6128,9 +6077,9 @@ impl PromptMode {
             .is_none_or(|mode| mode != SendMode::Ask);
         // Resumed, the spec isn't built again ahead of it.
         let builds = is_task && !freeform && resuming.is_none();
-        // On the host, a Code task is told not to change the spec; in a
-        // container, nothing it mustn't touch is there.
-        let guarded = mode_guard::guarded(self.tasks[task_ix].mode, container_kind.is_some());
+        // A Code task is also told not to change the spec, as a courtesy:
+        // its sandbox is what keeps it off.
+        let guarded = self.tasks[task_ix].mode;
         if builds {
             self.tasks[task_ix].status = TaskStatus::Building;
         }
@@ -6310,9 +6259,15 @@ impl PromptMode {
             }
         };
 
+        // Its phases shown as they go: a resumed task's on from what it had.
+        let timing = self.tasks[task_ix].timing.clone();
+        if resuming.is_none() {
+            crate::time_breakdown::lock(&timing).clear();
+        }
         self._pending[lane_slot(lanes)] = cx.spawn(async move |this, cx| {
             // Its phases, logged as they happen and kept in its record.
-            let mut phases = crate::debug_log::Phases::new(&project_dir, known.clone());
+            let mut phases =
+                crate::debug_log::Phases::new(&project_dir, known.clone()).sharing(timing);
             if let Some(queued_at) = queued_at {
                 phases.since("queued", queued_at, "");
             }
@@ -6487,37 +6442,19 @@ impl PromptMode {
                     let unread = guarded.and_then(|mode| {
                         mode_guard::unread(mode, &crate::project_tree::Locations::read(&project_dir))
                     });
-                    // In a container, its understanding file is mounted on its
-                    // own, so it is there, empty, before the run.
-                    let container = container_kind.map(|kind| {
-                        if let Some(file) = &understanding_file
-                            && !file.exists()
-                        {
-                            std::fs::write(file, "").ok();
-                        }
-                        let locations = crate::project_tree::Locations::read(&project_dir);
-                        // Read as it is now, so a change takes effect from
-                        // the next run.
-                        crate::container::Plan::new(
-                            kind,
-                            agent,
-                            &project_dir,
-                            &locations,
-                            understanding_file.as_deref(),
-                            crate::container::Platform::current(),
-                        )
-                        .reading_code(
-                            crate::project_settings::spec_reads_code(&project_dir),
-                            crate::project_settings::spec_reads_project(&project_dir),
-                            &locations,
-                        )
-                        // Its attached files, each on its own.
-                        .with_files(&compiled.files)
-                    });
+                    // Its sandbox: its profile, its attached files each on its
+                    // own, and its understanding file.
+                    let sandbox = harness::Sandboxed {
+                        kind: profile_kind,
+                        files: crate::sandbox::RunFiles {
+                            attached: compiled.files.clone(),
+                            understanding: understanding_file.clone(),
+                        },
+                    };
                     let protected = harness::Protected {
                         root: told_off.clone(),
                         unread,
-                        container,
+                        sandbox: Some(sandbox),
                         // The model and effort it was sent to, recorded
                         // with it.
                         model: compiled.model.clone(),
@@ -6777,14 +6714,14 @@ impl PromptMode {
                         .ok()
                         .flatten()
                         .flatten();
-                    // Run in a container with no code, a spec run is followed
-                    // by a build on the host, as the SpecBuildScope says, so
-                    // the host's reference and shape guidance are current;
-                    // the task shows Building until it is over.
-                    if container_kind == Some(crate::container::RunKind::Spec) {
-                        // What the container's build left out of the
-                        // manifest outside the reference, still there, the
-                        // host's build owns as before.
+                    // A spec run is followed by a build on the host, as the
+                    // SpecBuildScope says, so the host's reference and shape
+                    // guidance are current; the task shows Building until it
+                    // is over.
+                    if profile_kind == crate::sandbox::ProfileKind::Spec {
+                        // What a build in its sandbox left out of the manifest
+                        // outside the reference, still there, the host's build
+                        // owns as before.
                         crate::piton_build::keep_owned(&project_dir, &owned_before);
                         let ended = this
                             .update(cx, |this, cx| {
@@ -6957,7 +6894,7 @@ impl PromptMode {
                                         sent_system.as_deref(),
                                     );
                                     if let Some(session) = this.session.of_mut(lane) {
-                                        session.in_container = Some(contained);
+                                        session.in_container = None;
                                     }
                                 }
                             });
@@ -6983,13 +6920,19 @@ impl PromptMode {
             let paused = pausing.load(Ordering::SeqCst);
             record.cancelled = is_cancelled() && !paused;
             record.paused = paused;
-            record.phases = phases.close(if paused {
+            let closed = phases.close(if paused {
                 "paused"
             } else if record.cancelled {
                 "cancelled"
             } else {
                 "ended"
             });
+            // Resumed, its phases go on from those it had.
+            if resuming.is_some() {
+                record.phases.extend(closed);
+            } else {
+                record.phases = closed;
+            }
             // When it was sent and was over, so how long it took is kept.
             if let Some(Some((started, ended))) = this
                 .update(cx, |this, cx| {
@@ -7423,15 +7366,13 @@ impl PromptMode {
                     // the compiled reference, read only, and no spec source,
                     // so it is kept off nothing else.
                     let protected = harness::Protected {
-                        container: Some(crate::container::Plan::new(
-                            crate::container::RunKind::Question,
-                            agent,
-                            &project_dir,
-                            &crate::project_tree::Locations::read(&project_dir),
-                            None,
-                            crate::container::Platform::current(),
-                        )
-                        .with_files(&compiled.files)),
+                        sandbox: Some(harness::Sandboxed {
+                            kind: crate::sandbox::ProfileKind::Question,
+                            files: crate::sandbox::RunFiles {
+                                attached: compiled.files.clone(),
+                                understanding: None,
+                            },
+                        }),
                         model: compiled.model.clone(),
                         effort: compiled.effort.clone(),
                         files: compiled.files.clone(),
@@ -7907,6 +7848,7 @@ impl PromptMode {
                     .hover(move |row| row.bg(hover))
                     .child(div().flex_none().child(task.status.tag(cx)))
                     .children(elapsed)
+                    .children(rate_label(("compact-rate", ix), task, None, cx).filter(|_| task.status.is_active()))
                     .child(
                         div()
                             .flex_1()
@@ -8889,119 +8831,18 @@ fn running_tasks(tasks: &[PromptTask], working: Lanes) -> Vec<(usize, SharedStri
 /// lane's, where a Freeform task, which keeps both busy, runs too, then the
 /// spec lane's.
 impl PromptMode {
-    /// Does what a run that couldn't go in its container asked, from its
-    /// button: starts or sets up Podman's machine, what that prints going to
-    /// the run's raw output, or logs the harness in; then, once that
-    /// succeeds, sends the prompt again, as the ContainerEnvironmentScope
-    /// says. `table` names the task or question, as its button was given.
+    /// Does what a run whose sandbox couldn't be applied offers, from its
+    /// button: opens the sandbox's documentation, as the SandboxScope's
+    /// failing closed says.
     fn run_action(
         &mut self,
         action: task_table::RunAction,
-        table: usize,
-        window: &mut Window,
+        _table: usize,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let key = if table >= ANSWER_ACTION_BASE {
-            ask_pane::QuestionKey::Answer(table - ANSWER_ACTION_BASE)
-        } else if table >= ASK_ACTION_BASE {
-            ask_pane::QuestionKey::Ask(table - ASK_ACTION_BASE)
-        } else {
-            ask_pane::QuestionKey::Task(table)
-        };
-        let Some(project_dir) = self.project_dir.clone() else {
-            return;
-        };
-        let this = cx.entity().downgrade();
         match action {
-            task_table::RunAction::InstallPodman => {
-                cx.open_url(crate::container::Platform::current().install_url());
-            }
-            task_table::RunAction::Build(fix) => {
-                use crate::container::BuildFix;
-                let resend = move |window: &mut Window, cx: &mut App| {
-                    this.update(cx, |this, cx| this.resend_question(key, window, cx))
-                        .ok();
-                };
-                match fix {
-                    BuildFix::UseLatest(agent) => {
-                        crate::container::use_latest(agent);
-                        resend(window, cx);
-                    }
-                    BuildFix::TryAgain => resend(window, cx),
-                    BuildFix::CopyDetails => {
-                        let details = crate::container::build_log::file()
-                            .and_then(|file| std::fs::read_to_string(file).ok())
-                            .unwrap_or_default();
-                        cx.write_to_clipboard(ClipboardItem::new_string(details));
-                    }
-                    BuildFix::FreeSpace => confirm_free_space(window, cx, resend),
-                }
-            }
-            // The harness the run needed, never another.
-            task_table::RunAction::LogIn(agent) => {
-                crate::login_view::LoginView::open(
-                    agent,
-                    project_dir,
-                    window,
-                    cx,
-                    move |window, cx| {
-                        window.close_dialog(cx);
-                        this.update(cx, |this, cx| this.resend_question(key, window, cx))
-                            .ok();
-                    },
-                );
-            }
-            task_table::RunAction::Machine(machine) => {
-                let (tx, rx) = std::sync::mpsc::channel();
-                std::thread::spawn(move || {
-                    let result = crate::container::run_machine_action(machine, &mut |line| {
-                        tx.send(Ok(line)).ok();
-                    });
-                    if let Err(err) = result {
-                        tx.send(Err(format!("{err:#}"))).ok();
-                    } else {
-                        tx.send(Err(String::new())).ok();
-                    }
-                });
-                // Collected on a timer: the commands report from their own
-                // thread.
-                cx.spawn_in(window, async move |this, cx| {
-                    loop {
-                        cx.background_executor()
-                            .timer(std::time::Duration::from_millis(100))
-                            .await;
-                        let mut over = None;
-                        let lines: Vec<_> = rx.try_iter().collect();
-                        let updated = this.update_in(cx, |this, window, cx| {
-                            for line in lines {
-                                match line {
-                                    Ok(line) => {
-                                        if let Some(task) = this.question_mut(key) {
-                                            task.reply.apply(HarnessEvent::Output(line));
-                                        }
-                                    }
-                                    Err(err) => over = Some(err),
-                                }
-                            }
-                            match over.as_deref() {
-                                // Done: the prompt goes again.
-                                Some("") => this.resend_question(key, window, cx),
-                                Some(err) => {
-                                    if let Some(task) = this.question_mut(key) {
-                                        task.reply.push_error(err.to_string());
-                                    }
-                                }
-                                None => {}
-                            }
-                            cx.notify();
-                        });
-                        if updated.is_err() || over.is_some() {
-                            break;
-                        }
-                    }
-                })
-                .detach();
-            }
+            task_table::RunAction::SandboxDocs => cx.open_url(crate::sandbox::DOCUMENTATION),
         }
     }
 }
@@ -11577,6 +11418,7 @@ mod tests {
     fn restored_tasks_list_their_changed_files() {
         let (dir, before, after) = changed_repo("changed-restore");
         let saved = || SavedPrompt {
+            record_error: None,
             sent_at: 0,
             recorded_at: None,
             anchor: HiddenAnchor::random(),
@@ -11990,6 +11832,7 @@ mod tests {
     fn previous_tasks_say_how_long_they_took() {
         use super::Took;
         let saved = |record: Option<RunRecord>, sent_at: u64, recorded: Option<u64>| SavedPrompt {
+            record_error: None,
             anchor: HiddenAnchor::random(),
             text: "Do it".into(),
             record,
@@ -12055,6 +11898,103 @@ mod tests {
         assert!(row_shown(cx), "the heading didn't expand it");
         click(cx);
         assert!(!row_shown(cx), "the heading didn't collapse it");
+    }
+
+    /// An open task's Time section shows where its time went: a segment
+    /// per kind with time, a legend largest first, and a timeline; a task
+    /// from before its phases were kept shows its total alone.
+    #[gpui_kit::test]
+    async fn an_open_task_shows_where_its_time_went(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        use crate::time_breakdown::{Kind, Timed};
+        let (prompt_mode, handle) = open(cx);
+        let timed = |name: &str, began: u64, ended: u64| Timed {
+            name: name.into(),
+            tool: name.starts_with("tool ").then(|| "t1".to_string()),
+            began,
+            ended: Some(ended),
+        };
+        let (rated, bare) = prompt_mode.update(cx, |this, cx| {
+            let mut add = |this: &mut super::PromptMode| {
+                let ix = this.push_task("Do it".into(), cx);
+                this.tasks[ix].mode = Some(SendMode::Code);
+                this.tasks[ix].status = TaskStatus::Done;
+                let start = std::time::UNIX_EPOCH + Duration::from_secs(1_000);
+                this.tasks[ix].started = Some(start);
+                this.tasks[ix].ended = Some(start + Duration::from_secs(60));
+                ix
+            };
+            let rated = add(this);
+            *crate::time_breakdown::lock(&this.tasks[rated].timing) = vec![
+                timed("queued", 0, 2_000),
+                timed("harness", 2_000, 60_000),
+                timed("tool Bash cargo build", 10_000, 40_000),
+            ];
+            let bare = add(this);
+            show_previous_tasks(this);
+            (rated, bare)
+        });
+        let open_task = |ix: usize, cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                prompt_mode.update(cx, |this, cx| {
+                    this.open_in_tab(super::tasks_tab::Opened::Task(ix), window, cx)
+                });
+                window.render_frame(cx);
+            })
+            .unwrap();
+        };
+        open_task(rated, cx);
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("time-section").is_some(), "no Time section");
+            for kind in [Kind::Model, Kind::Commands] {
+                assert!(window.try_find(("time-segment", kind.index())).is_some(), "no {kind:?} segment");
+            }
+            assert!(window.try_find(("time-segment", Kind::Files.index())).is_none());
+            // Largest first: Commands' 30s above the model's 28s.
+            let commands = window.find(("time-legend", Kind::Commands.index())).bounds();
+            let model = window.find(("time-legend", Kind::Model.index())).bounds();
+            assert!(commands.top() < model.top(), "the legend isn't largest first");
+            let bar = window.find("time-bar").bounds();
+            assert_eq!(bar.size.height, gpui_kit::px(12.));
+            assert!(window.try_find(("time-stretch", 0usize)).is_some(), "no timeline");
+            // Its wait in the queue beneath, never part of the chart.
+            assert!(window.try_find("time-queued").is_some(), "no queue line");
+            assert_eq!(window.find("time-timeline").bounds().left(), bar.left());
+        })
+        .unwrap();
+        open_task(bare, cx);
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("time-not-recorded").is_some(), "no total for a task without phases");
+            assert!(window.try_find("time-queued").is_none());
+            assert!(window.try_find("time-bar").is_none());
+        })
+        .unwrap();
+    }
+
+    /// While a Code task writes its reply, its header shows how fast,
+    /// beside its time, as the reply streams in.
+    #[gpui_kit::test]
+    async fn a_running_code_task_shows_its_live_output_rate(cx: &mut TestAppContext) {
+        use crate::chat_input::SendMode;
+        let (prompt_mode, handle) = open(cx);
+        let ix = prompt_mode.update(cx, |this, cx| {
+            let ix = this.push_task("Do it".into(), cx);
+            this.tasks[ix].mode = Some(SendMode::Code);
+            this.tasks[ix].live = true;
+            this.show_compiled(ix, "Prompt_0".into(), "Do it".into(), cx);
+            this.apply_event(ix, HarnessEvent::TextStarted, cx);
+            this.apply_event(ix, HarnessEvent::TextDelta("x".repeat(80)), cx);
+            ix
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        prompt_mode.update(cx, |this, cx| {
+            this.apply_event(ix, HarnessEvent::TextDelta("x".repeat(80)), cx)
+        });
+        cx.update_window(handle, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find(("task-rate", ix)).is_some(), "no live rate in the header");
+        })
+        .unwrap();
     }
 
     /// Once a run is over, its task header shows its average output rate
@@ -13251,6 +13191,7 @@ mod tests {
         let anchor = HiddenAnchor::random();
         let name = anchor.name().to_string();
         let task = PromptTask::restore(SavedPrompt {
+            record_error: None,
             sent_at: 0,
             recorded_at: None,
             anchor,
@@ -13265,6 +13206,7 @@ mod tests {
         ));
 
         let unrecorded = PromptTask::restore(SavedPrompt {
+            record_error: None,
             sent_at: 0,
             recorded_at: None,
             anchor: HiddenAnchor::random(),
@@ -13273,6 +13215,18 @@ mod tests {
         });
         assert_eq!(unrecorded.status, TaskStatus::Unrecorded);
         assert!(unrecorded.reply.done && unrecorded.compiled.is_none());
+        // It opens all the same, saying why there is nothing to show.
+        assert!(matches!(unrecorded.reply.rows().as_slice(), [OutputRow::Notice(_)]));
+        let unreadable = PromptTask::restore(SavedPrompt {
+            record_error: Some("Its record couldn't be read: bad".into()),
+            sent_at: 0,
+            recorded_at: None,
+            anchor: HiddenAnchor::random(),
+            text: "Broken".into(),
+            record: None,
+        });
+        assert_eq!(unreadable.status, TaskStatus::Unrecorded);
+        assert!(matches!(unreadable.reply.rows().as_slice(), [OutputRow::Notice(_)]));
     }
 
     /// A task sent more while it ran: a result that leaves a message sent
@@ -13384,6 +13338,7 @@ mod tests {
             failed.note(&event);
         }
         let failed = PromptTask::restore(SavedPrompt {
+            record_error: None,
             sent_at: 0,
             recorded_at: None,
             anchor: HiddenAnchor::random(),
@@ -13473,6 +13428,7 @@ mod tests {
                 record.note(&HarnessEvent::Output((*line).into()));
             }
             SavedPrompt {
+                record_error: None,
                 sent_at: 0,
                 recorded_at: None,
                 anchor: HiddenAnchor::random(),
@@ -13489,6 +13445,7 @@ mod tests {
             ]),
             saved(&["not json"]),
             SavedPrompt {
+                record_error: None,
                 sent_at: 0,
                 recorded_at: None,
                 anchor: HiddenAnchor::random(),

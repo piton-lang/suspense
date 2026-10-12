@@ -1,0 +1,6 @@
+- [The kinds are Spec build, Preparing, Model, Commands, Files, Subagents, Web, and Other; queueing is not one](.claude/reference/ui/components/right-sidebar/tasks/index.md#time-breakdown)
+- [Time waiting in the queue before it was sent is left out of the chart](.claude/reference/ui/components/right-sidebar/tasks/index.md#time-breakdown)
+- [The chart starts when the task was sent from the queue, or straight away where it never queued; shares are of the time it was under way](.claude/reference/ui/components/right-sidebar/tasks/index.md#time-breakdown)
+- [How long it waited in the queue is given beneath the timeline, muted, as "Queued 2:14 before it started"](.claude/reference/ui/components/right-sidebar/tasks/index.md#time-breakdown)
+- [The queue line is left out where the task never waited](.claude/reference/ui/components/right-sidebar/tasks/index.md#time-breakdown)
+- [Each kind keeps a theme chart colour of its own, the same in every task](.claude/reference/ui/components/right-sidebar/tasks/index.md#time-breakdown)

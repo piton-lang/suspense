@@ -1,0 +1,8 @@
+- [Windows: one AppContainer per run, ACL grants for its SID only, ledger, job, suspended start](../../.claude/reference/scope/sandbox/index.md#windows)
+- [Windows programs the harness needs granted outside the project](../../.claude/reference/scope/sandbox/index.md#programs)
+- [Policy compiled into per-path read or read-write grants](../../.claude/reference/scope/sandbox/index.md#policy)
+- [Fail closed: a run never starts unrestricted, the reason is shown](../../.claude/reference/scope/sandbox/index.md#fail-closed)
+- [Channels: the piton channel is a named pipe only the run and the user can open](../../.claude/reference/scope/sandbox/index.md#channels)
+- [Compatibility: PowerShell, MSVC, Cargo work inside each profile](../../.claude/reference/scope/sandbox/index.md#compatibility)
+- [Verification: junction, symlink, hard link, 8.3, ADS, job escape, no leftover grants](../../.claude/reference/scope/sandbox/index.md#verification)
+- [Status card names AppContainer and what it enforces, or why it can't](../../.claude/reference/scope/settings-window/index.md#sandbox-status)

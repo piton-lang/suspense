@@ -1,0 +1,8 @@
+- [The ribbon's tabs are, in order: Project, Planning, Code, Spec, and Application](.claude/reference/ui/components/ribbon/index.md#description)
+- [The Planning tab sits between Project and Code](.claude/reference/ui/components/ribbon/planning-tab/index.md#description)
+- [Planning takes no mode's colour: its label is in the tab row's own colour, as Project's and Application's are](.claude/reference/ui/components/ribbon/planning-tab/index.md#description)
+- [Planning has no groups yet: opened alone, the command area reads "No commands yet"](.claude/reference/ui/components/ribbon/planning-tab/index.md#groups)
+- [Opened beside other tabs, Planning adds nothing to the command area](.claude/reference/ui/components/ribbon/planning-tab/index.md#groups)
+- [Alt+1 onward open the tabs in the order shown: Alt+2 opens Planning and Alt+5 Application; a number past the last does nothing](.claude/reference/ui/components/ribbon/index.md#description)
+- [Each Alt+number opens its tab alone, expanding a collapsed ribbon first, and does nothing while an inset panel is open](.claude/reference/ui/components/ribbon/index.md#description)
+- [The window always opens on Project](.claude/reference/ui/components/ribbon/index.md#description)

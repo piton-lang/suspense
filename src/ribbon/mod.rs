@@ -22,6 +22,7 @@ use crate::project_indicator::ProjectIndicator;
 
 mod application_tab;
 mod code_tab;
+mod planning_tab;
 mod project_tab;
 mod spec_tab;
 
@@ -35,6 +36,7 @@ actions!(
         ShowTab2,
         ShowTab3,
         ShowTab4,
+        ShowTab5,
         RunPrimary,
         RunRelease
     ]
@@ -93,11 +95,12 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-shift-f5", RunRelease, None),
         #[cfg(not(target_os = "macos"))]
         KeyBinding::new("ctrl-shift-f5", RunRelease, None),
-        // Alt+1 to Alt+4 open the tabs in the order they are shown.
+        // Alt+1 to Alt+5 open the tabs in the order they are shown.
         KeyBinding::new("alt-1", ShowTab1, None),
         KeyBinding::new("alt-2", ShowTab2, None),
         KeyBinding::new("alt-3", ShowTab3, None),
         KeyBinding::new("alt-4", ShowTab4, None),
+        KeyBinding::new("alt-5", ShowTab5, None),
     ]);
 }
 
@@ -105,6 +108,7 @@ pub fn bind_keys(cx: &mut App) {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RibbonTab {
     Project,
+    Planning,
     Code,
     Spec,
     Application,
@@ -112,8 +116,9 @@ pub enum RibbonTab {
 
 impl RibbonTab {
     /// Every tab, in order.
-    pub const ALL: [RibbonTab; 4] = [
+    pub const ALL: [RibbonTab; 5] = [
         RibbonTab::Project,
+        RibbonTab::Planning,
         RibbonTab::Code,
         RibbonTab::Spec,
         RibbonTab::Application,
@@ -122,6 +127,7 @@ impl RibbonTab {
     fn label(self) -> &'static str {
         match self {
             RibbonTab::Project => "Project",
+            RibbonTab::Planning => "Planning",
             RibbonTab::Code => "Code",
             RibbonTab::Spec => "Spec",
             RibbonTab::Application => "Application",
@@ -134,7 +140,7 @@ impl RibbonTab {
         match self {
             RibbonTab::Code => Some(crate::chat_input::SendMode::Code),
             RibbonTab::Spec => Some(crate::chat_input::SendMode::Spec),
-            RibbonTab::Project | RibbonTab::Application => None,
+            RibbonTab::Project | RibbonTab::Planning | RibbonTab::Application => None,
         }
     }
 
@@ -142,6 +148,7 @@ impl RibbonTab {
     fn commands(self, cx: &App) -> Vec<CommandPlace> {
         match self {
             RibbonTab::Project => project_tab::COMMANDS.to_vec(),
+            RibbonTab::Planning => planning_tab::COMMANDS.to_vec(),
             RibbonTab::Code => code_tab::commands(cx),
             RibbonTab::Spec => spec_tab::COMMANDS.to_vec(),
             RibbonTab::Application => application_tab::COMMANDS.to_vec(),
@@ -762,8 +769,9 @@ impl Render for Ribbon {
             row.push(group(label, commands));
         }
         if row.is_empty() {
+            // Lets UI tests find it; inert in normal builds.
             row.push(
-                div()
+                gpui_kit::TestSupportExt::test_support(div().id("no-commands"))
                     .flex()
                     .items_center()
                     .text_sm()

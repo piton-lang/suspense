@@ -1,4 +1,5 @@
 use /lib
+from /ui/components/right-sidebar import TasksTab
 from /scope/prompt-mode/modes import PromptModes
 
 export anchor MessageListBackgrounds:
@@ -9,14 +10,7 @@ export anchor MessageListBackgrounds:
         strong fill. A task from the history that doesn't say which mode it
         was sent in has no bar and keeps the tab bar's colour.
 
-        Each task in the previous tasks list hints at the mode it was sent in:
-        its heading's background is a faint tint of that mode's colour, of the
-        @{PromptModes}, red for Code, purple for Chain, blue for Spec,
-        green for Ask, and grey for Freeform, far fainter than the latest
-        task's header, so the list reads as a column of the list's own
-        background with each task only touched by its colour. A task whose
-        mode isn't known, as one from the history that doesn't say, keeps the
-        list's background untinted. Its status label, prompt, checkbox, and
-        buttons stay readable over the tint, in light and dark mode, and its
-        hover and open states still show over it. An open task's prompt and
-        output beneath its heading are not tinted.
+        Each task in the Tasks tab hints at the mode it was sent in by the
+        bar at its row's left, in that mode's colour, as the @{TasksTab}
+        says, never by tinting its whole row.
+

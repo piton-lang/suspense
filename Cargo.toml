@@ -61,6 +61,7 @@ gpui-kit = { version = "0.6.1", features = [
     "tree-sitter-yaml",
     "tree-sitter-zig",
 ] }
+globset = "0.4"
 ignore = "0.4"
 imagesize = "0.14"
 lsp-types = "0.97"
@@ -75,11 +76,19 @@ tree-sitter-language = "0.1"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Isolation",
+    "Win32_Storage_FileSystem",
     "Win32_System_Console",
+    "Win32_System_IO",
+    "Win32_System_Pipes",
     "Win32_System_JobObjects",
     "Win32_System_Registry",
     "Win32_System_Threading",

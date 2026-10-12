@@ -168,7 +168,7 @@ impl Step {
                 "Changes the code to do what the prompt asks, reading the spec to know how, and leaves the spec as it is. Code tasks run on this machine, in the project."
             }
             Step::Spec => {
-                "Changes the spec, the description of what the application should be, and leaves the code as it is, so a change can be agreed on before anything is built. Spec tasks run in a container that holds only the spec, and the spec is built after each."
+                "Changes the spec, the description of what the application should be, and leaves the code as it is, so a change can be agreed on before anything is built. Spec tasks run in a sandbox that keeps them off the code, and the spec is built after each."
             }
             Step::Chain => {
                 "Changes the spec first, then hands it to a code step that changes the code to match, one prompt doing both. It is where the chat input starts, and the usual way to ask for a change."

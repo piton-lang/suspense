@@ -1,0 +1,6 @@
+- [While writing, a run's status shows a live output rate beside its elapsed time, as "42 tok/s"](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)
+- [Once over, the task header shows the average rate, output tokens over time waiting on the model](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)
+- [The task header is one slim line: mode bar, status and time, summary, then buttons](.claude/reference/scope/prompt-mode/message-list/index.md#description)
+- [Claude Code is run as claude -p with stream-json output, its events read as they stream](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [A rate too little to work out is left out rather than shown as zero](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)
+- [The rate shows for every mode, from streamed deltas, Claude Code run with --include-partial-messages](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)

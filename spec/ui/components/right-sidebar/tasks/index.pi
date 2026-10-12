@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/project-data import ProjectData
 from /scope/application/Body import Body
 from /scope/prompt-mode import PromptEditor
 from /scope/prompt-mode/chat-input import ChatInput
@@ -188,7 +189,13 @@ export ui-component TasksTab:
         with the chain as a step is added. A single task, not part of a
         chain, keeps its own bar.
         Clicking a row opens it, as below, and the row stays highlighted
-        while it is open. Hovering a row shows its prompt's first lines in
+        while it is open. A row in Previous opens in the tab like any
+        other, done, failed, cancelled, or not recorded alike, and its
+        output opens in a body tab of its own at the same time, so every
+        previous task can be read whole, its header, output table, and
+        changed files, however old, as long as its record is in the history.
+        One whose record can't be read opens all the same, saying why,
+        muted, in place of its output. Hovering a row shows its prompt's first lines in
         its tooltip.
 
     virtualized:
@@ -259,6 +266,7 @@ export ui-component TasksTab:
         - Status: its status label and how long it took, or has been running, as the MessageList writes them, on one line
         - Prompt: its prompt, as it was typed, in a GrowingTextInput, and beneath it what is attached to it
         - Steps: for a chain, its steps, as its chain steps say, with Add step; a task that isn't a chain has no Steps section
+        - Time: where its time went, as its time breakdown says, once it has started
         - Details: the rest at a glance, its lane, its place in the queue while it waits, the conversation it carries on or that it starts a new one, its model and effort, and once it has run, how many tool calls it made, its errors, its tokens and their cost, and how many files it changed, each a labelled figure, those that don't apply left out
         - Parameters: its mode, its model and effort, its Slice toggle, and whether it starts a new conversation, each as the chat input shows it
         - Actions: Resend, Send to Spec or Send to Code, Pause while it runs or Resume while it is paused, Cancel while it is under way, paused, or queued, and Open output, as the PromptSending gives them
@@ -322,3 +330,71 @@ export ui-component TasksTab:
         a step whose step before it failed or was cancelled is never sent, as
         none of a chain's are.
 
+
+    timeBreakdown:
+        An open task that has started, and an open chain or step, has a Time
+        section, beneath its Steps, or its Prompt where it has none, and
+        above its Details, showing where its time went, so what is slow can
+        be seen at a glance: waiting on the model, building the spec,
+        running commands, and the rest.
+
+        Its time under way is split into kinds, each with a colour of its own,
+        drawn from the theme's chart colours, distinct from one another in light
+        and dark mode and never a mode's colour, so a kind looks the same in
+        every task:
+
+        \\
+        - Spec build: building the spec ahead of it, and after it for a spec step
+        - Preparing: making its sandbox and filtered repository, and the snapshots taken as it started and ended
+        - Model: the harness waiting on the model, thinking and writing, between tool calls
+        - Commands: shell commands it ran and waited on, a build or tests among them
+        - Files: reading, searching, and editing files
+        - Subagents: subagents it waited on
+        - Web: fetching and searching the web
+        - Other: any other tool call, and time that fits none of these
+        \\
+
+        Each kind's time is worked out from the times its record keeps, as
+        the @{ProjectData} says: each phase from its start to its end, and
+        each tool call from when it was made to when its result came,
+        counted as its kind; Model is the time between, from each turn's
+        start, or a tool call's result, to the next tool call or the turn's
+        end. A subagent's own tool calls count as Subagents, not as their own
+        kinds, and background tasks that ran beside the main thread are
+        never counted twice: only the time the task itself waited on them.
+        Time while paused is left out, as is the gap between a chain's steps,
+        and time spent waiting in the queue before it was sent: the chart
+        starts when the task was sent from the queue, or straight away where
+        it never queued, so its kinds' shares are of the time it was under
+        way. How long it waited in the queue is given beneath the timeline,
+        muted, as "Queued 2:14 before it started", left out where it never
+        waited.
+
+        Along the top of the section, a single bar, the section's full width
+        and 12 pixels tall, with corners rounded 3 pixels, split into a
+        segment per kind in the order above, each as wide as its share of
+        the whole, a pixel of the section's surface between segments, kinds
+        with no time left out. Beneath it, a legend, one line per kind with
+        time, in order of the time it took, largest first: a square of its
+        colour, its name, its time, as the @{MessageList} writes times, and
+        its share, muted, as "Model 4:12 · 61%". The largest is in the
+        theme's text colour and the rest muted, so what took longest stands
+        out. Hovering a segment, or its legend line, lightens the other
+        segments and shows a tooltip giving the kind's time, its share, and,
+        for Commands, Files, Subagents, and Web, how many calls and the
+        slowest of them, as "npm run build, 1:38".
+
+        Beneath the legend, a timeline of the task from start to end, the
+        section's full width and 24 pixels tall: each phase and tool call as
+        a bar at its place along it, in its kind's colour, so long waits and
+        when they came can be seen, with a muted time at either end. Hovering
+        a bar names what it was and how long it took, and clicking a tool
+        call's bar opens the task's output scrolled to that row.
+
+        While the task runs, the section follows it, the kind under way
+        growing in place and the timeline extending to now. A chain's Time
+        section shows its steps' time together, the bar split by kind across
+        all of them, and the timeline marking where each step began; each
+        step's own section shows its own. A task from before its phases were
+        kept shows only its total time, muted, saying its breakdown wasn't
+        recorded.

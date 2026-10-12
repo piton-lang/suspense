@@ -62,8 +62,8 @@ impl Agent {
         }
     }
 
-    /// What every run of it is given in its environment, on the host or in
-    /// a container: for Claude Code, the claude.ai account's connectors
+    /// What every run of it is given in its environment, whatever its
+    /// sandbox: for Claude Code, the claude.ai account's connectors
     /// turned off, so no run is told one needs authorizing, as the
     /// HarnessIntegrationScope says. MCP servers a project configures stay.
     pub fn env(self) -> &'static [(&'static str, &'static str)] {

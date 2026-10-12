@@ -721,7 +721,10 @@ pub fn run_agent(
     cancel: &Cancel,
     on_line: &dyn Fn(String),
 ) -> Result<String> {
-    let mut child = crate::harness::one_off_command(project_dir)
+    // Reading the project, never changing it, as a question does.
+    let mut command = crate::harness::one_off_command(project_dir);
+    let _sandbox = crate::harness::sandboxed(crate::sandbox::ProfileKind::Question, project_dir, &mut command)?;
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

@@ -1,0 +1,366 @@
+use /lib
+from /scope/application import Application
+from /scope/edge-releases import EdgeReleases
+from /scope/harness-integration import HarnessIntegration
+from /scope/project-data import ProjectData
+from /scope/project-locations import ProjectLocations
+from /scope/prompt-mode/mode-system-prompts import ModeSystemPrompts
+from /scope/settings-window import SettingsWindow
+from /scope/spec-build import SpecBuild
+
+export feature Sandbox:
+    pitch:
+        Native, per-command filesystem access control for the coding agents
+        Suspense runs: a Code run can't read or change the spec's source, a
+        Spec run can't read or change the code, enforced by the operating
+        system for the agent and everything it starts, with no container,
+        virtual machine, or WSL to install.
+
+    description:
+        Every run of a harness the application starts, and everything that
+        run starts in turn, shells, compilers, interpreters, build tools,
+        and the project's own MCP servers among them, runs natively on the
+        host under a sandbox: a filesystem policy the operating system
+        enforces, applied before the harness's program runs and inherited by
+        every process it starts, so no descendant can lift or widen it. It
+        is not a prompt, an instruction to the harness, a rule given to its
+        tools, or a check of the commands it runs: what the policy denies,
+        the system refuses, whatever program asks.
+
+        There are no containers. Docker, Podman, chroot, virtual machines,
+        and WSL are never used or asked for, and nothing about the harness,
+        its login, or its toolchain is duplicated: each run uses the harness
+        installed on the host, its login, and its settings, as the
+        @{HarnessIntegration} says.
+
+        The sandbox is a small Rust module of the application's own,
+        `sandbox`, with one policy model and a backend for each platform. It
+        restricts the filesystem only: it is not a general container
+        runtime, and limits neither the network nor the processor, nor
+        memory, beyond what the @{Application} says of memory.
+
+    failClosed:
+        A sandbox that can't be applied as its policy says is never weakened
+        to run anyway. Where the platform can't enforce a policy, as a Linux
+        kernel without Landlock or with too old a version of it, the policy
+        is contradictory, or applying it fails at any step, the run is never
+        started, and never started unrestricted: the task or question fails
+        before anything runs, saying in plain words that its sandbox couldn't
+        be applied and why, naming the platform's missing capability or the
+        path at fault, with a Details disclosure holding the backend's own
+        error. There is no setting that turns the sandbox off for a profile
+        that restricts anything.
+
+    policy:
+        A policy is compiled from a profile, as below, before each run:
+
+        \\
+        - the working directory, the project directory
+        - the program and its arguments, its environment, and its standard input, output, and error
+        - read-only paths, which can be read, listed, and executed from, never changed
+        - read-write paths, which can also be created in, changed, renamed within, and deleted from
+        - denied paths, which can't be read, listed, executed from, or changed
+        \\
+
+        Within the project directory everything is denied unless a grant
+        reaches it: the project itself is never granted whole where anything
+        in it is denied. A grant of a folder that holds a denied path is
+        expanded when the policy is compiled into grants of each of its
+        entries but the one leading to the denied path, level by level, so
+        what the policy allows is only ever an allow-list the backends can
+        enforce. Where two grants overlap, the narrower wins, and a denied
+        path beats any grant that would reach it. A grant that can't be
+        expanded so, as one naming a file that is denied, or a denied path
+        whose parent is granted read-write and could be renamed over it, is a
+        contradiction, and the run doesn't start.
+
+        Every path is resolved before it is granted: made absolute, `..`
+        removed, and every symbolic link and junction followed, and the path
+        granted is the one it resolves to; a grant that resolves into a
+        denied path, or a denied path reachable from a grant by a link, is a
+        contradiction. A file with more than one hard link, in a granted
+        path, that is also a denied file, is found by its identity, its
+        device and inode, or its file id on Windows, and the run refused,
+        saying which. Grants are made on the path's open handle where the
+        platform allows it, never on its name looked up again later, so
+        nothing can be swapped in between the check and the grant.
+
+        Paths outside the project are granted explicitly, never the user's
+        whole home: what the system and the toolchains need, read-only, the
+        system's own folders, the harness's installation, and the language
+        toolchains and their caches found on the host, as `~/.cargo`,
+        `~/.rustup`, a Node version manager's folder, Homebrew, and the
+        Xcode and SDK folders; the harness's own folders for its login,
+        settings, and sessions, as `~/.claude`, read-write; the toolchains'
+        caches that builds write to, as `~/.cargo/registry`, read-write; and
+        a temporary directory of the run's own, read-write, made for it and
+        removed after it, given as TMPDIR, TMP, and TEMP, so a build's
+        scratch files never land in a shared place. No grant outside the
+        project ever reaches into it: one that would, as a toolchain folder
+        holding the project, is cut at the project's edge, and the project is
+        only reached through its own grants.
+
+    profiles:
+        Each kind of run has a profile, saying what of the project it may
+        read and change, built from the project's locations, as the
+        @{ProjectLocations} says, and the project's own classification of its
+        paths, below. The profile is chosen by the application from what the
+        run is, never by the harness, the prompt, or anything the run does,
+        and a run can't change its own profile or grants, nor start anything
+        under a wider one.
+
+        \\
+        - Code, for a Code task and a Chain prompt's code step: the code location and every other path classed as code, read-write, and its tests; the compiled reference, the harness directory's reference folder, read-only; the build's output folders, as `target`, read-write; never the spec location or anything classed as spec
+        - Spec, for a Spec task and a Chain prompt's spec step and spec follow-up: the spec location and every path classed as spec, read-write; the compiled reference, read-write; `.piton`, read-write; piton.config.pi, read-only; never the code location or anything classed as code, unless the project lets its Spec runs read the code, when the code is read-only, and, where it lets them read the whole project, every other path of the project too, read-only
+        - Question, for a question from the Ask tab, and the application's own runs that read the project, as divergence analysis and finding run targets: the code, the spec, the reference, and piton.config.pi, all read-only, nothing writable in the project
+        - Freeform, for a Freeform task, which may change either: the whole project read-write, but for its `.git` and, unless its Suspense data level is set to Edit, the project's data under `.suspense`, so even an unrestricted run stays inside the project
+        \\
+
+        Every profile also has: its prompt's attached files, read-only, and
+        its understanding file, read-write, each granted on its own; the
+        Suspense fluency and Piton fluency files, read-only; and the grants
+        outside the project above. The application's small runs that read
+        nothing of the project, as commit notes, commit messages, and prompt
+        titles, run with no grant in the project at all.
+
+    classification:
+        Which paths are code and which are spec is the project's to say, in
+        `.suspense/sandbox.json`, saved with its data, as the @{ProjectData}
+        says, and edited in the @{SettingsWindow}'s Sandbox section. It holds
+        a list of code roots and a list of spec roots, each a path in the
+        project, and patterns classing files anywhere as code or spec, as
+        `**/*.pi` for spec, so a project laid out in any way, with several
+        roots, or spec and code side by side, can be classed. With no file,
+        the project's code location is its only code root and its spec
+        location its only spec root, as the @{ProjectLocations} says. A path
+        classed as both is a contradiction, and runs refuse until it is
+        resolved; a path classed as neither is denied to Code and Spec runs
+        alike, and readable by questions. The profiles are built from the
+        classification each time a run starts, so a change takes effect from
+        the next run.
+
+        The same file holds the project's own levels for each profile, as
+        set in the @{SettingsWindow}'s grid: for each mode and each area of
+        the project, code, spec source, compiled reference, Suspense data,
+        any area the user has added, each a name with its folders and
+        patterns, and other files, everything none of those covers, Edit,
+        Read, or No access, where it differs from the profile's default. An
+        added area may not overlap code, spec, the reference, Suspense data,
+        or another added area; one that does is a contradiction. The levels
+        are applied over the defaults when the profile is built, and never
+        past what the sandbox allows: a level that would let a Code run read
+        the spec's source, a Spec run change the code, a Question run change
+        anything, or any run but Freeform change Suspense data, is refused
+        when the policy is compiled, as a contradiction, and the run doesn't
+        start until it is put right.
+
+    git:
+        Denying the spec's folder is not enough when git can show it, as `git
+        show HEAD:spec/example.pi`, from the repository's objects, packs,
+        index, stash, or reflog. So no Code, Spec, or Question run is ever
+        granted the project's `.git`, nor a worktree's `.git` file or the
+        folder it points to, nor any git object store on the host that holds
+        the project's history.
+
+        Instead, each such run is given a filtered repository of its own: a
+        bare git directory the application makes in the run's temporary
+        directory, holding a single commit, with no history, of the files
+        at HEAD that its profile may read, and nothing else, its index
+        matching that commit, and given to the run as GIT_DIR, with
+        GIT_WORK_TREE the project directory. So `git status`, `git diff`, and
+        `git log` work for what the run may see, and nothing it may not see
+        is in any object the run can read: not in history, not in packs, not
+        in the index. The application makes it by reading only the
+        permitted paths from the real repository, outside the sandbox, never
+        by copying the repository. What a run commits there stays there and
+        is removed with it; committing the project is the application's own,
+        as the Git panel does. A Freeform run, which may change either, is
+        given the real `.git` read-write.
+
+    piton:
+        Compiling the spec is trusted work done outside the sandbox, by the
+        application, as the @{SpecBuild} says, never by a restricted run on
+        files it may not read. A run reaches piton only through a controlled
+        command: `piton` on the run's PATH is a small shim of the
+        application's that asks the application, over a private channel made
+        for that run alone, a Unix socket in its temporary directory, or a
+        named pipe on Windows open only to that run's sandbox identity, to
+        run the piton command for it, on the host, as trusted work, and
+        streams back what it prints and its exit status. Only what the run's
+        profile allows is run: a Spec run may build, check, format, and
+        slice; a Code or Question run may only slice with an adapter, which
+        prints compiled output, never the source; anything else is refused,
+        the shim saying so. The real `piton` on the host, if the run finds
+        it, can only read what the sandbox lets it.
+
+    channels:
+        The sandbox closes what reaches the filesystem by another route:
+        every file descriptor or handle but its standard input, output, and
+        error, and the piton channel, is closed before the harness runs, so
+        none open on a denied file can be inherited; on Linux and macOS, Unix
+        sockets outside the run's grants can't be connected to, so no local
+        service, as an SSH agent, a Docker socket, or another editor, can be
+        asked to read the project for it; and on Windows, the run's identity
+        can't open named pipes or services but its own. The account's
+        connectors are already never given to a run, as the
+        @{HarnessIntegration} says.
+
+        What remains outside the enforcement boundary is said plainly, in
+        the sandbox's documentation and in the Sandbox section of the
+        settings, never claimed as protected: the network, through which a
+        run could fetch the project from a remote repository or a forge it
+        is published to; the harness's own service, which holds what was sent
+        to it in earlier conversations of the same lane; and the clipboard.
+        These are for the user to decide on, and the sandbox doesn't
+        pretend to close them.
+
+    linux:
+        On Linux the backend is Landlock, applied in the child process just
+        before it runs the harness's program, with `no_new_privs` set first,
+        so it is never applied to Suspense itself and needs no root. It
+        restricts reading, writing, executing, renaming, linking, and
+        truncating, by an allow-list of paths opened as file descriptors,
+        and the restriction survives every exec and is inherited by every
+        child. It needs Landlock ABI 3 or later, as Linux 6.2 gives, so that
+        truncation is covered too, and ABI 6 or later, as Linux 6.12 gives,
+        to scope Unix sockets; on a kernel that has an older ABI, the Unix
+        socket scoping is left out and said to be, and on one with no
+        Landlock, or older than ABI 3, nothing runs, as failing closed says.
+        Nothing else is used: no namespaces or seccomp, unless a concrete
+        part of the policy can't be enforced without them.
+
+    macos:
+        On macOS the backend is Seatbelt: a sandbox profile generated from
+        the policy, in the sandbox profile language, applied to the child as
+        it starts, as `sandbox-exec` does, inherited by every process it
+        starts, and needing no administrator rights. It denies by default and
+        allows reading and writing only the policy's paths, the system's
+        own, and what Xcode and its command-line tools, `xcodebuild`, the
+        SDKs, and their caches and DerivedData need, which the backend
+        grants by their resolved paths. Seatbelt's interface is deprecated by
+        Apple and undocumented in parts, as the sandbox's documentation says,
+        and the backend's behaviour is tested on each macOS the releases are
+        built for, never assumed from a profile that applied.
+
+    windows:
+        On Windows the backend is AppContainer, as Windows 10 version 1809
+        and later give, needing no administrator rights. Each run gets an
+        AppContainer of its own, made with `CreateAppContainerProfile` and
+        named `Suspense.<profile>.<run id>`, so two runs never share an
+        identity and one run's grants never reach another's; it is deleted
+        with `DeleteAppContainerProfile` once the run is over. An
+        AppContainer's process reaches no file in the user's folders or the
+        project unless that path's access list names its identity, so the
+        filesystem boundary is the access lists, checked by the kernel on
+        every open, whatever program opens the file.
+
+        Before the run, each path the policy grants is given an access entry
+        for the run's AppContainer SID, with `SetNamedSecurityInfoW` on the
+        path's handle, opened without following reparse points: read and
+        execute for read-only grants, modify for read-write ones, inherited
+        by everything beneath it. A denied path is never beneath a grant, as
+        the policy's expansion ensures, so no inherited entry can reach it;
+        where the expansion is too deep to make, the run is refused, as a
+        contradiction. The entries are added with the AppContainer's SID
+        alone, never the user's or any group's, so they widen nothing for any
+        other process. Each entry added is written first to a ledger in
+        Suspense's data directory, with its path and the SID, so it is always
+        removed after the run, however it ended, and at the next launch for
+        any run the application didn't see end, as after a crash: no grant is
+        ever left in place.
+
+        The harness is started with `CreateProcessW` given the AppContainer's
+        security capabilities in its attribute list, `internetClient` among
+        them so the harness can reach its model service, and nothing else:
+        no `privateNetworkClientServer`, no broad file capabilities such as
+        documents or removable storage. The process is created suspended,
+        assigned to a job object of the run's own with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`
+        and breakaway forbidden, and only then resumed, so nothing it starts
+        can leave the job or the AppContainer, and closing the job ends them
+        all. Its standard input, output, and error are pipes the application
+        makes, the only handles it inherits, listed explicitly with
+        `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`, and it starts without a console
+        window, as the @{Application} says.
+
+        What the harness and its tools need from outside the project is
+        granted read-only by path, found on the host as the application finds
+        programs: the harness's installation, Node.js where the harness runs
+        on it, git, the language toolchains, as MSVC, the Windows SDKs, and
+        `.cargo` and `.rustup`, and PowerShell's modules. The harness's own
+        folder in the user's profile, as `.claude`, its caches, the
+        toolchains' caches builds write to, and a temporary folder of the
+        run's own, given as TEMP and TMP, are granted read-write. The system's
+        own folders, `C:\Windows` and `C:\Program Files`, are readable by
+        AppContainers as Windows installs them, through the ALL APPLICATION
+        PACKAGES group, and need no grant; nothing is ever granted to that
+        group, nor to ALL RESTRICTED APPLICATION PACKAGES, since it would
+        reach every AppContainer. A path the user can't change the access
+        list of, as one owned by another account, can't be granted, and a
+        run that needs it doesn't start, saying which path.
+
+        Neither a job object nor a restricted token alone is taken as a
+        filesystem boundary; the AppContainer is. The named pipe the piton
+        shim talks over is made with a security descriptor naming only the
+        run's AppContainer SID and the user, so no other process can open
+        it. Where an AppContainer can't be made, a capability can't be given,
+        a grant can't be added or recorded, or the Windows version is older
+        than 1809, the run doesn't start, saying which, as failing closed
+        says, and the Status card in the settings says the sandbox can't run
+        here and why.
+
+        Its tests run on the Windows runner as on the others, as the
+        verification says, and check besides that a file the run is denied
+        can't be opened through a junction, a symbolic link, a hard link, an
+        8.3 short name, or an alternate data stream, that a process the run
+        starts can't open a process outside its job, and that no access entry
+        for a run's SID remains once it is over.
+
+    compatibility:
+        Normal native development works inside each profile: in the Code
+        profile, `cargo build` and `cargo test`, git through the filtered
+        repository, shell scripts, and the platform's compilers on Linux;
+        native builds, the Xcode command-line tools, and `xcodebuild` on
+        macOS; PowerShell, MSVC, Cargo, and the native build tools on
+        Windows; each reaching the system, the SDKs, the toolchains, their
+        caches, and the run's temporary directory, and none reaching what
+        the profile denies. Project restrictions are never widened to make a
+        command succeed: a build that needs a denied path fails, saying the
+        sandbox refused it, and naming the path.
+
+    verification:
+        The sandbox is tested on each platform, by the tests the
+        @{EdgeReleases} run, against what the operating system actually
+        does, never a mocked decision: a harness of hostile commands runs
+        inside each profile in a temporary project of its own, and asserts
+        that in the Code profile the code can be read and written and the
+        compiled reference read, while the spec can be neither read nor
+        written; that the Spec profile is the same the other way round; and
+        that none of these can get past it: a shell, Python, Node.js, a Rust
+        or C++ program run inside, a child of a child, `..` paths, symbolic
+        links, junctions, hard links, renames across the boundary, inherited
+        descriptors, a race swapping a path, and git, whose `show`, `log`,
+        `cat-file`, and `stash` show nothing denied. A policy the platform
+        can't enforce refuses to run, and the representative native builds
+        above still work. A platform where any of these can't be tested, or
+        fails, is said so in the documentation, never released as protected.
+
+    documentation:
+        The sandbox's guarantees and limits are written down in the
+        repository, in `SANDBOX.md` beside the module: what each backend
+        enforces on which versions of each platform, what remains outside it,
+        as the channels say, which escape routes were tested and how, and the
+        approach chosen against the implementations that were weighed,
+        `nolabs-ai/nono`, `openai/codex`'s native sandboxes,
+        `anthropics/sandbox-runtime`, `eugene1g/agent-safehouse`, and
+        `LeGambiArt/arapuca`: their licences, maturity, dependencies, and
+        what each really enforces, and why the parts reused were reused and
+        the rest weren't. An existing, auditable Rust library is used for a
+        backend wherever one does what the policy needs, as the `landlock`
+        crate on Linux, rather than writing the system's own security
+        interfaces again, and no large framework is brought in for it.
+
+    examples:
+        The repository holds examples beside the module, one per profile, as
+        a small program that runs a command under the Code profile and one
+        under the Spec profile for a sample project, so the sandbox can be
+        tried and its behaviour seen apart from the rest of the application.

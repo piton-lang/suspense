@@ -1,0 +1,60 @@
+
+export anchor MissingTokensSInCodeTasks2:
+    userPrompt:
+        \\\
+        I'm not seeing tokens/s in code tasks
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            I'm not seeing tokens/s in code tasks
+            \\\
+        result:
+            \\\
+            The likely cause is that Claude Code only sends its reply text in chunks as it's written when started with `--include-partial-messages`. Without that flag, a run's reply arrives all at once at the end, leaving nothing to measure a live rate from. I can't see the code to confirm, but the spec now requires the flag and says exactly where the rate shows. `piton check` reports no problems and `piton build` wrote 84 files.
+
+            - **Every run** (`.claude/reference/scope/harness-integration/index.md#harnesses`): every Claude Code run, tasks of every mode and questions, uses `--output-format stream-json --verbose --include-partial-messages`, so the reply arrives token by token with usage per message.
+            - **Every mode:** the rate shows for any run that writes a reply. That covers Code, Chain steps, Spec, Freeform and questions, on the host or in a container.
+            - **Placement:** in the task header it sits right after the elapsed time, before the summary. In the Tasks tab it sits beside a running row's time.
+            - **When it updates:**
+              - The live rate comes from the reply's chunks as they arrive, not from the final result, so it appears as soon as the reply starts.
+              - The average after the run uses the result's own figures, including Claude Code's `duration_api_ms`.
+
+            **Anchors the code should follow:** `HarnessIntegration` `#harnesses` (the flags), and `MessageList` `#output-rate`.
+            \\\
+
+    sentFrom: MissingTokensSInCodeTasks
+
+    model: opus

@@ -1,0 +1,7 @@
+- [Every Claude Code run, tasks of every mode and questions, uses `--output-format stream-json --verbose --include-partial-messages`](.claude/reference/scope/harness-integration/index.md#harnesses)
+- [The rate shows for every run that writes a reply: Code, Chain steps, Spec, Freeform, and questions, on the host or in a container](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)
+- [In a task's slim header it sits right after the elapsed time, muted, before the summary](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)
+- [In the Tasks tab it sits beside the time of a running row](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)
+- [It is worked out from the streamed reply's own deltas and each message's usage, never only the final result, showing as soon as the reply begins](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)
+- [It is left out while the harness waits on a tool call, runs a command, or hasn't begun to reply](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)
+- [The average once over is from the result's own figures, Claude Code's API duration](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)

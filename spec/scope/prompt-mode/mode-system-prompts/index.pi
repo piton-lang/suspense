@@ -1,5 +1,5 @@
 use /lib
-from /scope/container-environment import ContainerEnvironment
+from /scope/sandbox import Sandbox
 from /scope/harness-integration import HarnessIntegration
 from /scope/new-project import NewProject
 from /scope/project-data import ProjectData
@@ -52,31 +52,24 @@ export feature ModeSystemPrompts:
         removed, like any other text of a template.
 
         Every path a placeholder is filled in with points where the run that
-        is sent it finds that file, whether it runs on the host or in a
-        container, as the @{ContainerEnvironment} says. So each is
-        written relative to the project directory, the directory every run
-        works in, the project directory itself on the host and `/workspace`
-        in a container: CODE_LOCATION and SPEC_LOCATION as `./` and the
+        is sent it finds that file, and that its sandbox lets it reach, as
+        the @{Sandbox} says. So each is written relative to the project
+        directory, the directory every run works in: CODE_LOCATION and SPEC_LOCATION as `./` and the
         location's path, as `./spec`, HARNESS_DIRECTORY as the harness's
         directory, as `.claude`, and PITON_FLUENCY_FILE,
         SUSPENSE_FLUENCY_FILE, and UNDERSTANDING_FILE as their paths, as
-        `.suspense/fluency.md`. None is ever filled in with an absolute path:
-        not the project's path on the host, which a run in a container can't
-        reach, and not `/workspace`, which a run on the host has no such
-        directory for.
+        `.suspense/fluency.md`. None is ever filled in with an absolute path.
 
         A run fills CODE_LOCATION and SPEC_LOCATION in only with what it can
-        see, as the @{ContainerEnvironment} says. A run of the spec
+        see, as its sandbox's profile allows, as the @{Sandbox} says. A run of the spec
         lane, a Spec task or a Chain prompt's spec step, can't see the code
         location, and fills CODE_LOCATION in with nothing, its instructions and
         system template alike, unless the project lets its Spec runs read
-        the code, as the @{ContainerEnvironment} says, when it fills
+        the code, as the @{Sandbox} says, when it fills
         CODE_LOCATION in as a question does, and is told, on a paragraph of
         its own, that the code there is read only, for reading what the spec
         describes, never for changing, and, where they may read the whole
-
         project too, that everything in the project directory is there to
-
         read, read only. A question can see the code location and the
         spec location, both read only, and fills both in. A run of the code
         lane, a Code task, a Chain prompt's code step, or a Freeform task,
@@ -140,8 +133,7 @@ export feature ModeSystemPrompts:
         it prints is written as text, never read as Piton, but for the
         project directory's absolute path on the host wherever it appears in
         it, which is written as `.` instead, a path within it as relative to
-        it, as `./spec`, so the file holds no path a run in a container
-        can't reach.
+        it, as `./spec`, so the file holds no path of the machine it was written on.
 
         PITON_FLUENCY_FILE stands for the file's path. The Spec instructions
         and the Chain instructions, for a Chain prompt's first step, say, on a
@@ -183,7 +175,7 @@ export feature ModeSystemPrompts:
         application ships, so it keeps in step with the application rather
         than the project. It is written as text, never read as Piton, holds
         no placeholder and no path of the machine it was written on, and so
-        reads the same on the host and in a container.
+        reads the same on any machine.
 
         It says, plainly and briefly, written for a harness rather than for
         the user, each of these in a short paragraph of its own.

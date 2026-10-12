@@ -2,8 +2,8 @@
 //! made it themselves, as the ApplicationScope's file ownership says.
 //!
 //! On Linux and macOS a process creates what it creates as its own user, and
-//! on Linux containers run with `--userns=keep-id` (see [`crate::container`]),
-//! so nothing is needed there. Windows' build declares it runs as invoker,
+//! every harness run is native, under its sandbox, as the user, so nothing is
+//! needed there. Windows' build declares it runs as invoker,
 //! never asking for elevation (gpui's embedded manifest does so). Should it be
 //! started elevated all the same, as from an administrator's terminal, what an
 //! elevated process creates is owned by the Administrators group: the token's

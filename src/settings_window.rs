@@ -11,10 +11,11 @@
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{Editor, EditorState, InputEvent};
+use gpui_kit::component::input::{Editor, EditorState, Input, InputEvent, InputState};
 use gpui_kit::component::radio::Radio;
+use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, h_flex,
     v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
@@ -24,6 +25,8 @@ use crate::agent::{self, Agent};
 use crate::growing_input::GrowToFit;
 use crate::piton_syntax;
 use crate::project_directory::ProjectDirectory;
+use crate::chat_input::{self, SendMode};
+use crate::sandbox::{Classification, ProfileKind, Refused};
 use crate::system_prompts::{
     self, CODE_LOCATION, CODE_PROMPT, CODE_RESULT, HARNESS_DIRECTORY, PITON_FLUENCY_FILE, Prompt,
     SUSPENSE_FLUENCY_FILE,
@@ -45,7 +48,7 @@ enum Section {
     SystemPrompts,
     InjectedPrompts,
     Agent,
-    Containers,
+    Sandbox,
     Updates,
 }
 
@@ -54,7 +57,7 @@ impl Section {
         Section::SystemPrompts,
         Section::InjectedPrompts,
         Section::Agent,
-        Section::Containers,
+        Section::Sandbox,
         Section::Updates,
     ];
 
@@ -63,7 +66,7 @@ impl Section {
             Section::SystemPrompts => "System prompts",
             Section::InjectedPrompts => "Injected prompts",
             Section::Agent => "Agent",
-            Section::Containers => "Containers",
+            Section::Sandbox => "Sandbox",
             Section::Updates => "Updates",
         }
     }
@@ -73,7 +76,7 @@ impl Section {
             Section::SystemPrompts => "system-prompts",
             Section::InjectedPrompts => "injected-prompts",
             Section::Agent => "agent",
-            Section::Containers => "containers",
+            Section::Sandbox => "sandbox",
             Section::Updates => "updates",
         }
     }
@@ -295,6 +298,15 @@ pub fn bind_keys(cx: &mut App) {
     ]);
 }
 
+/// `text` with its first letter a capital, as a sentence begins.
+fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
+}
+
 /// One prompt, as edited.
 struct PromptEditor {
     prompt: Prompt,
@@ -305,23 +317,31 @@ struct PromptEditor {
     error: Option<SharedString>,
 }
 
-/// Where the containers runs go in stand, as the Containers section shows
-/// them.
-#[derive(Clone, Debug, PartialEq)]
-struct Containers {
-    podman: crate::container::PodmanState,
-    /// Whether each harness is logged in in its container, where that can
-    /// be asked: Podman running and the image built.
-    logins: Vec<(Agent, Option<bool>)>,
-    /// What runs another version in its container than on the host.
-    notes: Vec<(Agent, String)>,
-}
-
 pub struct SettingsWindow {
     prompts: Vec<PromptEditor>,
-    /// Where the containers stand, once read.
-    containers: Option<Containers>,
-    _containers_read: Task<()>,
+    /// Whether the sandbox can run here, and what it enforces, once read.
+    sandbox: Option<Result<String, Refused>>,
+    _sandbox_read: Task<()>,
+    /// What Test sandbox found, once it has run, and whether it is running.
+    sandbox_test: Option<Result<Vec<(String, bool)>, Refused>>,
+    testing: bool,
+    _sandbox_test: Task<()>,
+    /// Whether Test's results are listed, check by check.
+    test_open: bool,
+    /// The list a pattern is being typed into, the spec's or the code's,
+    /// and what is typed.
+    adding_pattern: Option<bool>,
+    pattern: Entity<InputState>,
+    /// An area being named: a new one, or the added one at its place.
+    naming: Option<Option<usize>>,
+    area_name: Entity<InputState>,
+    /// The added area whose folders and patterns are open beneath its row.
+    editing_area: Option<usize>,
+    /// The added area a pattern is being typed into, and what is typed.
+    area_pattern_for: Option<usize>,
+    area_pattern: Entity<InputState>,
+    /// Why the classification couldn't be saved, when it couldn't.
+    classification_error: Option<SharedString>,
     /// Why the project's settings couldn't be saved, when they couldn't.
     project_settings_error: Option<SharedString>,
     /// Set while the editors are filled from disk, so doing so saves nothing.
@@ -377,11 +397,56 @@ impl SettingsWindow {
             })
             .collect();
 
+        // A pattern typed is saved once Enter is pressed or it loses focus.
+        let pattern = cx.new(|cx| InputState::new(window, cx).placeholder("**/*.pi"));
+        subscriptions.push(cx.subscribe_in(
+            &pattern,
+            window,
+            |this, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                    this.commit_pattern(window, cx);
+                }
+            },
+        ));
+        // An area's name, and a pattern of an added area, are saved once
+        // Enter is pressed or they lose focus.
+        let area_name = cx.new(|cx| InputState::new(window, cx).placeholder("Docs"));
+        subscriptions.push(cx.subscribe_in(
+            &area_name,
+            window,
+            |this, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                    this.commit_naming(window, cx);
+                }
+            },
+        ));
+        let area_pattern = cx.new(|cx| InputState::new(window, cx).placeholder("docs/**/*.md"));
+        subscriptions.push(cx.subscribe_in(
+            &area_pattern,
+            window,
+            |this, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                    this.commit_area_pattern(window, cx);
+                }
+            },
+        ));
         let mut this = Self {
             prompts,
-            containers: None,
             project_settings_error: None,
-            _containers_read: Task::ready(()),
+            _sandbox_read: Task::ready(()),
+            sandbox: None,
+            sandbox_test: None,
+            testing: false,
+            _sandbox_test: Task::ready(()),
+            test_open: false,
+            adding_pattern: None,
+            pattern,
+            naming: None,
+            area_name,
+            editing_area: None,
+            area_pattern_for: None,
+            area_pattern,
+            classification_error: None,
             loading: false,
             scroll: ScrollHandle::new(),
             focus_handle: cx.focus_handle(),
@@ -430,229 +495,1135 @@ impl SettingsWindow {
             }
         }
         self.loading = false;
-        self.read_containers(project_dir, cx);
+        let _ = project_dir;
+        self.read_sandbox(cx);
         cx.notify();
     }
 
-    /// Reads, in the background, whether Podman can run containers and
-    /// whether each harness is logged in in its container.
-    fn read_containers(&mut self, project_dir: Option<std::path::PathBuf>, cx: &mut Context<Self>) {
-        let read = cx.background_spawn(async move {
-            let platform = crate::container::Platform::current();
-            let podman = crate::container::podman_state(platform);
-            let image = matches!(podman, crate::container::PodmanState::Ready(_))
-                .then(|| crate::container::built_image(project_dir.as_deref()?))
-                .flatten();
-            let logins = Agent::RUNNABLE
-                .into_iter()
-                .map(|agent| {
-                    let logged_in = image
-                        .as_deref()
-                        .and_then(|image| crate::container::logged_in(agent, image, platform).ok());
-                    (agent, logged_in)
-                })
-                .collect();
-            // Which harness runs another version in its container than here.
-            let notes = Agent::RUNNABLE
-                .into_iter()
-                .filter_map(|agent| Some((agent, crate::container::version_note(agent)?)))
-                .collect();
-            Containers { podman, logins, notes }
-        });
-        self._containers_read = cx.spawn(async move |this, cx| {
-            let containers = read.await;
+    /// Reads, in the background, whether the sandbox can run here.
+    fn read_sandbox(&mut self, cx: &mut Context<Self>) {
+        let read = cx.background_spawn(async { crate::sandbox::status() });
+        self._sandbox_read = cx.spawn(async move |this, cx| {
+            let status = read.await;
             this.update(cx, |this, cx| {
-                this.containers = Some(containers);
+                this.sandbox = Some(status);
                 cx.notify();
             })
             .ok();
         });
     }
 
-    /// Logs `agent` in again in its container, in the login view.
-    fn log_in_again(&mut self, agent: Agent, window: &mut Window, cx: &mut Context<Self>) {
+    /// Runs Test: a short set of the hostile checks, in a temporary project,
+    /// each saying whether the system refused it.
+    fn test_sandbox(&mut self, cx: &mut Context<Self>) {
+        self.testing = true;
+        let run = cx.background_spawn(async { crate::sandbox::self_test() });
+        self._sandbox_test = cx.spawn(async move |this, cx| {
+            let found = run.await;
+            this.update(cx, |this, cx| {
+                this.sandbox_test = Some(found);
+                this.testing = false;
+                cx.notify();
+            })
+            .ok();
+        });
+        cx.notify();
+    }
+
+    /// Changes the open project's classification by `change`, saved at once.
+    fn classify(&mut self, change: impl FnOnce(&mut Classification), cx: &mut Context<Self>) {
         let Some(project_dir) = ProjectDirectory::get(cx) else {
             return;
         };
-        crate::harness::forget_login(agent);
-        let this = cx.entity().downgrade();
-        crate::login_view::LoginView::open(
-            agent,
-            project_dir.clone(),
-            window,
-            cx,
-            move |window, cx| {
-                window.close_dialog(cx);
-                this.update(cx, |this, cx| {
-                    this.read_containers(Some(project_dir.clone()), cx)
-                })
-                .ok();
+        let mut classification = Classification::load(&project_dir);
+        change(&mut classification);
+        self.classification_error = classification
+            .save(&project_dir)
+            .err()
+            .map(|err| format!("{err}").into());
+        cx.notify();
+    }
+
+    /// Adds folders to the code or the spec, chosen with the folder browser,
+    /// opened in the project.
+    fn add_folder(&mut self, spec: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        let picked = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: true,
+            prompt: Some("Add".into()),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = picked.await else {
+                return;
+            };
+            this.update(cx, |this, cx| {
+                let roots: Vec<String> = paths
+                    .iter()
+                    .filter_map(|path| path.strip_prefix(&project_dir).ok())
+                    .map(|path| path.to_string_lossy().replace('\\', "/"))
+                    .filter(|root| !root.is_empty())
+                    .collect();
+                this.classify(
+                    |classification| {
+                        let list = if spec {
+                            &mut classification.spec_roots
+                        } else {
+                            &mut classification.code_roots
+                        };
+                        for root in roots {
+                            if !list.contains(&root) {
+                                list.push(root);
+                            }
+                        }
+                    },
+                    cx,
+                )
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Adds a row to the code's or the spec's list to type a pattern into.
+    fn start_pattern(&mut self, spec: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.adding_pattern = Some(spec);
+        self.pattern.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+            input.focus(window, cx);
+        });
+        cx.notify();
+    }
+
+    /// Saves the pattern typed, once Enter is pressed or it loses focus; an
+    /// empty one is let go.
+    fn commit_pattern(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(spec) = self.adding_pattern.take() else {
+            return;
+        };
+        let pattern = self.pattern.read(cx).value().trim().to_string();
+        self.pattern.update(cx, |input, cx| input.set_value("", window, cx));
+        if pattern.is_empty() {
+            cx.notify();
+            return;
+        }
+        if globset::Glob::new(&pattern).is_err() {
+            self.classification_error = Some(format!("`{pattern}` isn't a pattern").into());
+            cx.notify();
+            return;
+        }
+        self.classify(
+            |classification| {
+                let list = if spec {
+                    &mut classification.spec_patterns
+                } else {
+                    &mut classification.code_patterns
+                };
+                if !list.contains(&pattern) {
+                    list.push(pattern.clone());
+                }
             },
+            cx,
         );
     }
 
-    /// Whether Podman can run the containers, and each harness's login in
-    /// its container.
-    fn render_containers(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        use crate::container::{MachineAction, Platform, PodmanState};
-        let muted = cx.theme().muted_foreground;
-        let platform = Platform::current();
-        let podman = match self.containers.as_ref().map(|containers| &containers.podman) {
-            None => div().text_color(muted).child("Checking Podman…").into_any_element(),
-            Some(PodmanState::Ready(version)) => div()
-                .child(format!("Podman {version}, ready to run containers."))
-                .into_any_element(),
-            Some(PodmanState::Missing) => v_flex()
-                .gap_1()
-                .child("Podman isn't installed, so Spec tasks, a Chain prompt's spec steps, and questions can't run.")
-                .child(
-                    Button::new("settings-install-podman")
-                        .small()
-                        .label("Install Podman")
-                        .on_click(move |_, _, cx| cx.open_url(platform.install_url())),
-                )
-                .into_any_element(),
-            Some(state) => {
-                let action = if *state == PodmanState::NoMachine {
-                    MachineAction::SetUp
-                } else {
-                    MachineAction::Start
-                };
-                v_flex()
-                    .gap_1()
-                    .child(if action == MachineAction::SetUp {
-                        "Podman has no machine to run containers in."
-                    } else {
-                        "Podman's machine isn't running."
-                    })
-                    .child(
-                        Button::new("settings-podman-machine")
-                            .small()
-                            .label(action.label())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                let project_dir = ProjectDirectory::get(cx);
-                                let run = cx.background_spawn(async move {
-                                    crate::container::run_machine_action(action, &mut |_| {}).ok();
-                                });
-                                this._containers_read = cx.spawn(async move |this, cx| {
-                                    run.await;
-                                    this.update(cx, |this, cx| this.read_containers(project_dir, cx))
-                                        .ok();
-                                });
-                            })),
-                    )
-                    .into_any_element()
-            }
-        };
-        let logins = v_flex()
+    /// A card of the section: a box on the raised surface, headed by `title`.
+    fn card(title: &'static str, cx: &App) -> Div {
+        let palette = crate::theme::palette(cx);
+        v_flex()
+            .w_full()
             .gap_2()
-            .children(Agent::RUNNABLE.into_iter().map(|agent| {
-                let state = self
-                    .containers
-                    .as_ref()
-                    .and_then(|containers| {
-                        containers
-                            .logins
-                            .iter()
-                            .find(|(known, _)| *known == agent)
-                            .map(|(_, logged_in)| *logged_in)
-                    })
-                    .flatten();
+            .p(px(12.))
+            .rounded(px(6.))
+            .bg(crate::theme::color(palette.raised))
+            .child(div().text_sm().font_semibold().child(title))
+    }
+
+    /// The Status card: whether the sandbox can enforce every profile here,
+    /// the backend and what it enforces, and Test.
+    fn render_sandbox_status(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let (muted, danger, success) = (theme.muted_foreground, theme.danger, theme.success);
+        let backend = crate::sandbox::backend_name();
+        let runs = matches!(self.sandbox, Some(Ok(_)));
+        let dot = |color: Hsla| div().flex_none().size(px(8.)).rounded_full().bg(color);
+        let line: AnyElement = match &self.sandbox {
+            None => h_flex()
+                .gap_2()
+                .child(dot(muted))
+                .child(div().text_color(muted).child("Checking the sandbox…"))
+                .into_any_element(),
+            Some(Ok(enforces)) => {
+                // What it enforces, in plain words, after the backend's name.
+                let plain = enforces
+                    .split_once(": ")
+                    .map_or(enforces.as_str(), |(_, plain)| plain)
+                    .to_string();
                 h_flex()
                     .gap_2()
-                    .child(div().w(px(120.)).child(agent.label()))
-                    .child(
-                        div()
-                            .w(px(120.))
-                            .text_sm()
-                            .text_color(muted)
-                            .child(match state {
-                                Some(true) => "Logged in",
-                                Some(false) => "Not logged in",
-                                None => "Unknown",
-                            }),
-                    )
-                    .children(
-                        self.containers
-                            .as_ref()
-                            .and_then(|containers| {
-                                containers.notes.iter().find(|(known, _)| *known == agent)
-                            })
-                            .map(|(_, note)| {
-                                div().flex_1().min_w_0().text_xs().text_color(muted).child(note.clone())
-                            }),
-                    )
-                    .child(
-                        Button::new(SharedString::from(format!(
-                            "settings-log-in-{}",
-                            agent.command()
-                        )))
+                    .child(dot(success))
+                    .child(div().font_medium().child(backend))
+                    .child(div().text_color(muted).child(plain))
+                    .into_any_element()
+            }
+            Some(Err(why)) => h_flex()
+                .gap_2()
+                .child(dot(danger))
+                .child(div().flex_1().min_w_0().text_color(danger).child(format!(
+                    "{}. No task or question will run until it can.",
+                    capitalized(&why.message)
+                )))
+                .child(
+                    Button::new("settings-sandbox-docs")
+                        .ghost()
                         .small()
-                        .label("Log in again")
-                        .disabled(ProjectDirectory::get(cx).is_none())
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| this.log_in_again(agent, window, cx),
-                        )),
-                    )
-            }));
-        // For the open project alone: whether its Spec runs may read the code.
-        let reads_code = ProjectDirectory::get(cx).map(|project_dir| {
-            let settings = crate::project_settings::ProjectSettings::load(&project_dir);
-            let reads = settings.spec_reads_code;
-            // Offered only while they may read the code.
-            let whole = reads.then(|| {
+                        .label("Documentation")
+                        .on_click(|_, _, cx| cx.open_url(crate::sandbox::DOCUMENTATION)),
+                )
+                .into_any_element(),
+        };
+        let test = Button::new("settings-test-sandbox")
+            .ghost()
+            .small()
+            .label("Test")
+            .loading(self.testing)
+            .disabled(self.testing || !runs)
+            .on_click(cx.listener(|this, _, _, cx| this.test_sandbox(cx)));
+        let results = self.sandbox_test.as_ref().map(|found| match found {
+            Err(why) => div().text_sm().text_color(danger).child(why.message.clone()).into_any_element(),
+            Ok(checks) => {
+                let through = checks.iter().filter(|(_, refused)| !refused).count();
+                let summary = if through == 0 {
+                    format!("{} of {} refused", checks.len(), checks.len())
+                } else {
+                    format!("{through} of {} got through", checks.len())
+                };
+                let open = self.test_open;
                 v_flex()
-                    .pl_6()
                     .gap_1()
                     .child(
-                        crate::checkbox::checkbox(
-                            "settings-spec-reads-project",
-                            "Also let them read the whole project",
-                        )
-                        .checked(settings.spec_reads_project)
-                        .on_click(cx.listener(move |this, checked: &bool, _, cx| {
-                            this.set_spec_reads_project(*checked, cx)
-                        })),
+                        h_flex()
+                            .id("settings-sandbox-test-summary")
+                            .gap_1()
+                            .cursor_pointer()
+                            .text_sm()
+                            .text_color(if through == 0 { success } else { danger })
+                            .child(
+                                Icon::new(if open { IconName::ChevronDown } else { IconName::ChevronRight })
+                                    .xsmall(),
+                            )
+                            .child(summary)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.test_open = !this.test_open;
+                                cx.notify();
+                            })),
                     )
+                    .when(open, |list| {
+                        list.children(checks.iter().map(|(check, refused)| {
+                            h_flex()
+                                .gap_2()
+                                .pl_4()
+                                .text_sm()
+                                .child(
+                                    Icon::new(if *refused { IconName::Check } else { IconName::X })
+                                        .xsmall()
+                                        .text_color(if *refused { success } else { danger }),
+                                )
+                                .child(div().text_color(muted).child(check.clone()))
+                        }))
+                    })
+                    .into_any_element()
+            }
+        });
+        Self::card("Status", cx)
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(div().flex_1().min_w_0().child(line))
+                    .child(test),
+            )
+            .children(results)
+            .into_any_element()
+    }
+
+    /// Sets `kind`'s level in `area` for the open project, or with none, puts
+    /// back the profile's default, as the grid's menus do. The Spec column's
+    /// Code row is the Read the code switch, and its Other files row at
+    /// Read the Read the whole project switch, so the two always agree.
+    fn set_level(
+        &mut self,
+        kind: ProfileKind,
+        area: crate::sandbox::reach::Area,
+        level: Option<crate::sandbox::reach::Level>,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::sandbox::reach::{Area, Level, mode_key};
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        let store = |this: &mut Self, level: Option<Level>, cx: &mut Context<Self>| {
+            this.classify(
+                |classification| {
+                    let mode = mode_key(kind).to_string();
+                    // An added area keeps its levels with it.
+                    if let Area::Added(index) = area {
+                        if let Some(added) = classification.areas.get_mut(index) {
+                            match level {
+                                Some(level) => {
+                                    added.levels.insert(mode, level);
+                                }
+                                None => {
+                                    added.levels.remove(&mode);
+                                }
+                            }
+                        }
+                        return;
+                    }
+                    match level {
+                        Some(level) => {
+                            classification
+                                .levels
+                                .entry(mode)
+                                .or_default()
+                                .insert(area.key().to_string(), level);
+                        }
+                        None => {
+                            if let Some(areas) = classification.levels.get_mut(&mode) {
+                                areas.remove(area.key());
+                                if areas.is_empty() {
+                                    classification.levels.remove(&mode);
+                                }
+                            }
+                        }
+                    }
+                },
+                cx,
+            )
+        };
+        let reads_code = crate::project_settings::spec_reads_code(&project_dir);
+        match (kind, area, level) {
+            (ProfileKind::Spec, Area::Code, level) => {
+                store(self, None, cx);
+                self.set_spec_reads_code(level == Some(Level::Read), cx);
+            }
+            (ProfileKind::Spec, Area::EverythingElse, level) if reads_code => match level {
+                Some(Level::Edit) => {
+                    self.set_spec_reads_project(false, cx);
+                    store(self, Some(Level::Edit), cx);
+                }
+                level => {
+                    store(self, None, cx);
+                    self.set_spec_reads_project(level == Some(Level::Read), cx);
+                }
+            },
+            (_, _, level) => store(self, level, cx),
+        }
+    }
+
+    /// Starts naming an area: a new one, with `target` none, or renaming
+    /// the added area at `target`.
+    fn start_naming(&mut self, target: Option<usize>, window: &mut Window, cx: &mut Context<Self>) {
+        let current = target
+            .and_then(|index| {
+                let project_dir = ProjectDirectory::get(cx)?;
+                Classification::load(&project_dir)
+                    .areas
+                    .get(index)
+                    .map(|area| area.name.clone())
+            })
+            .unwrap_or_default();
+        self.naming = Some(target);
+        self.area_name.update(cx, |input, cx| {
+            input.set_value(current, window, cx);
+            input.focus(window, cx);
+        });
+        cx.notify();
+    }
+
+    /// Saves the name typed, once Enter is pressed or it loses focus: a new
+    /// area, opened to add its folders and patterns, or a renamed one. An
+    /// empty name is let go.
+    fn commit_naming(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(target) = self.naming.take() else {
+            return;
+        };
+        let name = self.area_name.read(cx).value().trim().to_string();
+        self.area_name.update(cx, |input, cx| input.set_value("", window, cx));
+        if name.is_empty() {
+            cx.notify();
+            return;
+        }
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        let added = Classification::load(&project_dir).areas.len();
+        self.classify(
+            |classification| match target {
+                Some(index) => {
+                    if let Some(area) = classification.areas.get_mut(index) {
+                        area.name = name;
+                    }
+                }
+                None => classification.areas.push(crate::sandbox::AddedArea {
+                    name,
+                    ..crate::sandbox::AddedArea::default()
+                }),
+            },
+            cx,
+        );
+        if target.is_none() {
+            self.editing_area = Some(added);
+        }
+    }
+
+    /// Removes the added area at `index`, its files going back into Other
+    /// files.
+    fn remove_area(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.classify(
+            |classification| {
+                if index < classification.areas.len() {
+                    classification.areas.remove(index);
+                }
+            },
+            cx,
+        );
+        self.editing_area = None;
+        self.area_pattern_for = None;
+    }
+
+    /// Adds folders to the added area at `index`, chosen with the folder
+    /// browser.
+    fn add_area_folder(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(project_dir) = ProjectDirectory::get(cx) else {
+            return;
+        };
+        let picked = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: true,
+            prompt: Some("Add".into()),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = picked.await else {
+                return;
+            };
+            this.update(cx, |this, cx| {
+                let roots: Vec<String> = paths
+                    .iter()
+                    .filter_map(|path| path.strip_prefix(&project_dir).ok())
+                    .map(|path| path.to_string_lossy().replace('\\', "/"))
+                    .filter(|root| !root.is_empty())
+                    .collect();
+                this.classify(
+                    |classification| {
+                        if let Some(area) = classification.areas.get_mut(index) {
+                            for root in roots {
+                                if !area.roots.contains(&root) {
+                                    area.roots.push(root);
+                                }
+                            }
+                        }
+                    },
+                    cx,
+                )
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Adds a row to the added area at `index` to type a pattern into.
+    fn start_area_pattern(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.area_pattern_for = Some(index);
+        self.area_pattern.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+            input.focus(window, cx);
+        });
+        cx.notify();
+    }
+
+    /// Saves the pattern typed into an added area, once Enter is pressed or
+    /// it loses focus; an empty one is let go.
+    fn commit_area_pattern(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(index) = self.area_pattern_for.take() else {
+            return;
+        };
+        let pattern = self.area_pattern.read(cx).value().trim().to_string();
+        self.area_pattern.update(cx, |input, cx| input.set_value("", window, cx));
+        if pattern.is_empty() {
+            cx.notify();
+            return;
+        }
+        if globset::Glob::new(&pattern).is_err() {
+            self.classification_error = Some(format!("`{pattern}` isn't a pattern").into());
+            cx.notify();
+            return;
+        }
+        self.classify(
+            |classification| {
+                if let Some(area) = classification.areas.get_mut(index)
+                    && !area.patterns.contains(&pattern)
+                {
+                    area.patterns.push(pattern);
+                }
+            },
+            cx,
+        );
+    }
+
+    /// An area's name in the grid, and beneath it, muted and cut off, what
+    /// it covers, the whole list in its tooltip. An added area's name renames
+    /// it, its covered line opens its folders and patterns, and a button
+    /// shown on hover removes it. Suspense data notes the files every run is
+    /// given there on its own.
+    fn render_area_name(
+        &self,
+        row: usize,
+        area: crate::sandbox::reach::Area,
+        name: String,
+        covered: Vec<String>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        use crate::sandbox::reach::{Area, OWN_FILES};
+        let muted = cx.theme().muted_foreground;
+        let whole: SharedString = if covered.is_empty() {
+            "Nothing yet".into()
+        } else {
+            covered.join(", ").into()
+        };
+        let tip = whole.clone();
+        let added = match area {
+            Area::Added(index) => Some(index),
+            _ => None,
+        };
+        let renaming = added.is_some() && self.naming == Some(added);
+        let name: AnyElement = match added {
+            _ if renaming => Input::new(&self.area_name).small().into_any_element(),
+            Some(index) => div()
+                .id(SharedString::from(format!("settings-area-name-{row}")))
+                .text_sm()
+                .cursor_pointer()
+                .truncate()
+                .child(name)
+                .on_click(cx.listener(move |this, _, window, cx| this.start_naming(Some(index), window, cx)))
+                .into_any_element(),
+            None => div().text_sm().truncate().child(name).into_any_element(),
+        };
+        // Lets UI tests find it; inert in normal builds.
+        let covered_line = gpui_kit::TestSupportExt::test_support(
+            div().id(SharedString::from(format!("settings-area-covered-{row}"))),
+        )
+            .text_xs()
+            .text_color(muted)
+            .truncate()
+            .child(whole)
+            .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(window, cx))
+            .when_some(added, |line, index| {
+                line.cursor_pointer().on_click(cx.listener(move |this, _, _, cx| {
+                    this.editing_area = (this.editing_area != Some(index)).then_some(index);
+                    cx.notify();
+                }))
+            });
+        let group = SharedString::from(format!("settings-area-row-{row}"));
+        v_flex()
+            .id(group.clone())
+            .group(group.clone())
+            .w(px(150.))
+            .min_w_0()
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(div().flex_1().min_w_0().child(name))
+                    .children(added.map(|index| {
+                        div()
+                            .opacity(0.)
+                            .group_hover(group.clone(), |style| style.opacity(1.))
+                            .child(
+                                Button::new(SharedString::from(format!("settings-area-remove-{row}")))
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::X)
+                                    .tooltip("Remove this area; its files go back into Other files")
+                                    .on_click(cx.listener(move |this, _, _, cx| this.remove_area(index, cx))),
+                            )
+                    })),
+            )
+            .child(covered_line)
+            .when(area == Area::ProjectData, |column| {
+                column.child(div().text_xs().text_color(muted).child(OWN_FILES))
+            })
+            .into_any_element()
+    }
+
+    /// An added area's folders and patterns, as its covered line opens them:
+    /// each in monospace with a remove button, one another area already has
+    /// in the error colour saying which, then Add folder and Add pattern.
+    fn render_area_editor(
+        &self,
+        index: usize,
+        classification: &Classification,
+        project_dir: &std::path::Path,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = cx.theme();
+        let (muted, danger, mono) = (theme.muted_foreground, theme.danger, theme.mono_font_family.clone());
+        let Some(area) = classification.areas.get(index) else {
+            return div().into_any_element();
+        };
+        let agent = crate::agent::of_project(Some(project_dir));
+        let reference = project_dir.join(agent.directory()).join("reference");
+        let entries: Vec<(String, bool)> = area
+            .roots
+            .iter()
+            .map(|root| (root.clone(), false))
+            .chain(area.patterns.iter().map(|pattern| (pattern.clone(), true)))
+            .collect();
+        let mut list = v_flex().gap_0p5().pl(px(12.)).py_1();
+        for (n, (entry, pattern)) in entries.into_iter().enumerate() {
+            let taken = classification.taken_by(index, &entry, pattern, project_dir, &reference);
+            let removed = entry.clone();
+            list = list.child(
+                h_flex()
+                    .gap_2()
+                    .text_sm()
                     .child(
                         div()
-                            .text_sm()
-                            .text_color(muted)
-                            .child(
-                                "The whole project directory is mounted read only, but for \
-                                 its .git and .suspense folders.",
-                            ),
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .font_family(mono.clone())
+                            .when(taken.is_some(), |entry| entry.text_color(danger))
+                            .child(entry),
                     )
-            });
-            v_flex()
+                    .children(taken.map(|taken| {
+                        div().text_xs().text_color(danger).child(format!("already in {taken}"))
+                    }))
+                    .child(
+                        Button::new(SharedString::from(format!("settings-area-{index}-remove-{n}")))
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::X)
+                            .tooltip("Remove")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                let removed = removed.clone();
+                                this.classify(
+                                    |classification| {
+                                        if let Some(area) = classification.areas.get_mut(index) {
+                                            area.roots.retain(|root| *root != removed);
+                                            area.patterns.retain(|pattern| *pattern != removed);
+                                        }
+                                    },
+                                    cx,
+                                )
+                            })),
+                    ),
+            );
+        }
+        if self.area_pattern_for == Some(index) {
+            list = list.child(Input::new(&self.area_pattern).small());
+        } else if area.roots.is_empty() && area.patterns.is_empty() {
+            list = list.child(div().text_sm().text_color(muted).child("Nothing yet"));
+        }
+        list.child(
+            h_flex()
                 .gap_1()
                 .child(
-                    crate::checkbox::checkbox("settings-spec-reads-code", "Let Spec tasks read the code")
-                        .checked(reads)
-                        .on_click(cx.listener(move |this, checked: &bool, _, cx| {
-                            this.set_spec_reads_code(*checked, cx)
-                        })),
+                    Button::new(SharedString::from(format!("settings-area-{index}-add-folder")))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::FolderPlus)
+                        .label("Add folder")
+                        .on_click(cx.listener(move |this, _, window, cx| this.add_area_folder(index, window, cx))),
                 )
                 .child(
+                    Button::new(SharedString::from(format!("settings-area-{index}-add-pattern")))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Plus)
+                        .label("Add pattern")
+                        .on_click(cx.listener(move |this, _, window, cx| this.start_area_pattern(index, window, cx))),
+                ),
+        )
+        .into_any_element()
+    }
+
+    /// The Who can see what card: each mode's reach into each part of the
+    /// project, as the profiles compile now.
+    fn render_sandbox_profiles(&self, project_dir: &std::path::Path, cx: &mut Context<Self>) -> AnyElement {
+        use crate::sandbox::Access;
+        use crate::sandbox::reach::{Area, Level, OUTSIDE, allowed, level, reach};
+        use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+        let theme = cx.theme();
+        let (muted, success, accent, danger) =
+            (theme.muted_foreground, theme.success, theme.primary, theme.danger);
+        let modes = [
+            (ProfileKind::Code, SendMode::Code, "Code"),
+            (ProfileKind::Spec, SendMode::Spec, "Spec"),
+            (ProfileKind::Question, SendMode::Ask, "Ask"),
+            (ProfileKind::Freeform, SendMode::Freeform, "Freeform"),
+        ];
+        let agent = crate::agent::of_project(Some(project_dir));
+        let kinds: Vec<ProfileKind> = modes.iter().map(|(kind, ..)| *kind).collect();
+        let rows = reach(&kinds, agent, project_dir);
+        let names = crate::sandbox::reach::rows(agent, project_dir);
+        let classification = Classification::load(project_dir);
+        let this = cx.entity().downgrade();
+        const AREA_WIDTH: f32 = 150.;
+        const CELL_WIDTH: f32 = 84.;
+        let header = h_flex()
+            .gap_1()
+            .child(div().w(px(AREA_WIDTH)))
+            .children(modes.iter().map(|(_, mode, label)| {
+                div()
+                    .w(px(CELL_WIDTH))
+                    .text_sm()
+                    .font_medium()
+                    .text_color(chat_input::mode_color(*mode, cx))
+                    .child(*label)
+            }));
+        let mut grid = v_flex().gap_1().child(header);
+        for (row, (area, cells)) in rows.into_iter().enumerate() {
+            let (name, covered) = names
+                .get(row)
+                .map(|(_, name, covered)| (name.clone(), covered.clone()))
+                .unwrap_or_default();
+            let mut line = h_flex()
+                .items_start()
+                .gap_1()
+                .child(self.render_area_name(row, area, name, covered, cx));
+            for (column, cell) in cells.into_iter().enumerate() {
+                let kind = kinds[column];
+                let (current, tint, color, tip): (Option<Level>, Option<Hsla>, Hsla, String) = match cell {
+                    Err(why) => (None, None, danger, why),
+                    Ok(reach) => {
+                        let paths = if reach.paths.is_empty() {
+                            "Nothing".to_string()
+                        } else {
+                            reach.paths.join("\n")
+                        };
+                        match reach.access {
+                            Some(Access::ReadWrite) => (Some(Level::Edit), Some(success.opacity(0.16)), success, paths),
+                            Some(Access::ReadOnly) => (Some(Level::Read), Some(accent.opacity(0.16)), accent, paths),
+                            None => (Some(Level::NoAccess), None, muted, paths),
+                        }
+                    }
+                };
+                let label = current.map_or("Refused", Level::label);
+                // Set by the user: the Spec column's Code row is the Read the
+                // code switch, never a level of its own.
+                let linked = kind == ProfileKind::Spec && area == Area::Code;
+                let set = !linked && level(&classification, kind, area).is_some();
+                let reasons: Vec<&'static str> = Level::ALL
+                    .into_iter()
+                    .filter_map(|choice| allowed(kind, area, choice).err())
+                    .collect();
+                let this = this.clone();
+                let menu = Button::new(SharedString::from(format!("settings-reach-{row}-{column}")))
+                    .ghost()
+                    .xsmall()
+                    .label(label)
+                    .tooltip(SharedString::from(tip))
+                    .dropdown_menu_with_anchor(gpui_kit::Anchor::TopLeft, move |mut menu, _, _| {
+                        for choice in Level::ALL {
+                            let this = this.clone();
+                            menu = menu.item(
+                                PopupMenuItem::new(choice.label())
+                                    .checked(current == Some(choice))
+                                    .disabled(allowed(kind, area, choice).is_err())
+                                    .on_click(move |_, _, cx| {
+                                        this.update(cx, |this, cx| this.set_level(kind, area, Some(choice), cx))
+                                            .ok();
+                                    }),
+                            );
+                        }
+                        // Why what is disabled is, as the sandbox never allows it.
+                        if !reasons.is_empty() {
+                            menu = menu.separator();
+                            for reason in &reasons {
+                                menu = menu.item(PopupMenuItem::label(*reason));
+                            }
+                        }
+                        if set {
+                            let this = this.clone();
+                            menu = menu.separator().item(PopupMenuItem::new("Use default").on_click(
+                                move |_, _, cx| {
+                                    this.update(cx, |this, cx| this.set_level(kind, area, None, cx)).ok();
+                                },
+                            ));
+                        }
+                        menu
+                    });
+                line = line.child(
+                    div()
+                        .relative()
+                        .w(px(CELL_WIDTH))
+                        .rounded(px(4.))
+                        .text_color(color)
+                        .when_some(tint, |cell, tint| cell.bg(tint))
+                        .child(menu)
+                        // Set by the user, a small dot in its corner.
+                        .when(set, |cell| {
+                            cell.child(
+                                gpui_kit::TestSupportExt::test_support(
+                                    div().id(SharedString::from(format!("settings-reach-set-{row}-{column}"))),
+                                )
+                                .absolute()
+                                .top(px(2.))
+                                .right(px(2.))
+                                .size(px(5.))
+                                .rounded_full()
+                                .bg(accent),
+                            )
+                        }),
+                );
+            }
+            grid = grid.child(line);
+            // An added area being edited: its folders and patterns, beneath
+            // its row.
+            if let Area::Added(index) = area
+                && self.editing_area == Some(index)
+            {
+                grid = grid.child(self.render_area_editor(index, &classification, project_dir, cx));
+            }
+        }
+        // A new area being named, at the end of the added ones.
+        if self.naming == Some(None) {
+            grid = grid.child(
+                h_flex()
+                    .gap_1()
+                    .child(div().w(px(AREA_WIDTH)).child(Input::new(&self.area_name).small())),
+            );
+        }
+        let any_set = classification.levels.values().any(|areas| !areas.is_empty())
+            || classification.areas.iter().any(|area| !area.levels.is_empty());
+        Self::card("Who can see what", cx)
+            .child(grid)
+            .child(div().text_sm().text_color(muted).child(OUTSIDE))
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(
+                        Button::new("settings-add-area")
+                            .ghost()
+                            .small()
+                            .icon(IconName::Plus)
+                            .label("Add area")
+                            .on_click(cx.listener(|this, _, window, cx| this.start_naming(None, window, cx))),
+                    )
+                    .child(
+                        Button::new("settings-reset-grid")
+                            .ghost()
+                            .small()
+                            .label("Reset grid")
+                            .disabled(!any_set)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.classify(
+                                    |classification| {
+                                        classification.levels.clear();
+                                        for area in &mut classification.areas {
+                                            area.levels.clear();
+                                        }
+                                    },
+                                    cx,
+                                )
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    /// One of the Code and spec card's lists: its folders and patterns, in
+    /// monospace, each removed from the button shown on hover, those in
+    /// both lists in the error colour, then Add folder and Add pattern.
+    fn render_classified(
+        &self,
+        spec: bool,
+        classification: &Classification,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = cx.theme();
+        let (muted, danger, mono) = (theme.muted_foreground, theme.danger, theme.mono_font_family.clone());
+        let (folders, patterns, other_folders, other_patterns) = if spec {
+            (
+                &classification.spec_roots,
+                &classification.spec_patterns,
+                &classification.code_roots,
+                &classification.code_patterns,
+            )
+        } else {
+            (
+                &classification.code_roots,
+                &classification.code_patterns,
+                &classification.spec_roots,
+                &classification.spec_patterns,
+            )
+        };
+        let (title, mode) = if spec { ("Spec", SendMode::Spec) } else { ("Code", SendMode::Code) };
+        let side = if spec { "spec" } else { "code" };
+        let rows: Vec<(String, bool, bool)> = folders
+            .iter()
+            .map(|folder| (folder.clone(), false, other_folders.contains(folder)))
+            .chain(
+                patterns
+                    .iter()
+                    .map(|pattern| (pattern.clone(), true, other_patterns.contains(pattern))),
+            )
+            .collect();
+        let mut list = v_flex()
+            .gap_0p5()
+            .child(div().text_sm().font_medium().text_color(chat_input::mode_color(mode, cx)).child(title));
+        for (n, (row, is_pattern, in_both)) in rows.into_iter().enumerate() {
+            let group = SharedString::from(format!("settings-{side}-row-{n}"));
+            let removed = row.clone();
+            list = list.child(
+                h_flex()
+                    .id(group.clone())
+                    .group(group.clone())
+                    .gap_2()
+                    .text_sm()
+                    .font_family(mono.clone())
+                    .when(in_both, |row| row.text_color(danger))
+                    .child(div().flex_1().min_w_0().truncate().child(row))
+                    .child(
+                        div()
+                            .opacity(0.)
+                            .group_hover(group, |style| style.opacity(1.))
+                            .child(
+                                Button::new(SharedString::from(format!("settings-{side}-remove-{n}")))
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::X)
+                                    .tooltip("Remove")
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        let removed = removed.clone();
+                                        this.classify(
+                                            |classification| {
+                                                let list = match (spec, is_pattern) {
+                                                    (false, false) => &mut classification.code_roots,
+                                                    (false, true) => &mut classification.code_patterns,
+                                                    (true, false) => &mut classification.spec_roots,
+                                                    (true, true) => &mut classification.spec_patterns,
+                                                };
+                                                list.retain(|item| *item != removed);
+                                            },
+                                            cx,
+                                        )
+                                    })),
+                            ),
+                    ),
+            );
+        }
+        if self.adding_pattern == Some(spec) {
+            list = list.child(Input::new(&self.pattern).small());
+        } else if folders.is_empty() && patterns.is_empty() {
+            list = list.child(div().text_sm().text_color(muted).child("Nothing"));
+        }
+        list.child(
+            h_flex()
+                .gap_1()
+                .pt_1()
+                .child(
+                    Button::new(SharedString::from(format!("settings-{side}-add-folder")))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::FolderPlus)
+                        .label("Add folder")
+                        .on_click(cx.listener(move |this, _, window, cx| this.add_folder(spec, window, cx))),
+                )
+                .child(
+                    Button::new(SharedString::from(format!("settings-{side}-add-pattern")))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Plus)
+                        .label("Add pattern")
+                        .on_click(cx.listener(move |this, _, window, cx| this.start_pattern(spec, window, cx))),
+                ),
+        )
+        .into_any_element()
+    }
+
+    /// The Code and spec card: the project's classification, as two lists.
+    fn render_sandbox_classification(&self, project_dir: &std::path::Path, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let (muted, danger) = (theme.muted_foreground, theme.danger);
+        let classification = Classification::load(project_dir);
+        let in_both = classification
+            .code_roots
+            .iter()
+            .any(|root| classification.spec_roots.contains(root))
+            || classification
+                .code_patterns
+                .iter()
+                .any(|pattern| classification.spec_patterns.contains(pattern));
+        let conflict = classification.conflict(project_dir);
+        // The lists alone; the grid's levels are its own.
+        let from_locations = Classification {
+            levels: classification.levels.clone(),
+            areas: classification.areas.clone(),
+            ..Classification::from_locations(project_dir)
+        };
+        let differs = classification != from_locations;
+        Self::card("Code and spec", cx)
+            .child(div().text_sm().text_color(muted).child(
+                "Which parts of the project are code and which are spec. A Code run can't open \
+                 spec, and a Spec run can't open code.",
+            ))
+            .child(
+                h_flex()
+                    .items_start()
+                    .gap_4()
+                    .child(div().flex_1().min_w_0().child(self.render_classified(false, &classification, cx)))
+                    .child(div().flex_1().min_w_0().child(self.render_classified(true, &classification, cx))),
+            )
+            .when(in_both || conflict.is_some(), |card| {
+                card.child(div().text_sm().text_color(danger).child(
+                    "Something is in both lists. Runs won't start until it is in one only.",
+                ))
+            })
+            .children(
+                self.classification_error
+                    .clone()
+                    .map(|why| div().text_sm().text_color(danger).child(why)),
+            )
+            .child(
+                div().child(
+                    Button::new("settings-reset-classification")
+                        .ghost()
+                        .small()
+                        .label("Reset to project locations")
+                        .disabled(!differs)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let Some(project_dir) = ProjectDirectory::get(cx) else {
+                                return;
+                            };
+                            this.classify(
+                                |classification| {
+                                    *classification = Classification {
+                                        levels: std::mem::take(&mut classification.levels),
+                                        areas: std::mem::take(&mut classification.areas),
+                                        ..Classification::from_locations(&project_dir)
+                                    }
+                                },
+                                cx,
+                            )
+                        })),
+                ),
+            )
+            .into_any_element()
+    }
+
+    /// The Spec tasks card: whether Spec tasks may read the code, and the
+    /// whole project, each a switch.
+    fn render_sandbox_spec_tasks(&self, project_dir: &std::path::Path, cx: &mut Context<Self>) -> AnyElement {
+        let muted = cx.theme().muted_foreground;
+        let settings = crate::project_settings::ProjectSettings::load(project_dir);
+        let row = |label: &'static str, says: &'static str, switch: AnyElement| {
+            h_flex()
+                .gap_4()
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .child(div().text_sm().child(label))
+                        .child(div().text_sm().text_color(muted).child(says)),
+                )
+                .child(switch)
+        };
+        Self::card("Spec tasks", cx)
+            .child(row(
+                "Read the code",
+                "Spec tasks can read the code, but never change it.",
+                Switch::new("settings-spec-reads-code")
+                    .checked(settings.spec_reads_code)
+                    .on_click(cx.listener(|this, on: &bool, _, cx| this.set_spec_reads_code(*on, cx)))
+                    .into_any_element(),
+            ))
+            .when(settings.spec_reads_code, |card| {
+                card.child(
+                    div().pl_6().child(row(
+                        "Read the whole project",
+                        "They can also read the rest of the project, read only.",
+                        Switch::new("settings-spec-reads-project")
+                            .checked(settings.spec_reads_project)
+                            .on_click(cx.listener(|this, on: &bool, _, cx| {
+                                this.set_spec_reads_project(*on, cx)
+                            }))
+                            .into_any_element(),
+                    )),
+                )
+            })
+            .children(
+                self.project_settings_error
+                    .clone()
+                    .map(|error| div().text_sm().text_color(cx.theme().danger).child(error)),
+            )
+            .into_any_element()
+    }
+
+    /// The Outside the sandbox card: what it doesn't cover, so it is never
+    /// taken for protection.
+    fn render_sandbox_outside(&self, cx: &mut Context<Self>) -> AnyElement {
+        let muted = cx.theme().muted_foreground;
+        let line = |icon: IconName, says: &'static str| {
+            h_flex()
+                .items_start()
+                .gap_2()
+                .text_sm()
+                .text_color(muted)
+                .child(div().pt_0p5().child(Icon::new(icon).xsmall()))
+                .child(div().flex_1().min_w_0().child(says))
+        };
+        Self::card("Outside the sandbox", cx)
+            .child(line(
+                IconName::Globe,
+                "The network: a run can still fetch the project from anywhere it is published.",
+            ))
+            .child(line(
+                IconName::Bot,
+                "The harness's own service: it keeps what earlier runs of a conversation sent it.",
+            ))
+            .child(line(
+                IconName::ClipboardPaste,
+                "The clipboard: a run can read whatever was last copied.",
+            ))
+            .into_any_element()
+    }
+
+    /// The "Sandbox" section, as the SettingsWindowScope says: a column of
+    /// cards, Status first and Outside the sandbox last, the project's own
+    /// between them while one is open.
+    fn render_sandbox(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let muted = cx.theme().muted_foreground;
+        // Lets UI tests find each card; inert in normal builds.
+        let tagged = |id: &'static str, card: AnyElement| {
+            gpui_kit::TestSupportExt::test_support(div().id(id).w_full().child(card)).into_any_element()
+        };
+        let mut column = v_flex()
+            .gap_4()
+            .child(tagged("settings-sandbox-status", self.render_sandbox_status(cx)));
+        match ProjectDirectory::get(cx) {
+            Some(project_dir) => {
+                column = column
+                    .child(tagged("settings-sandbox-reach", self.render_sandbox_profiles(&project_dir, cx)))
+                    .child(tagged(
+                        "settings-sandbox-classification",
+                        self.render_sandbox_classification(&project_dir, cx),
+                    ))
+                    .child(tagged("settings-sandbox-spec-tasks", self.render_sandbox_spec_tasks(&project_dir, cx)));
+            }
+            None => {
+                column = column.child(
                     div()
                         .text_sm()
                         .text_color(muted)
-                        .child(
-                            "The code is mounted read only, so Spec tasks and a Chain prompt's \
-                             spec steps can read it but never change it.",
-                        ),
-                )
-                .children(whole)
-                .children(self.project_settings_error.clone().map(|error| {
-                    div().text_sm().text_color(cx.theme().danger).child(error)
-                }))
-        });
-        v_flex().gap_5().children(reads_code).child(podman).child(
-            v_flex()
-                .gap_2()
-                .child(div().font_semibold().child("Logins"))
-                .child(logins),
-        )
+                        .child("Who can see what, code and spec, and Spec tasks are for a project, once one is open."),
+                );
+            }
+        }
+        column.child(tagged("settings-sandbox-outside", self.render_sandbox_outside(cx)))
     }
 
     /// Lets the open project's Spec runs read the code, or not, saved with
@@ -947,12 +1918,11 @@ impl Render for SettingsWindow {
                 ),
                 "Open a project to edit its injected prompts.",
             ),
-            Section::Containers => (
-                "Containers",
-                "Spec tasks, a Chain prompt's spec steps, and questions always \
-                 run in a container holding only what their mode may use, so \
-                 a spec run can't read or change the code. Code tasks always \
-                 run on the host."
+            Section::Sandbox => (
+                "Sandbox",
+                "Every run of a harness runs natively under a sandbox the \
+                 operating system enforces, so a Code run can't reach the \
+                 spec's source and a Spec run can't reach the code."
                     .to_string(),
                 "",
             ),
@@ -976,8 +1946,8 @@ impl Render for SettingsWindow {
         };
         let body: AnyElement = if section == Section::Agent {
             self.render_agents(cx).into_any_element()
-        } else if section == Section::Containers {
-            self.render_containers(cx).into_any_element()
+        } else if section == Section::Sandbox {
+            self.render_sandbox(cx).into_any_element()
         } else if section == Section::Updates {
             render_updates(cx).into_any_element()
         } else if ProjectDirectory::get(cx).is_some() {
@@ -1071,13 +2041,13 @@ mod tests {
     use crate::system_prompts;
     use crate::system_prompts::Prompt;
 
-    /// The sidebar ends with Updates, after Containers.
+    /// The sidebar ends with Updates, after Sandbox.
     #[test]
     fn updates_come_last() {
         let labels: Vec<&str> = Section::ALL.iter().map(|section| section.label()).collect();
         assert_eq!(
             labels,
-            ["System prompts", "Injected prompts", "Agent", "Containers", "Updates"]
+            ["System prompts", "Injected prompts", "Agent", "Sandbox", "Updates"]
         );
     }
 
@@ -1307,6 +2277,148 @@ mod tests {
     /// picking another sends the project's runs from then on to it, saved
     /// with the project, its directory standing in for HARNESS_DIRECTORY.
     /// With no project open, none is offered.
+    /// The Sandbox section is a column of cards: Status and Outside the
+    /// sandbox always, the project's own between them once one is open,
+    /// its grid saying each mode's reach; a classification change shows in
+    /// the grid at once, and is saved.
+    #[gpui_kit::test]
+    async fn the_sandbox_section_is_a_column_of_cards(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+        });
+        let mut settings = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| SettingsWindow::new(window, cx));
+            settings = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let settings = settings.unwrap();
+        let cx = &mut VisualTestContext::from_window(window.into(), cx);
+        settings.update(cx, |this, cx| this.pick(Section::Sandbox, cx));
+        cx.run_until_parked();
+        let shown = |id: &'static str, cx: &mut VisualTestContext| {
+            cx.update(|window, cx| {
+                window.render_frame(cx);
+                window.try_find(id).is_some()
+            })
+        };
+        // No project: Status and Outside the sandbox alone.
+        assert!(shown("settings-sandbox-status", cx));
+        assert!(shown("settings-sandbox-outside", cx));
+        assert!(!shown("settings-sandbox-reach", cx));
+
+        let dir = std::env::temp_dir().join(format!("suspense-settings-sandbox-{}", std::process::id()));
+        fs::remove_dir_all(&dir).ok();
+        for folder in ["src", "spec", "docs", ".claude/reference"] {
+            fs::create_dir_all(dir.join(folder)).unwrap();
+        }
+        crate::sandbox::Classification {
+            code_roots: vec!["src".into()],
+            spec_roots: vec!["spec".into()],
+            ..crate::sandbox::Classification::default()
+        }
+        .save(&dir)
+        .unwrap();
+        cx.update(|_, cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        for card in [
+            "settings-sandbox-status",
+            "settings-sandbox-reach",
+            "settings-sandbox-classification",
+            "settings-sandbox-spec-tasks",
+            "settings-sandbox-outside",
+        ] {
+            assert!(shown(card, cx), "no {card} card");
+        }
+        // The cards go top to bottom in order.
+        let top = |id: &'static str, cx: &mut VisualTestContext| {
+            cx.update(|window, _| window.find(id).bounds().top())
+        };
+        assert!(top("settings-sandbox-status", cx) < top("settings-sandbox-reach", cx));
+        assert!(top("settings-sandbox-reach", cx) < top("settings-sandbox-classification", cx));
+        assert!(top("settings-sandbox-spec-tasks", cx) < top("settings-sandbox-outside", cx));
+        // Removing the code's folder: the Code row reads No access for Code
+        // at once, and the change is saved.
+        let reach = |cx: &mut VisualTestContext| {
+            settings.read_with(cx, |_, cx| {
+                let project = ProjectDirectory::get(cx).unwrap();
+                crate::sandbox::reach::reach(
+                    &[crate::sandbox::ProfileKind::Code],
+                    crate::agent::Agent::Claude,
+                    &project,
+                )[0]
+                .1[0]
+                    .clone()
+                    .unwrap()
+                    .access
+            })
+        };
+        assert_eq!(reach(cx), Some(crate::sandbox::Access::ReadWrite));
+        cx.update(|window, cx| {
+            window.render_frame(cx);
+            window.click("settings-code-remove-0", cx);
+        });
+        cx.run_until_parked();
+        assert_eq!(reach(cx), None);
+        assert!(crate::sandbox::Classification::load(&dir).code_roots.is_empty());
+        // A cell set is marked, saved, and Reset grid puts it back; the
+        // Spec column's Code row is the Read the code switch.
+        use crate::sandbox::reach::{Area, Level};
+        settings.update(cx, |this, cx| {
+            this.set_level(crate::sandbox::ProfileKind::Code, Area::Reference, Some(Level::NoAccess), cx)
+        });
+        assert!(shown("settings-reach-set-2-0", cx), "the set cell isn't marked");
+        assert_eq!(
+            crate::sandbox::reach::level(
+                &crate::sandbox::Classification::load(&dir),
+                crate::sandbox::ProfileKind::Code,
+                Area::Reference
+            ),
+            Some(Level::NoAccess)
+        );
+        cx.update(|window, cx| {
+            window.render_frame(cx);
+            window.click("settings-reset-grid", cx);
+        });
+        cx.run_until_parked();
+        assert!(crate::sandbox::Classification::load(&dir).levels.is_empty());
+        assert!(!shown("settings-reach-set-2-0", cx));
+        settings.update(cx, |this, cx| {
+            this.set_level(crate::sandbox::ProfileKind::Spec, Area::Code, Some(Level::Read), cx)
+        });
+        assert!(crate::project_settings::spec_reads_code(&dir), "the grid and the switch disagree");
+        assert!(crate::sandbox::Classification::load(&dir).levels.is_empty());
+        // An added area is a row of its own, before Other files, saying what
+        // it covers; removed, it goes.
+        settings.update(cx, |this, cx| {
+            this.classify(
+                |classification| {
+                    classification.areas.push(crate::sandbox::AddedArea {
+                        name: "Docs".into(),
+                        roots: vec!["docs".into()],
+                        ..crate::sandbox::AddedArea::default()
+                    })
+                },
+                cx,
+            )
+        });
+        assert!(shown("settings-area-covered-4", cx), "no row for the added area");
+        settings.update(cx, |this, cx| this.set_level(crate::sandbox::ProfileKind::Code, Area::Added(0), Some(Level::Read), cx));
+        assert_eq!(
+            crate::sandbox::Classification::load(&dir).areas[0].levels.get("code"),
+            Some(&Level::Read)
+        );
+        cx.update(|window, cx| {
+            window.render_frame(cx);
+            window.click("settings-area-remove-4", cx);
+        });
+        cx.run_until_parked();
+        assert!(crate::sandbox::Classification::load(&dir).areas.is_empty());
+        fs::remove_dir_all(&dir).ok();
+    }
+
     #[gpui_kit::test]
     async fn picks_the_projects_harness(cx: &mut TestAppContext) {
         use crate::agent::{self, Agent};

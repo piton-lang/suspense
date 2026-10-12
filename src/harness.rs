@@ -18,7 +18,6 @@ use serde_json::{Value, json};
 
 use crate::agent::{self, Agent};
 use crate::attached_image;
-use crate::container;
 use crate::harness_mentions;
 use crate::usage::{PlanLimit, Spend, Tally};
 
@@ -40,6 +39,9 @@ pub enum HarnessEvent {
     /// A new block of reply text began.
     TextStarted,
     TextDelta(String),
+    /// Thinking the model streamed, written though never shown: it counts
+    /// towards how fast the harness is writing.
+    ThinkingDelta(String),
     ToolStarted {
         id: String,
         name: String,
@@ -140,21 +142,19 @@ pub enum HarnessEvent {
     /// harness has no such session. The same prompt goes again at once as a
     /// new conversation, and that one is never to be carried on again.
     NewConversation(String),
-    /// The run's container is being prepared: its image built, what the
-    /// build prints following as output.
+    /// The run's sandbox is being made: its temporary directory, its
+    /// filtered repository, and its policy.
     Preparing,
-    /// Its container is ready, and the harness about to start in it.
+    /// Its sandbox is ready, and the harness about to start under it.
     Prepared,
-    /// Podman can't run its container, and what can be done about it, as
-    /// the ContainerEnvironmentScope says; the run then fails saying why.
-    PodmanUnavailable(Option<container::MachineAction>),
-    /// The container's image couldn't be built; what the application can do
-    /// about it first, if anything. The run then fails saying why, in
-    /// plain words.
-    BuildFailed(Option<container::BuildFix>),
-    /// The harness, as named, isn't logged in in its container, and must be
-    /// before the run can go; the run then fails saying so.
-    LoginNeeded(Agent),
+}
+
+/// The sandbox a run goes under, as the SandboxScope says: its profile, and
+/// the files of its own it is granted.
+#[derive(Clone, Debug)]
+pub struct Sandboxed {
+    pub kind: crate::sandbox::ProfileKind,
+    pub files: crate::sandbox::RunFiles,
 }
 
 /// What started a background task: an Agent or Task tool call, or a shell
@@ -199,15 +199,14 @@ pub fn send(
 /// harness knows at once. That is only a nudge: a shell command can still
 /// reach them, and nothing is put back or stops the run when one does.
 ///
-/// A run in a container, as `container` says, is kept off nothing this way:
-/// it sees only what is mounted into it.
+/// What a run may really reach is its sandbox's to say, as `sandbox` does.
 #[derive(Clone, Debug, Default)]
 pub struct Protected {
     pub root: Option<PathBuf>,
     pub unread: Option<PathBuf>,
-    /// The container the run goes in, if it runs in one rather than on the
-    /// host.
-    pub container: Option<container::Plan>,
+    /// The sandbox the run goes under. Every run the application starts has
+    /// one; only tests run without.
+    pub sandbox: Option<Sandboxed>,
     /// The model the run goes to, as the harness is told it; none for its
     /// own. Not kept off anything: only how the run is set up.
     pub model: Option<String>,
@@ -232,14 +231,45 @@ pub fn send_with_images(
     resume: Option<Resume>,
     project_dir: PathBuf,
 ) -> mpsc::UnboundedReceiver<HarnessEvent> {
+    // Reading the project, never changing it, as a question does.
+    let sandbox = (!cfg!(test)).then(|| Sandboxed {
+        kind: crate::sandbox::ProfileKind::Question,
+        files: crate::sandbox::RunFiles::default(),
+    });
     send_kept_off(
         prompt,
         system_prompt,
         images,
         resume,
         project_dir,
-        Protected::default(),
+        Protected {
+            sandbox,
+            ..Protected::default()
+        },
     )
+}
+
+/// Puts `command`, one of the application's own runs of the harness in
+/// `project_dir`, under the sandbox of `kind`, as the SandboxScope's
+/// profiles say; the sandbox to hold until it is over. Fails, so it never
+/// runs, where the sandbox can't be applied.
+pub fn sandboxed(
+    kind: crate::sandbox::ProfileKind,
+    project_dir: &Path,
+    command: &mut Command,
+) -> Result<Option<crate::sandbox::Prepared>> {
+    // A test's own program stands in for the harness, where it is.
+    #[cfg(test)]
+    if TEST_PROGRAM.with_borrow(Option::is_some) {
+        return Ok(None);
+    }
+    let agent = agent::of_project(Some(project_dir));
+    let prepared = crate::sandbox::prepare(kind, agent, project_dir, &crate::sandbox::RunFiles::default())
+        .map_err(|refused| anyhow::anyhow!("{refused}"))?;
+    prepared
+        .apply(command)
+        .map_err(|refused| anyhow::anyhow!("{refused}"))?;
+    Ok(Some(prepared))
 }
 
 /// Runs the harness once as [`send_with_images`] does, kept off what
@@ -308,18 +338,24 @@ fn start(
 ) -> Run {
     let agent = agent::of_project(Some(&project_dir));
     let program = program(agent);
+    // A test's own program, standing in for the harness, writes where the
+    // test looks, outside any grant; only tests of the sandbox itself run it
+    // sandboxed.
+    #[cfg(test)]
+    let protected = {
+        let mut protected = protected;
+        if TEST_PROGRAM.with_borrow(Option::is_some) && !SANDBOX_IN_TEST.get() {
+            protected.sandbox = None;
+        }
+        protected
+    };
     let (tx, rx) = mpsc::unbounded();
     let feed = (fed && agent.can_be_fed()).then(|| Feed::new(tx.clone()));
     let stop = Stop::new(feed.clone());
-    // A test's own `podman` goes with the run to its thread.
-    #[cfg(test)]
-    let podman = container::podman_for_test();
     std::thread::spawn({
         let feed = feed.clone();
         let stop = stop.clone();
         move || {
-            #[cfg(test)]
-            container::use_podman_for_test(podman);
             let mut resume = resume;
             let result = loop {
                 let ended = run(
@@ -363,13 +399,8 @@ fn start(
                 .or_else(|| resume.as_ref().map(|resume| resume.session.clone()));
             if let (Some(kept), Some(session)) = (&protected.session_copy, session) {
                 let (began, id) = Agent::of_session(&session);
-                let contained = protected
-                    .container
-                    .as_ref()
-                    .filter(|_| container::active())
-                    .map(container::Plan::as_on_host);
                 if began == agent
-                    && let Some((root, cwd)) = sessions_of(agent, &project_dir, contained.as_ref())
+                    && let Some((root, cwd)) = sessions_of(agent, &project_dir)
                     && let Err(err) = crate::session_keep::keep(agent, &root, &cwd, id, kept)
                 {
                     crate::debug_log::log(
@@ -399,6 +430,18 @@ thread_local! {
     /// A program each test's runs start in place of the agent's own, so
     /// tests can stand in a harness of their own.
     static TEST_PROGRAM: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Has this test's runs go under their sandbox even with a program of the
+/// test's own standing in for the harness.
+#[cfg(test)]
+pub fn sandbox_in_test(sandboxed: bool) {
+    SANDBOX_IN_TEST.set(sandboxed);
+}
+
+#[cfg(test)]
+thread_local! {
+    static SANDBOX_IN_TEST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Has this test's runs start `program` in place of the agent's harness.
@@ -1185,27 +1228,27 @@ fn run(
     if let Some(missing) = crate::attached_file::missing(&protected.files) {
         bail!("{missing}");
     }
-    // A run in a container needs Podman, its image, and the harness logged
-    // in there, before anything is run.
-    // What it mounts as the host now stands.
-    let contained = protected
-        .container
-        .as_ref()
-        .filter(|_| container::active())
-        .map(container::Plan::as_on_host);
-    let contained = contained.as_ref();
-    let image = match contained {
-        Some(plan) => match prepare(plan, tx, stop)? {
-            Some(image) => Some(image),
-            None => return Ok(Ended::Done),
-        },
+    // Its sandbox, made before anything is run; one that can't be is never
+    // run unrestricted instead.
+    let prepared = match &protected.sandbox {
+        Some(sandboxed) => {
+            tx.unbounded_send(HarnessEvent::Preparing).ok();
+            let prepared = crate::sandbox::prepare(sandboxed.kind, agent, project_dir, &sandboxed.files)
+                .map_err(|refused| anyhow::anyhow!("{refused}"))?;
+            crate::debug_log::log(Some(project_dir), format!("sandbox: {}", prepared.describe()));
+            tx.unbounded_send(HarnessEvent::Prepared).ok();
+            Some(prepared)
+        }
         None => None,
     };
+    if stop.is_stopped() {
+        return Ok(Ended::Done);
+    }
     // A conversation whose session the harness no longer has is put back
     // from the project's latest copy first, so it carries on with its
     // context.
     if let Some((id, _)) = &resume
-        && let Some((root, cwd)) = sessions_of(agent, project_dir, contained)
+        && let Some((root, cwd)) = sessions_of(agent, project_dir)
         && !crate::session_keep::has(agent, &root, &cwd, id)
     {
         let restored = crate::session_keep::restore(agent, &root, &cwd, id, project_dir);
@@ -1255,7 +1298,8 @@ fn run(
             if let Some(system_prompt) = system_prompt {
                 command.args(["--append-system-prompt", system_prompt]);
             }
-            if let Some(rules) = denied_rules(protected).filter(|_| contained.is_none()) {
+            // A courtesy only: the sandbox is what keeps it off them.
+            if let Some(rules) = denied_rules(protected) {
                 // Joined in one argument, as the flag takes any number of
                 // rules and would otherwise take what follows as more.
                 command.arg(format!("--disallowedTools={rules}"));
@@ -1311,16 +1355,11 @@ fn run(
     if stop.is_stopped() {
         return Ok(Ended::Done);
     }
-    // In a container, `podman run` runs the harness with the same arguments.
-    if let (Some(plan), Some(image)) = (contained, &image) {
-        let args: Vec<std::ffi::OsString> = command.get_args().map(ToOwned::to_owned).collect();
-        command = container::podman_command();
-        command.args(plan.run_args(image, agent.command(), &args, false));
-        // Its mounts and the podman command, as the debug log keeps them.
-        crate::debug_log::log(
-            Some(project_dir),
-            format!("container for {name}: {}", crate::process::describe(&command)),
-        );
+    // Under its sandbox, in force before its program runs.
+    if let Some(prepared) = &prepared {
+        prepared
+            .apply(&mut command)
+            .map_err(|refused| anyhow::anyhow!("{refused}"))?;
     }
     command
         .current_dir(project_dir)
@@ -1328,8 +1367,11 @@ fn run(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     // On the host, in a scope of its own where systemd runs, so the system's
-    // out-of-memory handling ends it rather than Suspense.
-    if contained.is_none() {
+    // out-of-memory handling ends it rather than Suspense. Not under a
+    // sandbox: systemd-run would need the user's service bus, through which
+    // a run could start anything unrestricted; it is still marked to be
+    // ended first.
+    if prepared.is_none() {
         let program = command.get_program().to_owned();
         let args: Vec<std::ffi::OsString> = command.get_args().map(ToOwned::to_owned).collect();
         let envs: Vec<(std::ffi::OsString, Option<std::ffi::OsString>)> = command
@@ -1402,8 +1444,6 @@ fn run(
         }
     });
 
-    // Whether the harness printed anything of its own.
-    let mut harness_spoke = false;
     let mut replying = Replying::default();
     // The run's last result, held back until its process has exited, so the
     // task isn't shown finished while the harness is still at work.
@@ -1449,12 +1489,6 @@ fn run(
                 continue;
             }
         };
-        // Paths the harness saw in its container are the host's to whatever
-        // reads them.
-        let line = match contained {
-            Some(plan) => plan.map_line(&line),
-            None => line,
-        };
         if line.trim().is_empty() {
             // Nothing to parse, but the raw stream shows lines as they arrived.
             // Once no one is listening, the run is stopped.
@@ -1466,8 +1500,6 @@ fn run(
         }
         let events = match serde_json::from_str::<Value>(&line) {
             Ok(event) => {
-                // The harness itself is running, past anything Podman says.
-                harness_spoke = true;
                 // The skills and agents this run has are offered as mentions.
                 harness_mentions::remember(&event, project_dir);
                 let events = parse(&event);
@@ -1514,14 +1546,6 @@ fn run(
         false => String::new(),
     };
     crate::process::ended(pid, Some(status), Some(&stderr));
-    // In a container, Podman failing before the harness started is Podman's
-    // failure, said plainly, never the harness's.
-    if contained.is_some()
-        && !harness_spoke
-        && let Some(why) = container::run_failure(status.code(), &stderr)
-    {
-        bail!("{why}");
-    }
     // Carrying on a conversation the harness has none of, it never began:
     // the prompt goes again as a new one.
     let failed_with = match &last {
@@ -1561,95 +1585,14 @@ fn run(
     Ok(Ended::Done)
 }
 
-/// Gets a run's container ready, as the ContainerEnvironmentScope says:
-/// Podman able to run it, its image built, and the harness logged in there.
-/// Gives the image to run; none when the run was stopped meanwhile. Fails,
-/// having said what can be done about it, when it can't be got ready.
-fn prepare(
-    plan: &container::Plan,
-    tx: &mpsc::UnboundedSender<HarnessEvent>,
-    stop: &Stop,
-) -> Result<Option<String>> {
-    let state = container::podman_state(plan.platform);
-    if let Some(why) = container::unavailable(&state, plan.platform) {
-        tx.unbounded_send(HarnessEvent::PodmanUnavailable(why.action))
-            .ok();
-        bail!("{}", why.message);
-    }
-    // Installed, but unusable: Podman couldn't be accessed, and says why.
-    if let Err(why) = container::check_access() {
-        bail!("{}", container::access_message(&why));
-    }
-    let image = container::ensure_image(
-        &plan.project_dir,
-        &mut || {
-            tx.unbounded_send(HarnessEvent::Preparing).ok();
-        },
-        &mut |line| {
-            tx.unbounded_send(HarnessEvent::Output(line)).ok();
-        },
-    )
-    .map_err(|err| match err.downcast_ref::<container::BuildFailed>() {
-        // In plain words, with what can be done: what the build printed
-        // went to the raw output, and is in the debug log.
-        Some(failed) => {
-            tx.unbounded_send(HarnessEvent::BuildFailed(failed.fixes.first().copied()))
-                .ok();
-            anyhow::anyhow!("{}", failed.message)
-        }
-        None => err.context("could not prepare the container's image"),
-    })?;
-    if stop.is_stopped() {
-        return Ok(None);
-    }
-    if !logged_in(plan.agent, &image, plan.platform)? {
-        tx.unbounded_send(HarnessEvent::LoginNeeded(plan.agent)).ok();
-        bail!("{} isn't logged in. Log in to run this.", plan.agent.label());
-    }
-    tx.unbounded_send(HarnessEvent::Prepared).ok();
-    Ok(Some(image))
-}
-
-/// Whether `agent` is logged in in its container, asked of Podman once and
-/// remembered once it is, as its credentials stay in its volume.
-fn logged_in(agent: Agent, image: &str, platform: container::Platform) -> Result<bool> {
-    if KNOWN.lock().unwrap().contains(&agent) {
-        return Ok(true);
-    }
-    let logged_in = container::logged_in(agent, image, platform)?;
-    if logged_in {
-        KNOWN.lock().unwrap().push(agent);
-    }
-    Ok(logged_in)
-}
-
-/// Forgets that `agent` was logged in in its container, as when it is
-/// logged in again, so the next run asks.
-pub fn forget_login(agent: Agent) {
-    KNOWN.lock().unwrap().retain(|known| *known != agent);
-}
-
-/// The harnesses known to be logged in in their containers.
-static KNOWN: Mutex<Vec<Agent>> = Mutex::new(Vec::new());
-
-/// Where `agent` keeps its sessions for a run in `project_dir`, in the
-/// container `contained` if it runs in one: the sessions folder and the
-/// working directory the run's sessions are kept under.
-fn sessions_of(
-    agent: Agent,
-    project_dir: &Path,
-    contained: Option<&container::Plan>,
-) -> Option<(PathBuf, PathBuf)> {
-    match contained {
-        Some(plan) => Some((
-            crate::session_keep::sessions_root(agent, plan.sessions.as_deref())?,
-            PathBuf::from(container::WORKSPACE),
-        )),
-        None => Some((
-            crate::session_keep::sessions_root(agent, None)?,
-            project_dir.to_path_buf(),
-        )),
-    }
+/// Where `agent` keeps its sessions for a run in `project_dir`, on the
+/// host: the sessions folder and the working directory the run's sessions
+/// are kept under.
+fn sessions_of(agent: Agent, project_dir: &Path) -> Option<(PathBuf, PathBuf)> {
+    Some((
+        crate::session_keep::sessions_root(agent, None)?,
+        project_dir.to_path_buf(),
+    ))
 }
 
 thread_local! {
@@ -1759,6 +1702,8 @@ pub fn ask_quickly(project_dir: &Path, prompt: &str) -> Result<String> {
         }
         _ => one_off_command(project_dir),
     };
+    // It reads nothing of the project.
+    let _sandbox = sandboxed(crate::sandbox::ProfileKind::Bare, project_dir, &mut command)?;
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -2245,6 +2190,14 @@ fn parse_claude(event: &Value) -> Vec<HarnessEvent> {
                         .into_iter()
                         .collect()
                 }
+                Some("content_block_delta")
+                    if str_at(inner, "/delta/type").as_deref() == Some("thinking_delta") =>
+                {
+                    str_at(inner, "/delta/thinking")
+                        .map(HarnessEvent::ThinkingDelta)
+                        .into_iter()
+                        .collect()
+                }
                 _ => Vec::new(),
             }
         }
@@ -2515,7 +2468,7 @@ pub(crate) mod tests {
                 model: None,
                 effort: None,
                 unread: unread.map(PathBuf::from),
-                container: None,
+                sandbox: None,
                 files: Vec::new(),
                 session_copy: None,
             })
@@ -2787,6 +2740,12 @@ wait
                     result: String::new()
                 },
             ]
+        );
+        // Thinking streamed, never shown, though written.
+        assert_eq!(
+            parse(&json!({ "type": "stream_event", "event": {
+                "type": "content_block_delta", "delta": { "type": "thinking_delta", "thinking": "Hmm" } } })),
+            [HarnessEvent::ThinkingDelta("Hmm".into())]
         );
         // Its time waiting on the model, as the conversation's running total.
         assert_eq!(
@@ -3667,6 +3626,94 @@ done
         futures::executor::block_on(events.collect::<Vec<_>>())
     }
 
+    /// A task's run goes under its sandbox: the harness, and everything it
+    /// starts, can read the code but never the spec's source, and a run
+    /// whose sandbox can't be applied never starts, saying why.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_task_runs_under_its_sandbox() {
+        if crate::sandbox::status().is_err() {
+            eprintln!("skipped: the sandbox can't run here");
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("suspense-sandboxed-run-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::create_dir_all(dir.join("spec")).unwrap();
+        std::fs::write(
+            dir.join("piton.config.pi"),
+            "use @piton/belay\nuse @piton/config\n\n\
+             from @piton/belay import ClaudeCodeAdapter\n\n\
+             export piton-config Project:\n    root: ./spec\n    frameworks:\n        - {Belay}\n\n\
+             belay-config Belay:\n    codeRoot: ./src\n    adapters:\n        - {ClaudeCodeAdapter}\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("src/a.rs"), "the code\n").unwrap();
+        std::fs::write(dir.join("spec/index.pi"), "the spec source\n").unwrap();
+        // The harness, in the code, reports what it could read.
+        let harness = dir.join("src/fake-harness");
+        std::fs::write(
+            &harness,
+            "#!/bin/sh\n\
+             code=$(cat src/a.rs 2>&1 | tr -d '\\n\"')\n\
+             spec=$(sh -c 'cat spec/index.pi' 2>&1 | tr -d '\\n\"')\n\
+             echo \"{\\\"type\\\":\\\"result\\\",\\\"is_error\\\":false,\\\"result\\\":\\\"code=$code spec=$spec\\\"}\"\n",
+        )
+        .unwrap();
+        crate::test_scripts::make_executable(&harness);
+        super::use_program_for_test(Some(harness.clone()));
+        super::sandbox_in_test(true);
+        let protected = super::Protected {
+            sandbox: Some(super::Sandboxed {
+                kind: crate::sandbox::ProfileKind::Code,
+                files: crate::sandbox::RunFiles::default(),
+            }),
+            ..super::Protected::default()
+        };
+        let run = super::send_task("Read it".into(), None, Vec::new(), None, dir.clone(), protected);
+        let events = all_events(run.events);
+        let result = events
+            .iter()
+            .find_map(|event| match event {
+                HarnessEvent::Finished { result, .. } => Some(result.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("the run never finished: {events:?}"));
+        assert!(result.contains("code=the code"), "{result}");
+        assert!(result.contains("Permission denied") && !result.contains("the spec source"), "{result}");
+        assert!(events.contains(&HarnessEvent::Preparing) && events.contains(&HarnessEvent::Prepared));
+
+        // A path classed as both: the run never starts, saying why.
+        crate::sandbox::Classification {
+            code_roots: vec!["src".into()],
+            spec_roots: vec!["src".into()],
+            ..crate::sandbox::Classification::default()
+        }
+        .save(&dir)
+        .unwrap();
+        let protected = super::Protected {
+            sandbox: Some(super::Sandboxed {
+                kind: crate::sandbox::ProfileKind::Code,
+                files: crate::sandbox::RunFiles::default(),
+            }),
+            ..super::Protected::default()
+        };
+        let run = super::send_task("Read it".into(), None, Vec::new(), None, dir.clone(), protected);
+        let events = all_events(run.events);
+        super::use_program_for_test(None);
+        super::sandbox_in_test(false);
+        let failed = events
+            .iter()
+            .find_map(|event| match event {
+                HarnessEvent::Failed(error) => Some(error.clone()),
+                _ => None,
+            })
+            .expect("a run without its sandbox started");
+        assert!(failed.starts_with(crate::sandbox::REFUSED), "{failed}");
+        assert!(!events.iter().any(|event| matches!(event, HarnessEvent::Finished { .. })));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// The image content blocks of a stream-json user message: each image's
     /// media type and its bytes, decoded.
     #[cfg(unix)]
@@ -4008,192 +4055,6 @@ done
                 },
             ]
         );
-    }
-
-    /// A run in a container is a `podman run` of the harness, with what its
-    /// plan mounts, and no rule against reading or editing anything, since
-    /// nothing it mustn't touch is there; the harness's output reads as ever.
-    #[cfg(unix)]
-    #[test]
-    fn a_containerised_run_goes_through_podman_unguarded() {
-        let dir = std::env::temp_dir().join(format!("suspense-podman-run-{}", std::process::id()));
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::create_dir_all(dir.join("spec")).unwrap();
-        std::fs::create_dir_all(dir.join("src")).unwrap();
-        let log = dir.join("podman.log");
-        let script = dir.join("podman");
-        std::fs::write(
-            &script,
-            format!(
-                "#!/bin/sh\n\
-                 echo \"$*\" >> {log}\n\
-                 case \"$1\" in\n\
-                 --version) echo 'podman version 5.0.0' ;;\n\
-                 image) exit 0 ;;\n\
-                 run)\n\
-                   case \"$*\" in\n\
-                   *'auth status'*) echo '{{\"loggedIn\": true}}' ;;\n\
-                   *) read first\n\
-                      echo '{{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"s1\"}}'\n\
-                      echo '{{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Done.\"}}' ;;\n\
-                   esac ;;\n\
-                 esac\n",
-                log = log.display()
-            ),
-        )
-        .unwrap();
-        crate::test_scripts::make_executable(&script);
-        crate::container::use_podman_for_test(Some(script));
-        let locations = crate::project_tree::Locations {
-            spec: Some(dir.join("spec")),
-            code: Some(dir.join("src")),
-        };
-        let plan = crate::container::Plan::new(
-            crate::container::RunKind::Spec,
-            crate::agent::Agent::Claude,
-            &dir,
-            &locations,
-            None,
-            crate::container::Platform::Linux,
-        );
-        let protected = super::Protected {
-            root: Some(dir.join("src")),
-            model: None,
-            effort: None,
-            unread: Some(dir.join("src")),
-            container: Some(plan),
-            files: Vec::new(),
-            session_copy: None,
-        };
-        let super::Run { mut events, .. } = super::send_task(
-            "Go.".into(),
-            Some("System.".into()),
-            Vec::new(),
-            None,
-            dir.clone(),
-            protected,
-        );
-        crate::container::use_podman_for_test(None);
-        let start = std::time::Instant::now();
-        loop {
-            assert!(
-                start.elapsed() < std::time::Duration::from_secs(20),
-                "never finished"
-            );
-            match events.try_recv() {
-                Ok(HarnessEvent::Finished { result, .. }) => {
-                    assert_eq!(result, "Done.");
-                    break;
-                }
-                Ok(HarnessEvent::Failed(error)) => panic!("failed: {error}"),
-                Ok(_) => {}
-                Err(futures::channel::mpsc::TryRecvError::Closed) => {
-                    panic!("the run ended without finishing")
-                }
-                Err(futures::channel::mpsc::TryRecvError::Empty) => {
-                    std::thread::sleep(std::time::Duration::from_millis(10))
-                }
-            }
-        }
-        let calls = std::fs::read_to_string(&log).unwrap();
-        let run = calls
-            .lines()
-            .find(|line| line.starts_with("run") && line.contains("claude -p"))
-            .expect("the harness never ran in a container");
-        assert!(
-            run.contains("--rm") && run.contains("--userns=keep-id"),
-            "{run}"
-        );
-        assert!(
-            run.contains(&format!("src={}/spec", dir.display())),
-            "{run}"
-        );
-        assert!(
-            !run.contains(&format!("src={}/src", dir.display())),
-            "the code was mounted: {run}"
-        );
-        assert!(
-            !run.contains("--disallowedTools"),
-            "a deny rule was given: {run}"
-        );
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    /// Podman failing to run a container, before the harness starts, fails
-    /// the run saying Podman couldn't be accessed, with what Podman said,
-    /// never that the harness reported an error.
-    #[cfg(unix)]
-    #[test]
-    fn podman_failing_is_said_plainly() {
-        let dir =
-            std::env::temp_dir().join(format!("suspense-podman-fails-{}", std::process::id()));
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::create_dir_all(dir.join("spec")).unwrap();
-        let script = dir.join("podman");
-        std::fs::write(
-            &script,
-            "#!/bin/sh\n\
-             case \"$1\" in\n\
-             --version) echo 'podman version 5.0.0' ;;\n\
-             info|image) exit 0 ;;\n\
-             run)\n\
-               case \"$*\" in\n\
-               *'auth status'*) echo '{\"loggedIn\": true}' ;;\n\
-               *) echo 'Error: crun: setrlimit RLIMIT_NOFILE: Operation not permitted: OCI permission denied' >&2; exit 125 ;;\n\
-               esac ;;\n\
-             esac\n",
-        )
-        .unwrap();
-        crate::test_scripts::make_executable(&script);
-        crate::container::use_podman_for_test(Some(script));
-        let plan = crate::container::Plan::new(
-            crate::container::RunKind::Spec,
-            crate::agent::Agent::Claude,
-            &dir,
-            &crate::project_tree::Locations {
-                spec: Some(dir.join("spec")),
-                code: Some(dir.join("src")),
-            },
-            None,
-            crate::container::Platform::Linux,
-        );
-        let super::Run { mut events, .. } = super::send_task(
-            "Go.".into(),
-            None,
-            Vec::new(),
-            None,
-            dir.clone(),
-            super::Protected {
-                container: Some(plan),
-                ..Default::default()
-            },
-        );
-        crate::container::use_podman_for_test(None);
-        let start = std::time::Instant::now();
-        let failed = loop {
-            assert!(
-                start.elapsed() < std::time::Duration::from_secs(20),
-                "never failed"
-            );
-            match events.try_recv() {
-                Ok(HarnessEvent::Failed(error)) => break error,
-                Ok(HarnessEvent::Finished { .. }) => panic!("it finished"),
-                Ok(_) => {}
-                Err(futures::channel::mpsc::TryRecvError::Closed) => {
-                    panic!("ended without failing")
-                }
-                Err(futures::channel::mpsc::TryRecvError::Empty) => {
-                    std::thread::sleep(std::time::Duration::from_millis(10))
-                }
-            }
-        };
-        assert!(
-            failed.starts_with("The harness couldn't be run because Podman couldn't be accessed."),
-            "{failed}"
-        );
-        assert!(failed.contains("OCI permission denied"), "{failed}");
-        assert!(!failed.contains("harness reported"));
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// Carrying on a conversation the harness has none of, as Claude Code's

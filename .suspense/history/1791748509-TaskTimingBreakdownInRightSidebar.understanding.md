@@ -1,0 +1,7 @@
+- [An open task shows Status, Prompt, Steps, Details, Parameters, and Actions in that order](.claude/reference/ui/components/right-sidebar/tasks/index.md#details)
+- [A task's history record keeps when each of its phases began and ended, to the millisecond](.claude/reference/scope/project-data/index.md#contents)
+- [Phases are queued, spec build, snapshot, preparing the container, harness started, first event, each tool call, its result, closing snapshot](.claude/reference/scope/debug-log/index.md#logged)
+- [Tool calls are Files, Edit, Command, Web, Agent, or Tool by kind](.claude/reference/ui/components/task-table/index.md#types)
+- [A paused task's time counts only while it runs](.claude/reference/scope/prompt-mode/sending/index.md#pausing)
+- [Mode and status colours come from the theme, never colours of their own](.claude/reference/ui/components/right-sidebar/tasks/index.md#theme)
+- [An open task has a Time section: a stacked bar by kind, a ranked legend, and a timeline, in the theme's chart colours](.claude/reference/ui/components/right-sidebar/tasks/index.md#time-breakdown)

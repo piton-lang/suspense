@@ -17,8 +17,9 @@ const CHARS_PER_TOKEN: f64 = 4.;
 /// How far back the live rate is smoothed over.
 const WINDOW: Duration = Duration::from_secs(3);
 
-/// The least time a reply must have taken for its rate to be told.
-const LEAST: Duration = Duration::from_millis(500);
+/// The least time a reply must have taken for its rate to be told: short,
+/// as the replies between a task's tool calls are.
+const LEAST: Duration = Duration::from_millis(200);
 
 /// A run's writing, as it streams in.
 #[derive(Debug, Default)]
@@ -47,7 +48,7 @@ impl RateMeter {
     }
 
     /// Follows what the run reported at `now`. Its first turn begins once
-    /// the harness says it has started, never while its container is
+    /// the harness says it has started, never while its sandbox is
     /// prepared.
     pub fn follow(&mut self, event: &HarnessEvent, now: Instant) {
         if !self.begun
@@ -56,6 +57,7 @@ impl RateMeter {
                 HarnessEvent::Session(_)
                     | HarnessEvent::TextStarted
                     | HarnessEvent::TextDelta(_)
+                    | HarnessEvent::ThinkingDelta(_)
                     | HarnessEvent::ToolStarted { .. }
             )
         {
@@ -63,7 +65,7 @@ impl RateMeter {
         }
         match event {
             HarnessEvent::TextStarted => self.text("", now),
-            HarnessEvent::TextDelta(text) => self.text(text, now),
+            HarnessEvent::TextDelta(text) | HarnessEvent::ThinkingDelta(text) => self.text(text, now),
             HarnessEvent::ToolStarted { .. } => {
                 if self.tools == 0 {
                     self.end_turn(now);
@@ -93,8 +95,10 @@ impl RateMeter {
     }
 
     fn text(&mut self, text: &str, now: Instant) {
+        // Writing, it waits on no tool call, whatever was left unanswered.
         if self.tools > 0 {
-            return;
+            self.tools = 0;
+            self.turn_from = None;
         }
         self.turn_from.get_or_insert(now);
         if self.reply_from.is_none() {
@@ -225,6 +229,21 @@ mod tests {
         meter.follow(&HarnessEvent::Finished { is_error: false, result: String::new() }, at(6000));
         // 2s to the first usage, and 1s after the tool call.
         assert_eq!(meter.finish(at(6000)), Duration::from_secs(3));
+    }
+
+    /// Thinking streamed counts as writing, and text after a tool call
+    /// whose result never came is writing all the same; a short reply
+    /// between tool calls is told too.
+    #[test]
+    fn thinking_and_short_replies_are_told() {
+        let start = Instant::now();
+        let at = |ms: u64| start + Duration::from_millis(ms);
+        let mut meter = RateMeter::default();
+        meter.follow(&HarnessEvent::ToolStarted { id: "t".into(), name: "Bash".into() }, at(0));
+        meter.follow(&HarnessEvent::ThinkingDelta("x".repeat(40)), at(1_000));
+        meter.follow(&HarnessEvent::ThinkingDelta("x".repeat(40)), at(1_250));
+        let rate = meter.live(at(1_250)).expect("no rate while thinking");
+        assert!((rate - 40.).abs() < 1., "{rate}");
     }
 
     #[test]

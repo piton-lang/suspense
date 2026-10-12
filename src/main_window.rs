@@ -2500,6 +2500,7 @@ impl Render for MainWindow {
             .on_action(cx.listener(|this, _: &ribbon::ShowTab2, _, cx| this.show_ribbon_tab(1, cx)))
             .on_action(cx.listener(|this, _: &ribbon::ShowTab3, _, cx| this.show_ribbon_tab(2, cx)))
             .on_action(cx.listener(|this, _: &ribbon::ShowTab4, _, cx| this.show_ribbon_tab(3, cx)))
+            .on_action(cx.listener(|this, _: &ribbon::ShowTab5, _, cx| this.show_ribbon_tab(4, cx)))
             .on_action(cx.listener(|this, _: &ribbon::ToggleRibbon, _, cx| {
                 // The ribbon is beneath the inset panel while it is open.
                 if !this.panel_open() {
@@ -3586,7 +3587,7 @@ mod tests {
                 r.toggle_collapsed(cx)
             }
         });
-        press("alt-3", cx);
+        press("alt-4", cx);
         ribbon.read_with(cx, |r, _| {
             assert!(!r.is_collapsed(), "the ribbon stayed collapsed");
             assert_eq!(r.open_tabs(), [RibbonTab::Spec]);
@@ -6412,10 +6413,11 @@ mod tests {
 
     /// Esc in the chat input takes focus out of it, and the window's own Esc
     /// does not hand focus straight back: typing no longer lands in it.
-    /// The ribbon's tabs are Project, Code, Spec, and Application,
+    /// The ribbon's tabs are Project, Planning, Code, Spec, and Application,
     /// each showing only its own controls: opening a project under Project,
     /// Build Spec under Spec, dark mode and settings under Application, and
-    /// none of those under Code.
+    /// none of those under Planning or Code; Planning, with no commands yet,
+    /// says so.
     #[gpui_kit::test]
     async fn ribbon_tabs_hold_their_controls(cx: &mut TestAppContext) {
         use crate::ribbon::RibbonTab;
@@ -6439,6 +6441,7 @@ mod tests {
 
         for (tab, shown) in [
             (RibbonTab::Project, Some("project-directory")),
+            (RibbonTab::Planning, None),
             (RibbonTab::Code, None),
             (RibbonTab::Spec, Some("build")),
             (RibbonTab::Application, Some("brightness")),
@@ -6454,6 +6457,9 @@ mod tests {
                         expected,
                         "{control} under {tab:?}"
                     );
+                }
+                if tab == RibbonTab::Planning {
+                    assert!(window.try_find("no-commands").is_some(), "Planning doesn't say it has no commands");
                 }
                 // Brightness is the Appearance group's one column.
                 if tab == RibbonTab::Application {

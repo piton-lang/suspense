@@ -1,0 +1,7 @@
+- [The grid's rows are Code, Spec source, Compiled reference, Suspense data, added areas, and Other files](.claude/reference/scope/settings-window/index.md#sandbox-areas)
+- [Each grid cell can be set to Edit, Read, or No access, saved in sandbox.json](.claude/reference/scope/settings-window/index.md#sandbox-profiles)
+- [Ask can never be given Edit anywhere](.claude/reference/scope/settings-window/index.md#sandbox-profiles)
+- [A path classed as neither code nor spec is denied to Code and Spec runs, readable by questions](.claude/reference/scope/sandbox/index.md#classification)
+- [Levels past the code/spec separation are refused when the policy is compiled](.claude/reference/scope/sandbox/index.md#classification)
+- [Project data is everything under .suspense](.claude/reference/scope/project-data/index.md#contents)
+- [Grid rows show what they cover; users can add, rename, and remove areas](.claude/reference/scope/settings-window/index.md#sandbox-areas)
