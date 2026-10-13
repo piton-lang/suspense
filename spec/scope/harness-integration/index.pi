@@ -2,7 +2,10 @@ use /lib
 from /scope/project-data import ProjectData
 from ../project-data import ProjectData
 from ../project-directory import ProjectDirectory
+from ../planning import Planning
+from ../prompt-mode import PromptEditor
 from ../prompt-mode/ask-conversation import AskConversation
+from ../prompt-mode/message-list/Status import MessageListStatus
 from ../prompt-mode/mode-system-prompts import ModeSystemPrompts
 from ../prompt-mode/sending import PromptSending
 from ../settings-window import SettingsWindow
@@ -167,8 +170,9 @@ export feature HarnessIntegration:
         open, and more can still be sent to it. At the last result the run's
         input is closed, but the task is only shown as finished once the
         harness's process has exited as well, and it then finishes in the
-        state of that last result; until the process exits, the task keeps
-        running. A process that exits without a last result finishes the task
+        state of that last result, unless its reply's verdict says it failed,
+        when it finishes Failed, as the failures say; until the process
+        exits, the task keeps running. A process that exits without a last result finishes the task
         as a run with no result does, failed. A run that is stopped closes its
         input and ends straight away, whatever is still going in the
         background, since its whole process group is ended with it.
@@ -322,6 +326,40 @@ export feature HarnessIntegration:
         above what the harness said. A run that couldn't be started says
         why it couldn't, and one whose sandbox couldn't be applied says so, as
         the @{Sandbox} says.
+
+        A task's run can also fail without any error from the harness, when
+        its reply says it couldn't do the work: that it failed, that it
+        couldn't write or change what it was to, that the sandbox or a
+        missing file blocked it, or that it gave up. Such a task is Failed,
+        never Done. This is never guessed from the wording of the reply: the
+        run says it in its verdict, a line every task is asked to end its
+        reply with, as the @{ModeSystemPrompts} says, and the application
+        reads only that. The verdict is the last line of the reply of the
+        run's last result that isn't blank, trimmed, and read without regard
+        to case, either `SUSPENSE-VERDICT: done` where it did the work, or
+        `SUSPENSE-VERDICT: failed` where it didn't. Where that line reads
+        failed, the task finishes Failed, with the "Failed" label of the
+        @{MessageListStatus}, though the harness reported success. Where it
+        reads done, or the reply gives no verdict, as a Freeform task's,
+        the task finishes in the state of its last result, as the feeding says;
+        a verdict never makes a run that failed Done.
+
+        A task failed by its verdict says why in the run's own words, as
+        every failed run does: its output shows its reply, which says what
+        stopped it, beneath a heading saying the run reported that it
+        couldn't do the work. The verdict line itself is never shown in a
+        task's output, nor handed on as part of its final output, to a
+        chain's next step or anywhere else. The task is saved as Failed in
+        its history record, its reply with it, so it reads Failed after a
+        restart too, and never Done.
+
+        Being Failed, it is followed by everything that follows a failed task,
+        so in a chain, the next step is never sent and the chain reads
+        Failed, as the @{PromptEditor}'s chained tasks say; in Planning, its
+        story's card shows Failed, the story never counts as Done, Close
+        sprint sends it back to the start of Next sprint rather than into
+        Done, and Start automatically doesn't start the next sprint because
+        of it, as the @{Planning} says.
 
     bakedPrompts: @{BakedSystemPrompts}
 

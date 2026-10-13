@@ -1,0 +1,82 @@
+
+export anchor Story_58610de07106cb71:
+    userPrompt:
+        \\\
+        The board's sideways scrollbar is drawn very wrong. Once this is done, it is
+        the same Scrollbar as everywhere else, turned on its side, and nothing
+        about it is drawn as an upright column.
+
+        Read these first: spec/ui/components/scrollbar/index.pi#Scrollbar.description,
+        spec/ui/components/scrollbar/index.pi#Scrollbar.surface,
+        spec/ui/components/scrollbar/index.pi#Scrollbar.buttons,
+        spec/ui/components/scrollbar/index.pi#Scrollbar.track and
+        spec/scope/planning/index.pi#Planning.layout, which puts "the Scrollbar
+        along its foot". The Scrollbar spec has nothing yet on a bar along a foot.
+        It describes only a column along a list's right, so that part is new:
+        add it to the Scrollbar spec as one more way the same scrollbar is laid out.
+
+        What should be true:
+        - Along the board's foot is one bar, 18 pixels tall and the full width of
+          the board's scrolling area. It has the same surface as what it sits on,
+          and runs the board's full width whether or not anything scrolls.
+        - At its left end is a square button, 17 pixels wide and 18 tall, with an
+          arrow pointing left. At its right end is the same button with an arrow
+          pointing right. Each arrow is 6 pixels tall and 4 wide, centred up and
+          down, 7 pixels in from the button's outer end, crisp on whole pixels,
+          and in the same colour as the column's arrows. They lighten on hover and
+          press as the column's buttons do.
+        - The track runs between the buttons. A one-pixel line in the raised
+          colour runs along both its top and its bottom edge, into the buttons, so
+          the bar reads as one raised outline. No line runs up or down across it.
+        - The thumb is a plain raised rectangle, the bar's full height, as wide as
+          the share of the board in view and never too narrow to grab, placed as
+          far along as the board is scrolled. It has a single column of pixels at
+          its left and right ends in the thumb-end colour, and it lightens on hover
+          and drag as the column's thumb does.
+        - There is no lock button and no lock gap. Nothing from an upright column
+          (its width, a horizontal line across it, an up or down arrow) appears
+          anywhere in the bar.
+        - It looks right in dark and light mode alike, on the board's surface.
+
+        Fix it in src/scrollbar.rs. Every part the column draws should be laid out
+        along the bar's axis, not with a fixed column width and height. Add a UI
+        test that captures the sideways bar and checks the points above. It should
+        check the bar pixel for pixel against the column's own parts turned on
+        their side, so the two can't drift apart again.
+        \\\
+
+    mode: combined
+
+    model: opus
+
+    addedSteps:
+        step1:
+            \\\
+            mode: code
+            model: opus
+
+            With the sideways scrollbar drawn right, it now has to work right on
+            Planning's board, as spec/scope/planning/index.pi#Planning.layout and
+            spec/ui/components/scrollbar/index.pi#Scrollbar.track and
+            spec/ui/components/scrollbar/index.pi#Scrollbar.buttons describe. The
+            Scrollbar spec doesn't yet say how presses behave along a foot, so add
+            that as new.
+
+            What should be true, while the board's columns are wider than the tab:
+            - Pressing the left button scrolls the board left a little, and the right
+              button scrolls it right a little.
+            - Pressing the thumb and dragging left or right scrolls the board with it.
+              The thumb stays under the pointer the whole way, even once the pointer
+              leaves the bar, until the button is released.
+            - Pressing the track off the thumb centres the thumb on the press, and it
+              can be dragged on from there straight away.
+            - Where a resize edge, such as the side panel's, overlaps the bar, a press
+              goes to whichever of the two has the smaller hit area, as with the
+              column.
+            - While the columns fit, the thumb fills the track and nothing scrolls.
+            - Opening and closing the side panel narrows and widens the board. The
+              thumb's size and position follow the board's sideways scroll exactly,
+              with no jump.
+
+            Add UI tests on Planning's board for each of these.
+            \\\

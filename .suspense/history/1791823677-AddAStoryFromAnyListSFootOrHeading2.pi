@@ -1,0 +1,78 @@
+
+export anchor AddAStoryFromAnyListSFootOrHeading2:
+    userPrompt:
+        \\\
+        Adding a story works as it does in Trello and Linear, as spec/scope/planning/index.pi#Planning.creating now says. The Backlog and Next sprint each have an "Add story" line at their foot. Clicking it opens an inline composer at that point: a blank card with its title focused. Enter adds the story to that list and opens another composer beneath it. Escape, or clicking away while the title is empty, discards it. The story is not opened in the side panel. Hovering either list's heading shows a labelled "+ Add" action that adds a story at the top of that list. Ctrl+N adds to the list that has focus, and falls back to Next sprint. This changes the current rule that every new story goes into Next sprint. Accepted proposals still go to the Backlog, and nothing added starts a sprint unless Start automatically would start it when a story is added to Next sprint, as spec/scope/planning/index.pi#Planning.sprint says. Current sprint, Done, and Findings get no composer. Update spec/scope/planning/index.pi#Planning.layout and spec/scope/planning/index.pi#Planning.keyboard to match, then the code.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Adding a story works as it does in Trello and Linear, as spec/scope/planning/index.pi#Planning.creating now says. The Backlog and Next sprint each have an "Add story" line at their foot. Clicking it opens an inline composer at that point: a blank card with its title focused. Enter adds the story to that list and opens another composer beneath it. Escape, or clicking away while the title is empty, discards it. The story is not opened in the side panel. Hovering either list's heading shows a labelled "+ Add" action that adds a story at the top of that list. Ctrl+N adds to the list that has focus, and falls back to Next sprint. This changes the current rule that every new story goes into Next sprint. Accepted proposals still go to the Backlog, and nothing added starts a sprint unless Start automatically would start it when a story is added to Next sprint, as spec/scope/planning/index.pi#Planning.sprint says. Current sprint, Done, and Findings get no composer. Update spec/scope/planning/index.pi#Planning.layout and spec/scope/planning/index.pi#Planning.keyboard to match, then the code.
+            \\\
+        result:
+            \\\
+            The spec now describes adding stories the Trello/Linear way. `piton check` reports no problems, `piton build` succeeded, and the new text is in the refreshed `.claude/reference/scope/planning/index.md`.
+
+            The `creating` section in the source still described the old rule, where every new story went into Next sprint, so I rewrote it along with layout and keyboard.
+
+            **Anchors the code should follow** (all in `spec/scope/planning/index.pi`):
+
+            - **`Planning.creating`:**
+              - The Backlog and Next sprint each have an "Add story" line at their foot. Clicking it opens an inline composer: a blank story card with its title box focused, in the mode last picked.
+              - Enter adds the story where the composer was and opens another beneath it. Enter with an empty title adds nothing.
+              - Escape discards the composer, even if a title was typed. Clicking away discards it if the title is empty, and adds the story without opening another if not.
+              - Only one composer is open at a time, and a new story is never opened in the side panel.
+              - Hovering either list's heading shows "+ Add", which opens the composer at the top of that list.
+              - Ctrl+N (Cmd+N) adds to whichever of those two lists has focus, and otherwise to Next sprint.
+              - Where stories land: a duplicate goes just beneath its original, "Add to sprint" still goes to the end of Next sprint, and accepted proposals still go to the end of the Backlog.
+              - Adding a story starts a sprint only through Start automatically, when it lands in an empty Next sprint.
+              - Current sprint, Done and Findings get no composer.
+            - **`Planning.layout`:**
+              - "+ Add" is a small ghost button with a plus icon and label, just after the count. Its space is reserved even when hidden, so the heading's other buttons never shift.
+              - The "Add story" line is a 32px row: plus icon and muted label, corners rounded 6px, no border. It takes the hover surface on hover and scrolls with the cards.
+              - The composer is drawn as a story card with the focus ring and the hint "Enter to add, Escape to cancel". The cards below it move down, and the list scrolls to keep it in view.
+              - The side panel rule now names the composer as the one thing drawn inside a list.
+            - **`Planning.keyboard`:**
+              - Tab reaches "+ Add" and the "Add story" line. Down from a list's last card reaches its "Add story" line, and Enter there opens the composer.
+              - Ctrl+N follows the focus rule above.
+              - In the composer, Enter adds the story and focuses the next composer. Escape returns focus to whatever opened it.
+              - Escape closes a composer first, before a menu or the side panel.
+
+            The code changes come in the next step.
+            \\\
+
+    sentFrom: AddAStoryFromAnyListSFootOrHeading
+
+    model: opus

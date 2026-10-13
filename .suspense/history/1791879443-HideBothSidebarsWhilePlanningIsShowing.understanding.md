@@ -1,0 +1,7 @@
+- [The left sidebar runs the full window height beneath the ribbon, left of the body](.claude/reference/ui/components/left-sidebar/index.md#description)
+- [The view bar is always there, collapsed or not](.claude/reference/ui/components/left-sidebar/index.md#view-bar)
+- [The right sidebar shows while a task runs, the queue holds a prompt, or it was opened by hand](.claude/reference/ui/components/right-sidebar/index.md#showing)
+- [The right-sidebar button at the tab bar's right end and Ctrl+Alt+B open and close the right sidebar](.claude/reference/ui/components/right-sidebar/index.md#showing)
+- [While Planning's tab is selected the chat input is hidden, at once with nothing sliding, and comes back as it was](.claude/reference/scope/application/Body.md#tabs)
+- [The body sits beneath the ribbon, right of the left sidebar, reaching the window's right edge or the right sidebar](.claude/reference/scope/application/Body.md#description)
+- [Planning fills the body from the tab bar to its bottom and from the body's left edge to its right](.claude/reference/scope/planning/index.md#description)

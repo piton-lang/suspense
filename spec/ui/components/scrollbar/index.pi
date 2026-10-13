@@ -75,6 +75,42 @@ export ui-component Scrollbar:
         the column, a press goes to whichever of the two has the smaller hit
         area, as the main window says.
 
+    sideways:
+        Something that scrolls sideways, like the Planning board, has the same
+        scrollbar turned on its side: a bar along its foot instead of a column
+        along its right. It is one more way of laying out this scrollbar, not
+        another one. Every part the column has is laid out along the bar's
+        length, so what is said above of the column's height holds for the bar's
+        width, and of the column's width for the bar's height, so the two never
+        drift apart. Pixel for pixel, the bar's buttons, arrows, border,
+        thumb, and thumb ends are the column's own turned on their side, in
+        dark and light mode alike. Nothing is drawn at the column's fixed width
+        or height, and nothing from an upright column, its width, a line
+        across it, or an up or down arrow, appears anywhere in the bar.
+
+        The bar is 18 pixels tall and the full width of what scrolls, always
+        shown, whether or not anything scrolls, and takes the surface it sits
+        on, as every scrollbar does. At its left end is a square button 17
+        pixels wide and 18 tall that scrolls left a little, with an arrow
+        pointing left, and at its right end the same button with an arrow
+        pointing right that scrolls right a little. Each arrow is the column's
+        arrow on its side, 6 pixels tall and 4 wide, centred up and down, 7
+        pixels in from the button's outer end, crisp on whole pixels, in the
+        column's arrow colour, and the buttons lighten on hover and press as
+        the column's do.
+
+        The track runs between the buttons. The border is a one-pixel line
+        along the bar's top and bottom edges, in the raised colour, running
+        into the buttons, so the bar reads as one raised outline; no line runs
+        up or down across it. The thumb is a plain raised rectangle, the bar's
+        full height, as wide as the share of what scrolls that is in view and
+        never too narrow to grab, placed as far along the track as it is
+        scrolled. Its left and right ends each have a single column of pixels,
+        between the borders, in the thumb-end colour, and it lightens on hover
+        and drag as the column's thumb does. Pressing and dragging it, and
+        pressing the track, work as they do on the column. A sideways bar has
+        no lock to bottom: no lock button and no gap for one.
+
     steadiness:
         The thumb never jumps. Its size and place always reflect the whole
         list's real height, including a list that only draws the rows in view:

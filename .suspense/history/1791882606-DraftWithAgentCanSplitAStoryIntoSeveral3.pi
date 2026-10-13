@@ -1,0 +1,83 @@
+
+export anchor DraftWithAgentCanSplitAStoryIntoSeveral3:
+    userPrompt:
+        \\\
+        The planning prompt that a story's draft run is sent with (planning.pi, listed in spec/scope/harness-integration/baked-prompts/index.pi#BakedSystemPrompts.prompts) asks the run to judge whether the story holds one piece of work or several.
+
+        If it holds several, the run should propose:
+        - the story's rewrite, `target: rewrite`, as the first piece, with that piece's steps (target: the story's id)
+        - a `target: new` block for each other piece, each with its own title, mode, spec citations, and prompt
+
+        Each block follows the form spec/scope/planning/index.pi#Planning.proposals describes. The prompt should tell the run not to split one piece of work into several stories just to make them smaller: steps are for pieces of one story, and new stories are for separate work. Its worked example should show a split.
+
+        Update the planning.pi line in spec/scope/harness-integration/baked-prompts/index.pi#BakedSystemPrompts.prompts to say this too. Then rebuild so that system-prompts/compiled.json carries the new prompt.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            "Draft with agent" (and "Ask agent" on an open story) can turn one rough story into several stories, not just one full story.
+
+            Today, spec/scope/planning/index.pi#Planning.draftingWithAgent asks each run only to "turn it into a full story": a rewrite plus its steps. Change it so that when a rough story holds more than one piece of work, the run proposes:
+            - the rewrite of the story itself, as the first piece, with its steps
+            - a "New story" proposal for each other piece, each with its own title, prompt, mode, and spec citations, grounded as spec/scope/planning/index.pi#Planning.specGrounding says
+
+            A story that is one piece of work still gets just its rewrite and steps, as before.
+
+            Once this is done, all of the following should be true:
+            - The card's proposal count ("3 proposals") counts the new stories along with the rewrite and the additions.
+            - The open story's "Proposals" list shows them all, in the order given. The rewrite comes first, then the new stories and the additions in the order the run gave them.
+            - Each new story's card reads "New story", as spec/scope/planning/index.pi#Planning.proposalCards labels it.
+            - Accepting a new story puts it at the end of the Backlog, marked "From agent", as now. It never goes into Draft (spec/scope/planning/index.pi#Planning.description) and never into Next sprint.
+            - Accepting a new story split off a Draft story does not move that story. Only accepting its rewrite or one of its additions moves it to the Backlog, as spec/scope/planning/index.pi#Planning.draftingWithAgent says.
+            - "Accept all" accepts the rewrite and every new story together.
+
+            spec/scope/planning/index.pi#Planning.proposals already allows a "New story" target. The spec has nothing yet on splitting one story into several, so that part is new. Update spec/scope/planning/index.pi#Planning.draftingWithAgent and spec/scope/planning/index.pi#Planning.drafting to say it, then make the application handle new-story proposals from a story's draft run as described above.
+            \\\
+        result:
+            \\\
+            A "Draft with agent" or "Ask agent" run is now asked to split a story that holds more than one piece of work. I couldn't compile or run the tests: this sandbox blocks reading `.suspense/system-prompts/*.md`, which the crate pulls in at build time. So the changes have only been checked by reading them.
+
+            - **The draft prompt:** I added a `split` piece to `system-prompts/planning.pi`. The rebuilt `compiled.json` already contains it. It asks for the story's rewrite first, with its steps, then a `target: new` story for each other piece, each with its own title, prompt, mode and grounded citations. A story that is one piece of work still gets only its rewrite and steps. `draft_request` in `src/planning.rs` adds this text whenever the draft is about a story, so it covers both entry points.
+            - **Order:** when a run ends, its proposals are stable-sorted so the rewrite comes first. The new stories and additions keep the order the run gave them, after any proposals already waiting.
+            - **Already true before this change:** the card count includes every kind of proposal, and a new story's card reads "New story". Accepting one puts it at the end of the Backlog marked "From agent". Only accepting a rewrite or an addition moves a Draft story. "Accept all" accepts everything waiting.
+
+            I added a test, `a_draft_splits_its_story_into_new_stories`, covering the order, the count, where an accepted new story goes, the Draft story staying put, and "Accept all". It needs a build with access to those prompt files before it can run. The spec and the prompt agreed, so there was nothing to reconcile.
+            \\\
+
+    sentFrom: DraftWithAgentCanSplitAStoryIntoSeveral2
+
+    model: opus
+
+    addedStep: DraftWithAgentCanSplitAStoryIntoSeveral 0

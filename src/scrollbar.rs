@@ -14,11 +14,12 @@ use gpui_kit::*;
 
 use crate::measured_list::MeasuredList;
 
-/// How wide the column is, which is also each button's width.
+/// How wide the column is, which is also each button's width: turned on its
+/// side, along a list's foot, how tall the bar is.
 pub const COLUMN_WIDTH: Pixels = px(18.);
 
 /// How far a button scrolls the list.
-const STEP: Pixels = px(48.);
+pub(crate) const STEP: Pixels = px(48.);
 
 /// The shortest the thumb gets, so it can always be grabbed.
 const MIN_THUMB: Pixels = px(16.);
@@ -158,7 +159,7 @@ pub fn with_scrollbar(
                 })
                 .child(content),
         )
-        .child(scrollbar(id.into(), &handle, lock, cx));
+        .child(scrollbar(id.into(), &handle, lock, Axis::Vertical, cx));
     row.into_any_element()
 }
 
@@ -178,8 +179,47 @@ pub fn with_fitted_scrollbar(
         .flex_shrink(1.)
         .min_h_0()
         .child(v_flex().flex_1().min_w_0().min_h_0().child(content))
-        .child(scrollbar(id.into(), &handle, None, cx))
+        .child(scrollbar(id.into(), &handle, None, Axis::Vertical, cx))
         .into_any_element()
+}
+
+/// `content`, which scrolls sideways with `handle`, above its scrollbar,
+/// laid along its foot as a column is along a list's right: a button at the
+/// left that scrolls left, the track, and a button at the right that scrolls
+/// right. It fills the space it is given.
+pub fn with_horizontal_scrollbar(
+    id: impl Into<SharedString>,
+    handle: &ScrollHandle,
+    content: impl IntoElement,
+    cx: &App,
+) -> AnyElement {
+    let handle: Scroll = handle.into();
+    v_flex()
+        .size_full()
+        .min_h_0()
+        .child(div().flex_1().min_h_0().w_full().child(content))
+        .child(scrollbar(id.into(), &handle, None, Axis::Horizontal, cx))
+        .into_any_element()
+}
+
+/// `bounds` laid out as a column's are: a bar along a list's foot turned on
+/// its side, so its left is a column's top. Turning it again turns it back.
+fn across(axis: Axis, bounds: Bounds<Pixels>) -> Bounds<Pixels> {
+    match axis {
+        Axis::Vertical => bounds,
+        Axis::Horizontal => Bounds::new(
+            point(bounds.origin.y, bounds.origin.x),
+            size(bounds.size.height, bounds.size.width),
+        ),
+    }
+}
+
+/// `at` laid out as a column's points are, as [`across`] lays out bounds.
+fn across_point(axis: Axis, at: Point<Pixels>) -> Point<Pixels> {
+    match axis {
+        Axis::Vertical => at,
+        Axis::Horizontal => point(at.y, at.x),
+    }
 }
 
 /// After the list is scrolled by hand: locks the scroll when the list is left
@@ -204,7 +244,7 @@ fn at_bottom(handle: &Scroll) -> bool {
     handle.offset().y <= -handle.max_offset().y + px(1.)
 }
 
-/// How tall each button is.
+/// How tall each button is: turned on its side, how wide.
 pub const BUTTON_HEIGHT: Pixels = px(17.);
 
 /// How far the track is inset from either side of the column.
@@ -217,6 +257,7 @@ fn scrollbar(
     id: SharedString,
     handle: &Scroll,
     lock: Option<(bool, SetLock)>,
+    axis: Axis,
     cx: &App,
 ) -> AnyElement {
     let colors = scroll_colors(cx.theme().is_dark());
@@ -226,9 +267,8 @@ fn scrollbar(
         let follow = follow.clone();
         let press: Press = Rc::new(move |window: &mut Window, cx: &mut App| {
             let offset = handle.offset();
-            let max = handle.max_offset().y;
-            let y = (offset.y + delta).min(px(0.)).max(-max);
-            handle.set_offset(point(offset.x, y));
+            let max = handle.max_offset().along(axis);
+            handle.set_offset(offset.apply_along(axis, |at| (at + delta).min(px(0.)).max(-max)));
             if let Some(follow) = &follow {
                 follow(window, cx);
             }
@@ -258,8 +298,12 @@ fn scrollbar(
                   cx| {
                 let grab = grab.read(cx).clone();
                 let hovered = hovered.read(cx).clone();
-                let geometry = Geometry::of(&handle, bounds);
+                // Worked out as a column's, and turned back to be drawn.
+                let shown = bounds;
+                let bounds = across(axis, bounds);
+                let geometry = Geometry::along(&handle, bounds, axis);
                 let thumb = thumb_bounds(&geometry, bounds);
+                let pointer = across_point(axis, window.mouse_position());
                 // The track is the surface, with the column's line down either
                 // side of it, and the thumb raised across the column's full
                 // width, the line and all, between its ends: a pixel at each
@@ -269,32 +313,32 @@ fn scrollbar(
                 for (top, bottom) in [(bounds.top(), body.top()), (body.bottom(), bounds.bottom())]
                 {
                     for side in sides(bounds, top, bottom) {
-                        window.paint_quad(fill(side, colors.raised));
+                        window.paint_quad(fill(across(axis, side), colors.raised));
                     }
                 }
-                window.paint_quad(fill(body, colors.raised));
+                window.paint_quad(fill(across(axis, body), colors.raised));
                 for (end, color) in ends {
-                    window.paint_quad(fill(end, color));
+                    window.paint_quad(fill(across(axis, end), color));
                 }
                 // Lightening while hovered or dragged. Nothing is hovered
                 // while something else, like a sidebar's edge, is being
                 // dragged across it.
-                let is_hovered = !cx.has_active_drag() && thumb.contains(&window.mouse_position());
+                let is_hovered = !cx.has_active_drag() && thumb.contains(&pointer);
                 hovered.set(is_hovered);
                 if grab.get().is_some() {
                     // No edge beneath the pointer is offered while dragging.
                     window.set_window_cursor_style(CursorStyle::Arrow);
-                    window.paint_quad(fill(thumb, colors.pressed));
+                    window.paint_quad(fill(across(axis, thumb), colors.pressed));
                 } else if is_hovered {
-                    window.paint_quad(fill(thumb, colors.hover));
+                    window.paint_quad(fill(across(axis, thumb), colors.hover));
                 }
                 // Moving on or off the thumb redraws it.
                 window.on_mouse_event({
                     let (handle, hovered) = (handle.clone(), hovered.clone());
                     move |event: &MouseMoveEvent, _, window, _| {
-                        let geometry = Geometry::of(&handle, bounds);
+                        let geometry = Geometry::along(&handle, bounds, axis);
                         let thumb = thumb_bounds(&geometry, bounds);
-                        if thumb.contains(&event.position) != hovered.get() {
+                        if thumb.contains(&across_point(axis, event.position)) != hovered.get() {
                             window.refresh();
                         }
                     }
@@ -303,20 +347,20 @@ fn scrollbar(
                 window.on_mouse_event({
                     let (handle, grab, follow) = (handle.clone(), grab.clone(), follow.clone());
                     move |event: &MouseDownEvent, phase, window, cx| {
-                        if !bounds.contains(&event.position) {
+                        if !shown.contains(&event.position) {
                             return;
                         }
-                        let geometry = Geometry::of(&handle, bounds);
-                        let y = event.position.y;
+                        let geometry = Geometry::along(&handle, bounds, axis);
+                        let y = across_point(axis, event.position).y;
                         // The thumb, or the track pressed off it, against any
                         // resize edge over it there: the smaller takes the
                         // press, taking it first when it is contested.
                         let on_thumb = y >= geometry.thumb_top
                             && y <= geometry.thumb_top + geometry.thumb_height;
                         let target = if on_thumb {
-                            thumb_bounds(&geometry, bounds)
+                            across(axis, thumb_bounds(&geometry, bounds))
                         } else {
-                            bounds
+                            shown
                         };
                         if !crate::hit_areas::wins_at(target, event.position, cx) {
                             return;
@@ -356,8 +400,10 @@ fn scrollbar(
                                 grab.set(None);
                                 return;
                             }
-                            Geometry::of(&handle, bounds)
-                                .scroll_thumb_to(&handle, event.position.y - at);
+                            Geometry::along(&handle, bounds, axis).scroll_thumb_to(
+                                &handle,
+                                across_point(axis, event.position).y - at,
+                            );
                             if let Some(follow) = &follow {
                                 follow(window, cx);
                             }
@@ -374,33 +420,48 @@ fn scrollbar(
     )
     .size_full();
 
-    let column = v_flex()
+    let (before, after) = match axis {
+        Axis::Vertical => ("Scroll up", "Scroll down"),
+        Axis::Horizontal => ("Scroll left", "Scroll right"),
+    };
+    // Its parts laid end to end along it, each stretched across it, so the
+    // track is as thick as the buttons.
+    let column = match axis {
+        Axis::Vertical => v_flex(),
+        Axis::Horizontal => h_flex().w_full(),
+    };
+    let column = across_size(column, axis, COLUMN_WIDTH)
+        .items_stretch()
         .id(SharedString::from(format!("{id}-scroll-column")))
         .flex_none()
-        .w(COLUMN_WIDTH)
         .child(square(
             format!("{id}-scroll-up"),
             Glyph::Up,
-            "Scroll up".into(),
+            before.into(),
             false,
             scroll_by(STEP),
             None,
+            axis,
             colors,
         ))
         .child(gpui_kit::TestSupportExt::test_support(
             div()
                 .id(SharedString::from(format!("{id}-scroll-track")))
                 .flex_1()
-                .min_h(px(8.))
+                .map(|track| match axis {
+                    Axis::Vertical => track.min_h(px(8.)),
+                    Axis::Horizontal => track.min_w(px(8.)),
+                })
                 .child(track),
         ))
         .child(square(
             format!("{id}-scroll-down"),
             Glyph::Down,
-            "Scroll down".into(),
+            after.into(),
             false,
             scroll_by(-STEP),
             None,
+            axis,
             colors,
         ))
         .when_some(lock, |column, (locked, set_lock)| {
@@ -413,19 +474,20 @@ fn scrollbar(
             column
                 // A pixel of the surface between it and the down button,
                 // within the column's line.
-                .child(
+                .child(sized(
                     canvas(
                         |_, _, _| {},
                         move |bounds, _, window, _| {
+                            let bounds = across(axis, bounds);
                             for side in sides(bounds, bounds.top(), bounds.bottom()) {
-                                window.paint_quad(fill(side, colors.raised));
+                                window.paint_quad(fill(across(axis, side), colors.raised));
                             }
                         },
                     )
-                    .flex_none()
-                    .w(COLUMN_WIDTH)
-                    .h(LOCK_GAP),
-                )
+                    .flex_none(),
+                    axis,
+                    LOCK_GAP,
+                ))
                 .child(square(
                     format!("{id}-scroll-lock"),
                     Glyph::ToBottom,
@@ -433,11 +495,32 @@ fn scrollbar(
                     locked,
                     press,
                     Some(pulse(locked, cx).into_any_element()),
+                    axis,
                     colors,
                 ))
         });
     // Lets UI tests find the column; inert in normal builds.
     gpui_kit::TestSupportExt::test_support(column).into_any_element()
+}
+
+/// `element` sized as a part of a scrollbar laid out along `axis` is:
+/// `length` along it, and across it as thick as the scrollbar, so a column's
+/// height is a bar's width, and a column's width a bar's height.
+fn sized<E: Styled>(element: E, axis: Axis, length: Pixels) -> E {
+    let element = across_size(element, axis, COLUMN_WIDTH);
+    match axis {
+        Axis::Vertical => element.h(length),
+        Axis::Horizontal => element.w(length),
+    }
+}
+
+/// `element` `thickness` across a scrollbar laid out along `axis`: a column's
+/// width, a bar's height.
+fn across_size<E: Styled>(element: E, axis: Axis, thickness: Pixels) -> E {
+    match axis {
+        Axis::Vertical => element.w(thickness),
+        Axis::Horizontal => element.h(thickness),
+    }
 }
 
 /// The space between the down button and the lock button.
@@ -549,13 +632,15 @@ fn square(
     selected: bool,
     press: Press,
     behind: Option<AnyElement>,
+    axis: Axis,
     colors: ScrollColors,
 ) -> impl IntoElement {
+    // Along a list's foot, the column's arrows turned on their side.
     let arrow = canvas(
         |_, _, _| {},
         move |bounds, _, window, _| {
-            for row in glyph.quads(bounds) {
-                window.paint_quad(fill(row, colors.arrow));
+            for row in glyph.quads(across(axis, bounds)) {
+                window.paint_quad(fill(across(axis, row), colors.arrow));
             }
         },
     )
@@ -567,8 +652,7 @@ fn square(
         .id(SharedString::from(id.clone()))
         .relative()
         .flex_none()
-        .w(COLUMN_WIDTH)
-        .h(BUTTON_HEIGHT)
+        .map(|button| sized(button, axis, BUTTON_HEIGHT))
         .children(behind)
         .child(face(format!("{id}-face"), selected, colors))
         .child(arrow)
@@ -857,7 +941,10 @@ fn thumb_bounds(geometry: &Geometry, track: Bounds<Pixels>) -> Bounds<Pixels> {
 
 /// Where the thumb sits in a track, for a list scrolled as `handle` is.
 struct Geometry {
+    /// The track, laid out as a column's is: across a bar along the list's
+    /// foot, its left is the column's top.
     track: Bounds<Pixels>,
+    axis: Axis,
     thumb_top: Pixels,
     thumb_height: Pixels,
     /// How far the list scrolls.
@@ -866,8 +953,14 @@ struct Geometry {
 
 impl Geometry {
     fn of(handle: &Scroll, track: Bounds<Pixels>) -> Self {
-        let viewport = handle.viewport().size.height;
-        let max = handle.max_offset().y.max(px(0.));
+        Self::along(handle, track, Axis::Vertical)
+    }
+
+    /// The thumb for a list scrolled along `axis`, in a `track` laid out as
+    /// a column's is, see [`across`].
+    fn along(handle: &Scroll, track: Bounds<Pixels>, axis: Axis) -> Self {
+        let viewport = handle.viewport().size.along(axis);
+        let max = handle.max_offset().along(axis).max(px(0.));
         let content = viewport + max;
         let height = track.size.height;
         // All of the list in view fills the track.
@@ -876,7 +969,7 @@ impl Geometry {
         } else {
             (height * (viewport / content)).max(MIN_THUMB).min(height)
         };
-        let scrolled = (-handle.offset().y).max(px(0.)).min(max);
+        let scrolled = (-handle.offset().along(axis)).max(px(0.)).min(max);
         let room = height - thumb_height;
         let thumb_top = if max > px(0.) {
             track.origin.y + room * (scrolled / max)
@@ -885,6 +978,7 @@ impl Geometry {
         };
         Self {
             track,
+            axis,
             thumb_top,
             thumb_height,
             max,
@@ -899,7 +993,7 @@ impl Geometry {
         }
         let fraction = ((top - self.track.origin.y) / room).clamp(0., 1.);
         let offset = handle.offset();
-        handle.set_offset(point(offset.x, -(self.max * fraction)));
+        handle.set_offset(offset.apply_along(self.axis, |_| -(self.max * fraction)));
     }
 }
 
@@ -907,6 +1001,14 @@ impl Geometry {
 #[cfg(test)]
 pub fn thumb_for_test(handle: &Scroll, track: Bounds<Pixels>) -> (Pixels, Pixels) {
     let geometry = Geometry::of(handle, track);
+    (geometry.thumb_top, geometry.thumb_height)
+}
+
+/// Where the thumb is drawn in the track at `track` of a bar along a
+/// sideways list's foot, as its left and width.
+#[cfg(test)]
+pub fn sideways_thumb_for_test(handle: &Scroll, track: Bounds<Pixels>) -> (Pixels, Pixels) {
+    let geometry = Geometry::along(handle, across(Axis::Horizontal, track), Axis::Horizontal);
     (geometry.thumb_top, geometry.thumb_height)
 }
 
@@ -964,7 +1066,7 @@ mod thumb_tests {
 
 #[cfg(test)]
 mod tests {
-    use gpui_kit::component::{Root, v_flex};
+    use gpui_kit::component::{Root, h_flex, v_flex};
     use gpui_kit::test::TestWindowExt as _;
     use gpui_kit::{
         AppContext as _, Bounds, Context, InteractiveElement as _, IntoElement, ParentElement as _,
@@ -1750,6 +1852,251 @@ mod tests {
             std::fs::write(path, out).unwrap();
         })
         .unwrap();
+    }
+
+    /// A column beside a tall list and a bar beneath a wide one, each in a
+    /// square of the same size on `surface`, so the bar is the column turned
+    /// on its side: as long, scrolling as far, with as much in view.
+    struct Both {
+        tall: ScrollHandle,
+        wide: ScrollHandle,
+        surface: u32,
+    }
+
+    /// The side of each square.
+    const SQUARE: f32 = 400.;
+
+    impl Render for Both {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let tall = div()
+                .id("tall")
+                .size_full()
+                .overflow_y_scroll()
+                .track_scroll(&self.tall)
+                .child(v_flex().children((0..200).map(|_| div().flex_none().h(px(20.)))));
+            let wide = div()
+                .id("wide")
+                .size_full()
+                .overflow_x_scroll()
+                .track_scroll(&self.wide)
+                .child(div().flex_none().w(px(4000.)).h_full());
+            h_flex()
+                .size_full()
+                .items_start()
+                .bg(crate::theme::color(self.surface))
+                .child(
+                    div()
+                        .flex_none()
+                        .size(px(SQUARE))
+                        .child(with_scrollbar("tall", &self.tall, tall, true, None, cx)),
+                )
+                .child(div().flex_none().w(px(40.)))
+                .child(
+                    div()
+                        .flex_none()
+                        .size(px(SQUARE))
+                        .child(super::with_horizontal_scrollbar("wide", &self.wide, wide, cx)),
+                )
+        }
+    }
+
+    /// The column, at its own place, and the bar, at the column's place
+    /// turned on its side, as 0xRRGGBB, from the column's top left down
+    /// each of its rows.
+    fn column_and_bar(window: &mut Window) -> (Vec<u32>, Vec<u32>) {
+        let frame = crate::frame_image::Frame::of(window);
+        let column = window.find("tall-scroll-column").bounds();
+        let bar = window.find("wide-scroll-column").bounds();
+        let across = column.size.width.as_f32() as i32;
+        let along = column.size.height.as_f32() as i32;
+        let (mut upright, mut sideways) = (Vec::new(), Vec::new());
+        for y in 0..along {
+            for x in 0..across {
+                let at = |from: Bounds<gpui_kit::Pixels>, x: i32, y: i32| {
+                    frame.at(point(
+                        from.left() + px(x as f32 + 0.5),
+                        from.top() + px(y as f32 + 0.5),
+                    ))
+                };
+                upright.push(at(column, x, y));
+                sideways.push(at(bar, y, x));
+            }
+        }
+        (upright, sideways)
+    }
+
+    /// The bar along a sideways list's foot is the column turned on its side,
+    /// pixel for pixel, at rest, with each of its buttons and its thumb
+    /// hovered, and with each pressed, in dark and light mode alike. It is
+    /// 18 pixels tall and the full width of what scrolls, with a 17 by 18
+    /// button at each end, an arrow pointing left in the left one and right
+    /// in the right one, a line along its top and bottom and none across it,
+    /// and no lock button or gap.
+    #[gpui_kit::test]
+    async fn the_bar_is_the_column_on_its_side(cx: &mut TestAppContext) {
+        use gpui_kit::component::{Theme, ThemeMode};
+        for (mode, surface) in [(ThemeMode::Dark, 0x111111), (ThemeMode::Light, 0xf3f3f3)] {
+            cx.update(|cx| {
+                gpui_kit::init(cx);
+                crate::theme::init(cx);
+                Theme::change(mode, None, cx);
+            });
+            let (tall, wide) = (ScrollHandle::new(), ScrollHandle::new());
+            let window = cx.add_window({
+                let (tall, wide) = (tall.clone(), wide.clone());
+                move |window, cx| {
+                    let view = cx.new(|_| Both {
+                        tall,
+                        wide,
+                        surface,
+                    });
+                    Root::new(view, window, cx)
+                }
+            });
+            let handle: gpui_kit::AnyWindowHandle = window.into();
+            let frame = |cx: &mut TestAppContext| {
+                cx.update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    window.render_frame(cx);
+                })
+                .unwrap()
+            };
+            // Both scrolled a third of the way.
+            let rest = |cx: &mut TestAppContext| {
+                frame(cx);
+                let (down, along) = (tall.max_offset().y, wide.max_offset().x);
+                assert!(down > px(0.), "nothing to scroll down");
+                assert_eq!(down, along, "the two scroll unequally");
+                tall.set_offset(point(px(0.), -(down / 3.).round()));
+                wide.set_offset(point(-(along / 3.).round(), px(0.)));
+                frame(cx);
+            };
+            rest(cx);
+            let dark = mode == ThemeMode::Dark;
+            let colors = super::scroll_colors(dark);
+            let raised = over(surface, colors.raised);
+            let arrow = over(raised, colors.arrow);
+            let end = over(surface, colors.thumb_end);
+            let (bar, buttons) = cx
+                .update_window(handle, |_, window, _| {
+                    let bar = window.find("wide-scroll-column").bounds();
+                    let wide = window.find("wide").bounds();
+                    let left = window.find("wide-scroll-up").bounds();
+                    let right = window.find("wide-scroll-down").bounds();
+                    let track = window.find("wide-scroll-track").bounds();
+                    assert!(window.try_find("wide-scroll-lock").is_none(), "a lock button");
+                    assert_eq!(bar.size.height, px(18.));
+                    assert_eq!((bar.left(), bar.right()), (wide.left(), wide.right()));
+                    assert_eq!(bar.top(), wide.bottom());
+                    for button in [left, right] {
+                        assert_eq!(button.size, size(px(17.), px(18.)), "{button:?}");
+                        assert_eq!((button.top(), button.bottom()), (bar.top(), bar.bottom()));
+                    }
+                    assert_eq!((left.left(), right.right()), (bar.left(), bar.right()));
+                    assert_eq!((track.left(), track.right()), (left.right(), right.left()));
+                    assert_eq!((track.top(), track.bottom()), (bar.top(), bar.bottom()));
+                    (bar, [left, right])
+                })
+                .unwrap();
+            let pixels = |cx: &mut TestAppContext| {
+                cx.update_window(handle, |_, window, cx| {
+                    window.render_frame(cx);
+                    column_and_bar(window)
+                })
+                .unwrap()
+            };
+            let at = |image: &[u32], x: i32, y: i32| image[(x * 18 + y) as usize];
+
+            // At rest, drawn as the spec draws it.
+            let (upright, sideways) = pixels(cx);
+            let lit = |x: i32, y: i32| at(&sideways, x, y);
+            let length = bar.size.width.as_f32() as i32;
+            // The arrows: 4 wide and 6 tall, centred up and down, 7 pixels in
+            // from the button's outer end, pointing out.
+            let left_arrow = [(7, 8, 2), (8, 7, 4), (9, 6, 6), (10, 6, 6)];
+            for (start, toward) in [(0, 1), (length - 1, -1)] {
+                for x in 0..17 {
+                    for y in 0..18 {
+                        let on = left_arrow.iter().any(|&(column, top, height)| {
+                            x == column && (top..top + height).contains(&y)
+                        });
+                        let c = lit(start + toward * x, y);
+                        let expected = if on { arrow } else { raised };
+                        assert!(
+                            same(c, expected),
+                            "{mode:?}: {c:06x} at ({x}, {y}) from the {} end, not {expected:06x}",
+                            if toward > 0 { "left" } else { "right" }
+                        );
+                    }
+                }
+            }
+            // The track: the surface between a line along its top and bottom,
+            // and the thumb the bar's full height, with a column at each end.
+            let thumb: Vec<i32> = (17..length - 17)
+                .filter(|x| !same(lit(*x, 9), surface))
+                .collect();
+            let (first, last) = (*thumb.first().unwrap(), *thumb.last().unwrap());
+            assert!(first > 27 && last < length - 27, "{mode:?}: the thumb at {first}..{last}");
+            for x in 17..length - 17 {
+                for y in [0, 17] {
+                    assert!(same(lit(x, y), raised), "{mode:?}: no line at ({x}, {y})");
+                }
+                for y in 1..17 {
+                    let expected = if x == first || x == last {
+                        end
+                    } else if (first..=last).contains(&x) {
+                        raised
+                    } else {
+                        surface
+                    };
+                    let c = lit(x, y);
+                    assert!(
+                        same(c, expected),
+                        "{mode:?}: {c:06x} at ({x}, {y}), not {expected:06x}"
+                    );
+                }
+            }
+            assert_eq!(upright, sideways, "{mode:?}: the bar isn't the column on its side");
+
+            // Hovered and pressed, each part of the bar as the column's.
+            let thumb_at = point(px((first + last) as f32 / 2.), px(9.));
+            for (name, place) in [
+                ("left button", buttons[0].center() - bar.origin),
+                ("right button", buttons[1].center() - bar.origin),
+                ("thumb", thumb_at),
+            ] {
+                let sideways_at = bar.origin + place;
+                let column = cx
+                    .update_window(handle, |_, window, _| {
+                        window.find("tall-scroll-column").bounds()
+                    })
+                    .unwrap();
+                let upright_at = column.origin + point(place.y, place.x);
+                // Hovered, then pressed, at `at`: the column and the bar.
+                let mut use_at = |at| {
+                    let none = gpui_kit::Modifiers::default;
+                    let left = gpui_kit::MouseButton::Left;
+                    let vcx = &mut gpui_kit::VisualTestContext::from_window(handle, cx);
+                    vcx.simulate_mouse_move(at, None, none());
+                    vcx.run_until_parked();
+                    let hovered = pixels(vcx);
+                    vcx.simulate_mouse_down(at, left, none());
+                    vcx.run_until_parked();
+                    let pressed = pixels(vcx);
+                    vcx.simulate_mouse_up(at, left, none());
+                    // Between the two squares, over neither.
+                    vcx.simulate_mouse_move(point(px(SQUARE + 20.), px(SQUARE / 2.)), None, none());
+                    vcx.run_until_parked();
+                    rest(cx);
+                    (hovered, pressed)
+                };
+                let ((column_hovered, _), (column_pressed, _)) = use_at(upright_at);
+                let ((_, bar_hovered), (_, bar_pressed)) = use_at(sideways_at);
+                assert_ne!(column_hovered, column_pressed, "{mode:?}: the {name}'s two steps");
+                assert_eq!(column_hovered, bar_hovered, "{mode:?}: the {name} hovered");
+                assert_eq!(column_pressed, bar_pressed, "{mode:?}: the {name} pressed");
+            }
+        }
     }
 
     /// With nothing to scroll, the thumb fills the track; otherwise it is as

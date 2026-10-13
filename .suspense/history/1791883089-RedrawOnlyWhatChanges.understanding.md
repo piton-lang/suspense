@@ -1,0 +1,6 @@
+- [A slide moves the tab bar, the selected tab's contents and the chat input together, frame by frame, laying out their contents anew at each width](.claude/reference/scope/application/Body.md#sliding)
+- [Drawing a table costs no more than its rows in view; only new or changed rows are laid out again](.claude/reference/ui/components/table/TableComponent.md#drawing)
+- [Raw output that only changes the waiting row redraws nothing while the end of the task table is out of view](.claude/reference/ui/components/task-table/index.md#scrolling)
+- [A running task's elapsed time counts up every second wherever its status label shows](.claude/reference/scope/prompt-mode/message-list/index.md#elapsed)
+- [The message list's previous tasks cost no more to draw than those in view](.claude/reference/scope/prompt-mode/message-list/index.md#scrolling)
+- [The Tasks tab's running rows update their time and spinner in place, redrawing only what is in view](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)

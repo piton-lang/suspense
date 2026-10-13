@@ -1,0 +1,7 @@
+- [A Start automatically switch on Next sprint's heading starts off and is saved in order.json](.claude/reference/scope/planning/index.md#auto-start)
+- [While on, once Current sprint ends all Done, it closes and Next sprint is sent at once](.claude/reference/scope/planning/index.md#auto-start)
+- [A sprint ending with a story failed, cancelled, or stopped never starts the next by itself](.claude/reference/scope/planning/index.md#auto-start)
+- [Next sprint never starts by itself while planning is paused](.claude/reference/scope/planning/index.md#auto-start)
+- [Each automatic start shows a passive notification and is logged](.claude/reference/scope/planning/index.md#auto-start)
+- [Runs end when the application quits](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [Turning it on starts a waiting Next sprint; on launch it waits for Start now; an Auto marker shows it is on](.claude/reference/scope/planning/index.md#auto-start)

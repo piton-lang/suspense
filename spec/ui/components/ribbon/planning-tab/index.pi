@@ -1,17 +1,77 @@
 use /lib
 use /ui
+from /scope/planning import Planning
 
 export ui-component RibbonPlanningTab:
     pitch:
         The ribbon's Planning tab: the commands for planning work before it is
-        sent, to be added.
+        sent, as the @{Planning} says.
 
     description:
         The Planning tab of the ribbon, between Project and Code. It takes no
         mode's colour: its label is in the tab row's own colour, as Project's
         and Application's are.
 
+        Opening it, by clicking it, with <Alt+2>, or by Ctrl+clicking it
+        (Cmd+click on macOS) to open it alongside other tabs, as the
+        ribbon's keyboard and opening several tabs say, opens Planning's tab
+        in the body and selects it, or selects it if it is already open,
+        exactly as Open Planning does, by the same route. Ctrl+clicking it
+        while it is already open closes only the ribbon tab, and opens
+        nothing. Switching the ribbon from Planning to another tab, or
+        closing Planning among several, leaves the body as it is: Planning's
+        tab stays in the body's tab bar, and the body's selected tab stays
+        selected.
+
     groups:
-        None yet. Opened alone, the command area reads "No commands yet", as
-        the ribbon says of a tab with no commands, and opened beside other
-        tabs, it adds nothing to the command area.
+        A "Plan" group holds the Open Planning command, then New Story, then
+        Send Sprint. An "Agent" group follows it, holding Draft Stories, then
+        Research.
+
+    commands:
+        openPlanning:
+            A "Planning" button with a checklist icon. Clicking it opens the
+            Planning tab in the body, or selects it where it is open. Its
+            tooltip says it opens the project's stories and sprint.
+
+            It is primary, and a full button.
+
+        newStory:
+            A "New Story" button with a plus icon. Clicking it opens Planning
+            and adds a story to Next sprint, its title focused.
+
+            It is primary, and a slim button.
+
+        sendSprint:
+            A "Send Sprint" button with a send icon, enabled while Next
+            sprint holds a story not yet sent. Clicking it sends the sprint,
+            as Planning's Send sprint does; its tooltip says how many stories
+            it sends.
+
+            It is a slim button, and not primary.
+
+        draftStories:
+            A "Draft Stories" button with a sparkle icon. Clicking it opens
+            Planning, or selects its tab where it is open, and opens drafting
+            in the side panel with its "Describe what you want" box focused,
+            exactly as the Backlog heading's "Draft stories" button and
+            Ctrl+Shift+D do, by the same route, not a copy of it. Its tooltip
+            says it asks the agent to break a request into proposed stories,
+            and gives Ctrl+Shift+D (Cmd+Shift+D on macOS). It is never
+            disabled while planning is paused, since drafting only changes
+            the plan.
+
+            It is a slim button, and not primary.
+
+        research:
+            A "Research" button with a magnifying-glass icon. Clicking it
+            opens Planning, or selects its tab where it is open, and opens
+            research in the side panel with its "What should be looked
+            into?" box focused, exactly as the Backlog heading's "Research"
+            button and Ctrl+Shift+R do, by the same route, not a copy of it.
+            Its tooltip says it asks the agent to look into a topic, read
+            only, and gives Ctrl+Shift+R (Cmd+Shift+R on macOS). It is never
+            disabled while planning is paused; a second research while paused
+            keeps the pause, as Planning says.
+
+            It is a slim button, and not primary.

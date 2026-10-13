@@ -466,20 +466,37 @@ fn a_native_build_still_works() {
 /// The piton channel runs only what the run's profile allows.
 #[test]
 fn piton_is_only_run_as_the_profile_allows() {
+    let dir = project("piton-channel");
+    std::fs::write(
+        dir.join("src/prompt.pi"),
+        "export anchor A:\n    text: 'a'\n",
+    )
+    .unwrap();
     let args = |text: &str| text.split(' ').map(String::from).collect::<Vec<_>>();
-    assert!(channel::allowed(ProfileKind::Spec, &args("build")).is_ok());
-    assert!(channel::allowed(ProfileKind::Spec, &args("check")).is_ok());
-    assert!(
-        channel::allowed(
-            ProfileKind::Code,
-            &args("slice --adapter claude-code index.pi#A")
-        )
-        .is_ok()
-    );
-    assert!(channel::allowed(ProfileKind::Code, &args("slice index.pi#A")).is_err());
-    assert!(channel::allowed(ProfileKind::Code, &args("build")).is_err());
-    assert!(channel::allowed(ProfileKind::Question, &args("check")).is_err());
-    assert!(channel::allowed(ProfileKind::Bare, &args("slice --adapter x y")).is_err());
+    let allowed = |kind, text: &str| channel::allowed(kind, &args(text), &dir).is_ok();
+    assert!(allowed(ProfileKind::Spec, "build"));
+    assert!(allowed(ProfileKind::Spec, "check"));
+    assert!(allowed(
+        ProfileKind::Code,
+        "slice --adapter claude-code index.pi#A"
+    ));
+    assert!(!allowed(ProfileKind::Code, "slice index.pi#A"));
+    assert!(!allowed(ProfileKind::Code, "build"));
+    // A Code run compiles its own code's Piton, as a build that bakes it in
+    // does, but never the spec, nothing outside its code, and with no flags.
+    assert!(allowed(ProfileKind::Code, "compile src/prompt.pi"));
+    assert!(!allowed(ProfileKind::Code, "compile spec/index.pi"));
+    assert!(!allowed(ProfileKind::Code, "compile src/../spec/index.pi"));
+    assert!(!allowed(ProfileKind::Code, "compile src/missing.pi"));
+    assert!(!allowed(ProfileKind::Code, "compile"));
+    assert!(!allowed(
+        ProfileKind::Code,
+        "compile --out /tmp/x src/prompt.pi"
+    ));
+    assert!(!allowed(ProfileKind::Question, "compile src/prompt.pi"));
+    assert!(!allowed(ProfileKind::Question, "check"));
+    assert!(!allowed(ProfileKind::Bare, "slice --adapter x y"));
+    std::fs::remove_dir_all(&dir).ok();
 }
 
 fn which(program: &str) -> bool {

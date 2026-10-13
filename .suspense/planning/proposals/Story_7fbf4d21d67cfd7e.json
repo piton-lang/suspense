@@ -1,0 +1,207 @@
+{
+  "proposals": [
+    {
+      "id": "Proposal_d03073942189ac26",
+      "title": "Muse Code one-off runs, models, and images",
+      "prompt": "Everything else Suspense does with a harness also works with Muse\nCode. A one-off run uses Muse Code in a mode that can only read,\nglob, and search, never change anything, as\nspec/scope/harness-integration/one-off-run/index.pi#OneOffAgentRun\nsays. The chat input's model picker lists the models Muse Code can\nbe told, and the effort picker is enabled only if Muse Code takes a\nreasoning effort, as spec/scope/prompt-mode/chat-input/index.pi#ChatInput\ndescribes for the others. Attached images go to Muse Code the way it\ntakes them, as\nspec/scope/harness-integration/index.pi#HarnessIntegration.images\nsays. Muse Code's skills, commands, and agents appear in\nspec/scope/harness-integration/catalog/index.pi#HarnessCatalog if it\nreports them. If Muse Code has no way to do one of these, the spec\nsays so.",
+      "mode": "chain",
+      "target": "Story_7fbf4d21d67cfd7e",
+      "about": "Story_7fbf4d21d67cfd7e",
+      "spec": [
+        {
+          "link": "spec/scope/harness-integration/one-off-run/index.pi#OneOffAgentRun",
+          "note": "Muse Code's read-only mode for one-off runs",
+          "kind": "Section",
+          "quote": "Claude Code is given only those tools, Codex runs in its read-only sandbox, and OpenCode runs as its plan agent"
+        },
+        {
+          "link": "spec/scope/prompt-mode/chat-input/index.pi#ChatInput",
+          "note": "the model and effort pickers for Muse Code",
+          "kind": "Section",
+          "quote": "for Codex and OpenCode, the models their own configuration lists"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.images",
+          "note": "how attached images are given to Muse Code",
+          "kind": "Section",
+          "quote": "Images attached to a prompt ... are given to the harness as it takes them"
+        },
+        {
+          "link": "spec/scope/harness-integration/catalog/index.pi#HarnessCatalog",
+          "note": "Muse Code's skills, commands, and agents",
+          "kind": "Section",
+          "quote": "Every harness run reports the skills and agents it has"
+        }
+      ]
+    },
+    {
+      "id": "Proposal_18ce6b60cda94dfd",
+      "title": "Run tasks with Muse Code",
+      "prompt": "Muse Code can be the harness a project's runs go to, alongside Claude Code,\nCodex, and OpenCode. The spec has nothing on Muse Code yet, so this is new:\nwork out its real command, flags, streamed JSON events, system-prompt\nsupport, conversation resume and fork, image arguments, and where it keeps\nits sessions and its directory from Muse Code's own documentation and\n`--help`. Never guess them; where something can't be found, say so.\n\nAdd Muse Code to spec/scope/harness-integration/index.pi#HarnessIntegration.harnesses\nwith how it is run, and read its events into the same reply, tool calls,\nusage, and result as the others. Cover what\nspec/scope/harness-integration/index.pi#HarnessIntegration.feeding,\nspec/scope/harness-integration/index.pi#HarnessIntegration.images,\nspec/scope/harness-integration/index.pi#HarnessIntegration.context, and\nspec/scope/harness-integration/index.pi#HarnessIntegration.failures say for\neach harness. If it takes no system prompt of its own, give the system prompt\nahead of the prompt the way Codex and OpenCode do. Name its directory for\nHARNESS_DIRECTORY in spec/scope/prompt-mode/mode-system-prompts/index.pi#ModeSystemPrompts.\nFind its command as spec/scope/application/index.pi#Application.findingPrograms\nsays, and offer it as a row in spec/scope/settings-window/index.pi#SettingsWindow.agent,\nwith its command muted beside it and \"Not installed\" when that command can't\nbe found. Every run kind (tasks, questions, palette search, one-off runs,\nnotes, commit messages, titles) works with it, under its mode's sandbox, the\nsame as with any other harness.",
+      "mode": "chain",
+      "target": "Story_7fbf4d21d67cfd7e",
+      "rewrite": true,
+      "about": "Story_7fbf4d21d67cfd7e",
+      "spec": [
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.harnesses",
+          "note": "the list of harnesses and how each is run, which Muse Code joins",
+          "kind": "Section",
+          "quote": "The harness in use is the project's: Claude Code, Codex, or OpenCode"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.pitch",
+          "note": "the one-off commands it names",
+          "kind": "Section",
+          "quote": "`claude -p`, `codex exec`, or `opencode run`, whichever the user chose"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.feeding",
+          "note": "whether Muse Code can be fed more while it works",
+          "kind": "Section",
+          "quote": "read a single prompt and can't be fed more while they work"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.images",
+          "note": "how images are passed to each harness",
+          "kind": "Section",
+          "quote": "are given to the harness as it takes them"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.context",
+          "note": "where its sessions are kept, copied and restored",
+          "kind": "Section",
+          "quote": "Codex and OpenCode sessions are kept and restored the same way, wherever each harness keeps them"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.failures",
+          "note": "its errors shown in its own words",
+          "kind": "Section",
+          "quote": "in the harness's own words"
+        },
+        {
+          "link": "spec/scope/settings-window/index.pi#SettingsWindow.agent",
+          "note": "a row for Muse Code in the harness picker",
+          "kind": "Section",
+          "quote": "a row for each harness, in order: Claude Code, Codex, and OpenCode"
+        },
+        {
+          "link": "spec/scope/application/index.pi#Application.findingPrograms",
+          "note": "finding Muse Code's command on the host",
+          "kind": "Section",
+          "quote": "each harness, Claude Code's `claude`, Codex's `codex`, and OpenCode's `opencode`"
+        },
+        {
+          "link": "spec/scope/prompt-mode/mode-system-prompts/index.pi#ModeSystemPrompts",
+          "note": "what HARNESS_DIRECTORY is for Muse Code",
+          "kind": "Section",
+          "quote": "HARNESS_DIRECTORY is the directory the harness that runs the prompt"
+        },
+        {
+          "note": "Muse Code itself (its command, flags, JSON event stream, session store or directory); searched the whole compiled reference for",
+          "quote": "muse"
+        }
+      ]
+    },
+    {
+      "id": "Proposal_6a1c726b0b5c44d2",
+      "title": "Settle the Muse Code harness in the spec",
+      "prompt": "Settle spec/scope/harness-integration/index.pi#HarnessIntegration.harnesses,\nspec/scope/harness-integration/index.pi#HarnessIntegration.feeding,\nspec/scope/harness-integration/index.pi#HarnessIntegration.images, and\nspec/scope/harness-integration/index.pi#HarnessIntegration.context with what\nthe code now does for Muse Code: the exact command and flags, whether it can\nbe fed or fork a conversation, how it takes images, where its sessions live,\nand which small model, if any, writes the notes, commit messages, and titles.",
+      "mode": "spec",
+      "target": "Story_7fbf4d21d67cfd7e",
+      "about": "Story_7fbf4d21d67cfd7e",
+      "spec": [
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.harnesses",
+          "note": "Muse Code's command and flags as built",
+          "kind": "Section",
+          "quote": "Each harness is run its own way"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.context",
+          "note": "where Muse Code's sessions are kept, as built",
+          "kind": "Section",
+          "quote": "wherever each harness keeps them"
+        }
+      ]
+    },
+    {
+      "id": "Proposal_3f3241d1d5b3b0b6",
+      "title": "Check Muse Code on the welcome page",
+      "prompt": "With Muse Code as the project's harness, the \"Harness\" and \"Harness login\"\nrows of spec/scope/welcome/index.pi#Welcome.checks speak of Muse Code. They\nfind it with its version command, link to its installation instructions when\nit's missing, report whether it is logged in using its own status command,\nand name its login command with \"Open terminal\" when it isn't. The spec has\nnothing on Muse Code yet, so this is new. Take its URL and commands from Muse\nCode's own documentation, never invent them.",
+      "mode": "chain",
+      "about": "Story_7fbf4d21d67cfd7e",
+      "spec": [
+        {
+          "link": "spec/scope/welcome/index.pi#Welcome.checks",
+          "note": "the Harness and Harness login rows for Muse Code, \"links to the harness's installation instructions\" and",
+          "kind": "Section",
+          "quote": "as its own status command reports"
+        },
+        {
+          "note": "Muse Code's install page, version command, or login status and login commands"
+        }
+      ]
+    },
+    {
+      "id": "Proposal_115bd305a9607dd6",
+      "title": "Model and effort pickers for Muse Code",
+      "prompt": "With Muse Code in use, the model picker in\nspec/scope/prompt-mode/chat-input/index.pi#ChatInput.tabs.model lists the\nmodels Muse Code can be told and passes the chosen one in the way Muse Code\ntakes it. The effort picker in\nspec/scope/prompt-mode/chat-input/index.pi#ChatInput.tabs.effort offers its\nlevels if Muse Code takes a reasoning effort, and is disabled otherwise, as\nfor Claude Code and OpenCode. Both are remembered per harness, as\nspec/scope/user-preferences/index.pi#UserPreferences.preferences says. The\nspec has nothing on Muse Code's models or efforts yet, so this is new. Take\nthem from Muse Code's own documentation.",
+      "mode": "chain",
+      "about": "Story_7fbf4d21d67cfd7e",
+      "spec": [
+        {
+          "link": "spec/scope/prompt-mode/chat-input/index.pi#ChatInput.tabs.model",
+          "note": "the models listed for each harness",
+          "kind": "Section",
+          "quote": "The models listed are those the harness can be told"
+        },
+        {
+          "link": "spec/scope/prompt-mode/chat-input/index.pi#ChatInput.tabs.effort",
+          "note": "which harnesses offer an effort",
+          "kind": "Section",
+          "quote": "Only a harness that takes a reasoning effort offers it"
+        },
+        {
+          "link": "spec/scope/user-preferences/index.pi#UserPreferences.preferences",
+          "note": "the choice remembered for each harness",
+          "kind": "Section",
+          "quote": "remembered for the user, per harness"
+        },
+        {
+          "note": "which models and reasoning efforts Muse Code accepts, and how it is told them"
+        }
+      ]
+    },
+    {
+      "id": "Proposal_268cf21eace58a28",
+      "title": "Offer Muse Code when creating or importing a project",
+      "prompt": "Muse Code can be picked as a new or imported project's harness, as\nspec/scope/new-project/index.pi#NewProject.agents and\nspec/scope/import-project/index.pi#ImportProject.defaults describe for the\nothers. A project with no harness saved defaults to Muse Code when its\npiton.config.pi builds only for Muse Code's adapter, as\nspec/scope/harness-integration/index.pi#HarnessIntegration.harnesses says.\nThe Agents group lists only agents Belay has an adapter for, and the spec\nnames no Muse Code adapter. First check whether @piton/belay has one. If it\ndoesn't, stop and say so rather than inventing one, because the rest of this\nstory depends on it.",
+      "mode": "chain",
+      "about": "Story_7fbf4d21d67cfd7e",
+      "spec": [
+        {
+          "link": "spec/scope/new-project/index.pi#NewProject.agents",
+          "note": "the Agents checkboxes and the Harness radio group",
+          "kind": "Section",
+          "quote": "one per agent Belay has an adapter for"
+        },
+        {
+          "link": "spec/scope/import-project/index.pi#ImportProject.defaults",
+          "note": "the harness an imported project starts with",
+          "kind": "Section",
+          "quote": "The template, the agents, and the harness start as a new project's do"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.harnesses",
+          "note": "the default harness from piton.config.pi's adapters",
+          "kind": "Section",
+          "quote": "by its adapters in order, Claude Code for ClaudeCodeAdapter"
+        },
+        {
+          "note": "a Belay adapter for Muse Code"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+
+export anchor Story_7fbf4d21d67cfd7e:
+    userPrompt:
+        \\\
+        Muse Code is a fourth harness a project can run with, alongside
+        Claude Code, Codex, and OpenCode. The spec has nothing on Muse Code
+        yet, so this is new. Before changing anything, find out from Muse
+        Code's own documentation or its --help how it is run one-off and
+        non-interactively: its command, how it takes a prompt on standard
+        input, how it streams what it does as JSON, how it carries on a
+        conversation, whether it takes a system prompt and a model, and the
+        folder it reads agentic Markdown from. If any of these can't be
+        found, stop and say what is missing.
+
+        Once this is done, a project whose harness is Muse Code sends every
+        run to it: tasks, questions, the palette's file search, and the
+        notes, commit messages, and prompt titles. Each run happens as
+        spec/scope/harness-integration/index.pi#HarnessIntegration.harnesses
+        describes for the other three. Muse Code's streamed events are read
+        into the same reply, tool calls, usage, and result. The project's
+        system prompt is given the way Muse Code takes one, or ahead of the
+        prompt and marked off from it if it takes none, as Codex and
+        OpenCode do. Each lane's conversation is carried on with Muse Code's
+        own resume. HARNESS_DIRECTORY stands for Muse Code's folder, as
+        spec/scope/prompt-mode/mode-system-prompts/index.pi#ModeSystemPrompts
+        says for the others. Its command is found on the user's own PATH, as
+        spec/scope/application/index.pi#Application says. A run that fails
+        or can't start says why in Muse Code's own words, as
+        spec/scope/harness-integration/index.pi#HarnessIntegration.failures
+        requires. A Muse Code run is sandboxed like any other run. Where
+        Muse Code can't do something (be fed more while it works, fork a
+        conversation, take a small model), the spec says so, as it does for
+        Codex and OpenCode.
+        \\\
+
+    mode: combined
+
+    model: opus
+
+    addedSteps:
+        step1:
+            \\\
+            mode: code
+            model: opus
+
+            Muse Code can be picked as a project's harness. The Agent section of
+            spec/scope/settings-window/index.pi#SettingsWindow.agent has a fourth
+            row, "Muse Code", with its command muted beside it and "Not
+            installed" when the command can't be found. Picking it saves it with
+            the project, as spec/scope/project-data/index.pi#ProjectData says.
+            The Harness group in
+            spec/scope/new-project/index.pi#NewProject.agents lists only agents
+            Belay has an adapter for. The spec has nothing on a Muse Code
+            adapter. If @piton/belay has one, add Muse Code as an agent there,
+            along with its adapter in the written piton.config.pi. If it doesn't,
+            leave New Project as it is and say so. Muse Code is then picked
+            afterwards in Settings. A project with no saved harness still falls
+            back by its adapters, as
+            spec/scope/harness-integration/index.pi#HarnessIntegration.harnesses
+            says.
+            \\\
+        step2:
+            \\\
+            mode: code
+            model: opus
+
+            Muse Code conversations last across restarts, machine moves, and
+            cleanups, just as the other harnesses' do in
+            spec/scope/harness-integration/index.pi#HarnessIntegration.context.
+            After every Muse Code run, its session is copied into the project's
+            data next to the run's history record. Before a conversation is
+            carried on, the session is put back where Muse Code looks for it,
+            under the same id. If there is no copy, the request is sent again as
+            a new conversation. The sandbox in spec/scope/sandbox/index.pi#Sandbox
+            lets a Muse Code run reach its own session folder and login on the
+            host, and nothing more. The spec doesn't say where Muse Code keeps
+            its sessions yet. Find out and write it in.
+            \\\

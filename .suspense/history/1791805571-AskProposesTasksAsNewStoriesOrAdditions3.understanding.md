@@ -1,0 +1,6 @@
+- [The agent never writes the plan; its run reads the project and changes nothing](.claude/reference/scope/planning/index.md#proposals)
+- [Each proposal says New story or Add to a named story, the open story first](.claude/reference/scope/planning/index.md#proposals)
+- [Each proposal card has Accept, Edit, and Reject; editing doesn't accept it](.claude/reference/scope/planning/index.md#proposal-cards)
+- [An accepted new story goes to the end of Next sprint; an addition becomes a new step of its story](.claude/reference/scope/planning/index.md#proposal-cards)
+- [Every added story goes to the end of Next sprint, however it is added](.claude/reference/scope/planning/index.md#creating)
+- [Ask answers' suspense-story blocks are proposal cards with the same choices](.claude/reference/scope/planning/index.md#proposal-cards)

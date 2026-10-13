@@ -1,0 +1,28 @@
+
+export anchor Story_b441db061746bce6:
+    userPrompt:
+        \\\
+        Opening the ribbon's Planning tab, by clicking it, with Alt+2, or by Ctrl+clicking
+        it to open it alongside other tabs, opens the body's Planning tab and selects it,
+        or selects it if it is already open. Today only the Open Planning button does this,
+        as spec/ui/components/ribbon/planning-tab/index.pi#RibbonPlanningTab.openPlanning
+        says. Read spec/ui/components/ribbon/index.pi#Ribbon.keyboard and
+        spec/ui/components/ribbon/index.pi#Ribbon.openingSeveralTabs for how ribbon tabs open.
+
+        Once open, the body's Planning tab can't be closed. It has no close button, and
+        nothing else closes it either, the same as the Chat tab described in
+        spec/scope/application/Body.pi#Body.tabs. Update
+        spec/scope/application/Body.pi#Body.contents, which says the tab is there only
+        "while it is open", and spec/scope/planning/index.pi#Planning.description, which
+        says Planning opens "as a file opens", to match. Planning sits right after Chat
+        and can't be dragged, and file and task tabs can't be dropped in front of it.
+
+        The spec says nothing yet about what the body shows when the ribbon switches from
+        Planning to another tab, so this part is new. The Planning tab stays in the bar and
+        the body's selection doesn't change. The Open Planning, New Story, Draft Stories and
+        Research commands keep working as they do now.
+        \\\
+
+    mode: combined
+
+    model: opus

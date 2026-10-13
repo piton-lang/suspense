@@ -1,0 +1,486 @@
+=== spec/scope/application/Body.pi#Body.description
+# Body.description
+
+The part of the specification `Body.description` depends on, from `.claude/reference/scope/application/Body.md#description` and the declarations it reaches. Each declaration appears once, and the names used in the text refer to the sections below.
+
+The entry reaches it through [`BuildApplication.refactoring`](.claude/skills/build-application/SKILL.md), [`Application.mainWindow`](.claude/reference/scope/application/index.md#main-window), and [`MainWindow.layout`](.claude/reference/scope/application/MainWindow.md#layout), which are included too.
+
+## Body
+
+Anchor in `.claude/reference/scope/application/Body.md#body`, declared as a `ui-component`, extending `UiComponent`.
+
+### Body.howToBuild
+
+Inherited from `Component`.
+
+A Body should be built as a reusable component that will be reused throughout the rest of the codebase.  A component is configurable through arguments or properties that alter its behaviour, appearance, and details.  A Body should encapsulate all of its own reusable behaviour, while leaving the wiring, integration, and integration to the domain of the application.
+
+### Body.theme
+
+Inherited from `UiComponent`, with the same value.
+
+### Body.pitch
+
+The main window's body: the area to the right of the project sidebar, where the tasks sent to the harness, and the files opened in tabs beside them, are shown, and the chat input they are sent from.
+
+### Body.description
+
+Beneath the [Ribbon](.claude/reference/ui/components/ribbon/index.md#ribbon), to the right of the [LeftSidebar](.claude/reference/ui/components/left-sidebar/index.md#left-sidebar), which runs the full height beside it, and reaching the window's right edge. It is part of the [PromptEditor](.claude/reference/scope/prompt-mode/index.md#prompt-editor).
+The [ChatInput](.claude/reference/scope/prompt-mode/chat-input/index.md#chat-input) lives within the body, along its bottom: its left edge against the project sidebar, and above it, beneath the body's tab bar, the selected tab's contents: the message list, or an open file. While a task runs, the [RightSidebar](.claude/reference/ui/components/right-sidebar/index.md#right-sidebar) runs the body's full height at its right, beside the tab bar, the selected tab's contents, and the chat input, and the chat input's right edge is against it: the chat input never runs beneath the right sidebar. While that sidebar isn't there, the chat input reaches the window's right edge.
+The body is flat and quiet: the selected tab's contents, the message list or an open file, sit on the theme's base surface, #444444 in dark mode, running edge to edge with no border, and the chat input along the bottom is set apart from them only by its own darker tab strip, as the [ChatInput](.claude/reference/scope/prompt-mode/chat-input/index.md#chat-input) says, with no line between them.
+
+### Body.sliding
+
+Whenever something slides out or back along one of the body's edges, as the [RightSidebar](.claude/reference/ui/components/right-sidebar/index.md#right-sidebar) does, everything else in the body moves smoothly with it, frame by frame, rather than jumping once the slide is over: the tab bar, the selected tab's contents, the Ask conversation while it shows, and the chat input all keep their right edge against the sliding edge throughout, so they narrow or widen together, in step with it and with each other. None of them lags behind another, is left at its old width until the slide settles, or runs beneath what is sliding. Their contents are laid out anew at each width as it changes, text wrapping and rows reflowing as they go: the tab bar's tabs, the chat input's text and buttons, the message list's table, and an open file's editor. A slide that reverses partway moves them back from wherever it had reached.
+
+### Body.contents
+
+Everything that can be in the body:
+
+- a tab bar along its top, holding a Chat tab, a tab for each file open, and the Planning tab, right after Chat, once it has been opened, since nothing closes it
+- the [Planning](.claude/reference/scope/planning/index.md#planning), beneath the tab bar while its tab is selected
+- the [MessageList](.claude/reference/scope/prompt-mode/message-list/index.md#message-list), the chat history, shown beneath the tab bar while the Chat tab is selected
+- the hint shown in the message list's place before any task has been sent, or while no project is open, as the [PromptEditor](.claude/reference/scope/prompt-mode/index.md#prompt-editor) and the [NoProjectState](.claude/reference/scope/no-project/index.md#no-project-state) say
+- an [Editor](.claude/reference/scope/editor/index.md#editor) for each open file, shown beneath the tab bar while its tab is selected
+- a task view for each task opened in a tab of its own, as its task tabs say, shown beneath the tab bar while its tab is selected
+- the [AskConversation](.claude/reference/scope/prompt-mode/ask-conversation/index.md#ask-conversation), in the Chat tab's place beneath the tab bar, while the chat input's Ask tab is selected
+- the [ChatInput](.claude/reference/scope/prompt-mode/chat-input/index.md#chat-input), along the bottom beneath whichever tab is selected but Planning, which is the one tab without it, and beneath the Ask conversation too
+- the [RightSidebar](.claude/reference/ui/components/right-sidebar/index.md#right-sidebar), at the right of all of these, the tab bar and the chat input included, while a task runs or is queued, or it is opened by hand
+
+An [InsetPanel](.claude/reference/ui/components/inset-panel/index.md#inset-panel) floats over the whole window, the body included, but is never part of it.
+
+### Body.askMode
+
+While the chat input's Ask tab is selected, the Ask conversation, as the [AskConversation](.claude/reference/scope/prompt-mode/ask-conversation/index.md#ask-conversation) says, takes the Chat tab's place in the body, filling all of it beneath the tab bar and above the chat input, as the message list fills it for every other mode: the body never splits, and nothing is shown beside the conversation. The Chat tab then reads "Ask" in Ask's colour. Selecting another mode's tab brings the message list back in its place, as it was left, and selecting Ask again brings the conversation back, scrolled where it was; the switch is at once, with nothing sliding. A file or task tab selected shows that file or task whatever mode is selected, and selecting Ask while one is shown selects the Chat tab, so the conversation is in view.
+
+### Body.tabs
+
+Along the top of the body runs a tab bar, in gpui-kit's default tab styling, across the width the message list takes: from the project sidebar to the right sidebar while a task runs, and to the window's right edge otherwise. Its first tab, Chat, shows the message list, and is always there: it can't be closed or moved. Once Planning has been opened, its tab, "Planning" with a checklist icon, comes right after Chat, and is pinned there as Chat is: it has no close button, nothing else closes it either, and it can't be dragged, so once there it stays in the bar. After them comes a tab for each open file and each task opened in a tab of its own, files and tasks together, in the order they were opened unless they have been dragged since, scrolling sideways once there are more than fit.
+Planning's tab is opened from the ribbon: opening the ribbon's Planning tab, by clicking it, with Alt+2, or by Ctrl+clicking it to open it alongside other ribbon tabs, opens Planning's tab here and selects it, or selects it if it is already open, as the [RibbonPlanningTab](.claude/reference/ui/components/ribbon/planning-tab/index.md#ribbon-planning-tab) says. Opening another ribbon tab, or closing the ribbon's Planning tab with Ctrl+click, changes nothing here: Planning's tab stays in the bar and the selected tab stays selected.
+Just one tab's contents show at a time, filling the space between the tab bar and the chat input. The chat input stays along the bottom whichever tab is selected but Planning, so a prompt can be written while a file or a task shows. The body starts with Chat selected, and clicking a tab selects it.
+Planning is the one tab without the chat input: while its tab is selected, the chat input isn't shown, and Planning fills the body from the tab bar to the body's bottom. Selecting Chat, a file, or a task tab brings the chat input back straight away, along the bottom as before. Nothing slides: it goes and comes back at once, and the selected tab's contents take or give up its room at once too. Hiding it keeps all it holds: its draft text, its attachments, and its selected mode tab are there again, as they were, when it shows. If it had keyboard focus when Planning was selected, it has keyboard focus again when it shows.
+Every tab in the bar, Chat and each file's alike, is laid out the same plain way, with nothing extra around it: the bar's full height, 32 pixels, its contents centred up and down in it, 12 pixels of padding at its left, and 12 at its right, and no margin of its own above, below, or beside it, so one tab ends where the next begins, with only the tab styling's own line between them. Nothing is inset from the bar's top or bottom, and the first tab starts at the bar's left edge.
+A file's tab shows the file's name, then, while it has unsaved changes, a dot, and then a small close button, an icon button 16 pixels square, set close beside the name, 4 pixels from it or from the dot, with no more room between them however long or short the name is. Since the button has room of its own around its icon, a file tab's right padding is 6 pixels rather than 12, so the icon sits as far from the tab's right edge as the name does from its left; the tab is only as wide as its padding, name, dot, and close button need. Chat's spinner, while something runs, sits 6 pixels after its label, inside the same padding. Hovering a file's tab shows the file's path in the project as its tooltip.
+A file's tab can be dragged along the tab bar to reorder the files, as the [DragReorderBehaviour](.claude/reference/ui/behaviours/drag-reorder/index.md#drag-reorder-behaviour) says, a vertical line showing the gap between two tabs it will land in, and the tab dragged following the pointer as the file's name. Chat stays first, and Planning, while its tab is there, right after it: no gap before a file's or task's first tab, between Chat or Planning and it, shows the indicator, so no file or task tab is ever dropped in front of either, and neither Chat nor Planning can be dragged. Dragging a tab selects it, as clicking it does, and the selection follows the tab to its new place; nothing else about its editor changes. A press on a tab's close button closes it rather than starting a drag. A file opened afterwards still gets its new tab just after the one selected, or, while Chat is selected and Planning's tab is there, just after Planning's, never between the two.
+
+### Body.taskTabs
+
+The Chat tab shows only the task the harness is working on now, and those running beside it, as the [MessageList](.claude/reference/scope/prompt-mode/message-list/index.md#message-list)'s header shows them, or, while none runs, the task that finished last, until the next is sent. It never shows any other task: a task opened from the right sidebar's Tasks tab, as the [TasksTab](.claude/reference/ui/components/right-sidebar/tasks/index.md#tasks-tab) says, or from anywhere else that opens a task, opens in a tab of its own in the body's tab bar, as a file does: a task not open yet gets a new tab just after the one selected, and is selected; opening one that already has a tab selects that tab; and opening the task Chat is showing selects Chat instead.
+A task's tab is laid out as a file's is: a bar 2 pixels wide down its left in its mode's colour, its status, a spinner while it is under way, a tick, cross, or dash once it has ended, then its name, the first line of its prompt cut off with an ellipsis at 24 characters, then its close button. Hovering it shows its prompt's first lines and its mode as its tooltip. It can be dragged among the files' tabs, and closed as they are, closing it changing nothing about the task.
+Beneath it, the task shows as it would at the head of the Chat tab, on its own: its header, with its status, time, compiled prompt, and buttons, then its output table, then the files it changed, scrolled to its top the first time it is shown, and as it was left after. A task still running shows its output as it comes, its table locked to the bottom while scrolled there, as the latest task's is, and carries on in its tab whether or not the tab is selected. Its tab stays open once it finishes. Opening a task in a tab doesn't select it in the Chat tab or change what Chat shows, and Chat's running tasks are never opened in tabs of their own unless asked for, a running task opened from the Tasks tab selecting it in Chat's header instead. Each open project keeps its own task tabs, as its file tabs are kept, and none is reopened when the project is opened again.
+
+### Body.openFile
+
+A file opened, from the [FileTree](.claude/reference/ui/components/file-tree/index.md#file-tree) or anywhere else the [OpenFile](.claude/reference/scope/open-file/index.md#open-file) says, shows in an [Editor](.claude/reference/scope/editor/index.md#editor) in a tab of its own, as many files open at once as are opened. A file not open yet gets a new tab, just after the one selected, and is selected. Opening a file that already has a tab selects that tab instead, leaving its editor as it was, unsaved changes and all.
+Nothing slides: a file's tab is selected, and its editor shows, at once, and closing it takes it away at once too. Files never split the body among themselves; the file takes the tab bar's full width above the chat input.
+Closing a file's tab, with its close button or the editor's, closes the file, the editor first asking to discard any unsaved changes. Closing the selected tab selects the tab to its right, or, with none to its right, the one to its left, which is Planning, while its tab is there, or else Chat, once no file is left. Closing a tab that isn't selected leaves the selection as it is.
+
+## Ribbon
+
+Anchor in `.claude/reference/ui/components/ribbon/index.md#ribbon`, declared as a `ui-component`, extending `UiComponent`.
+
+=== spec/scope/application/Body.pi#Body.tabs
+# Body.tabs
+
+The part of the specification `Body.tabs` depends on, from `.claude/reference/scope/application/Body.md#tabs` and the declarations it reaches. Each declaration appears once, and the names used in the text refer to the sections below.
+
+The entry reaches it through [`BuildApplication.refactoring`](.claude/skills/build-application/SKILL.md), [`Application.mainWindow`](.claude/reference/scope/application/index.md#main-window), and [`MainWindow.layout`](.claude/reference/scope/application/MainWindow.md#layout), which are included too.
+
+## Body
+
+Anchor in `.claude/reference/scope/application/Body.md#body`, declared as a `ui-component`, extending `UiComponent`.
+
+### Body.howToBuild
+
+Inherited from `Component`.
+
+A Body should be built as a reusable component that will be reused throughout the rest of the codebase.  A component is configurable through arguments or properties that alter its behaviour, appearance, and details.  A Body should encapsulate all of its own reusable behaviour, while leaving the wiring, integration, and integration to the domain of the application.
+
+### Body.theme
+
+Inherited from `UiComponent`, with the same value.
+
+### Body.pitch
+
+The main window's body: the area to the right of the project sidebar, where the tasks sent to the harness, and the files opened in tabs beside them, are shown, and the chat input they are sent from.
+
+### Body.description
+
+Beneath the [Ribbon](.claude/reference/ui/components/ribbon/index.md#ribbon), to the right of the [LeftSidebar](.claude/reference/ui/components/left-sidebar/index.md#left-sidebar), which runs the full height beside it, and reaching the window's right edge. It is part of the [PromptEditor](.claude/reference/scope/prompt-mode/index.md#prompt-editor).
+The [ChatInput](.claude/reference/scope/prompt-mode/chat-input/index.md#chat-input) lives within the body, along its bottom: its left edge against the project sidebar, and above it, beneath the body's tab bar, the selected tab's contents: the message list, or an open file. While a task runs, the [RightSidebar](.claude/reference/ui/components/right-sidebar/index.md#right-sidebar) runs the body's full height at its right, beside the tab bar, the selected tab's contents, and the chat input, and the chat input's right edge is against it: the chat input never runs beneath the right sidebar. While that sidebar isn't there, the chat input reaches the window's right edge.
+The body is flat and quiet: the selected tab's contents, the message list or an open file, sit on the theme's base surface, #444444 in dark mode, running edge to edge with no border, and the chat input along the bottom is set apart from them only by its own darker tab strip, as the [ChatInput](.claude/reference/scope/prompt-mode/chat-input/index.md#chat-input) says, with no line between them.
+
+### Body.sliding
+
+Whenever something slides out or back along one of the body's edges, as the [RightSidebar](.claude/reference/ui/components/right-sidebar/index.md#right-sidebar) does, everything else in the body moves smoothly with it, frame by frame, rather than jumping once the slide is over: the tab bar, the selected tab's contents, the Ask conversation while it shows, and the chat input all keep their right edge against the sliding edge throughout, so they narrow or widen together, in step with it and with each other. None of them lags behind another, is left at its old width until the slide settles, or runs beneath what is sliding. Their contents are laid out anew at each width as it changes, text wrapping and rows reflowing as they go: the tab bar's tabs, the chat input's text and buttons, the message list's table, and an open file's editor. A slide that reverses partway moves them back from wherever it had reached.
+
+### Body.contents
+
+Everything that can be in the body:
+
+- a tab bar along its top, holding a Chat tab, a tab for each file open, and the Planning tab, right after Chat, once it has been opened, since nothing closes it
+- the [Planning](.claude/reference/scope/planning/index.md#planning), beneath the tab bar while its tab is selected
+- the [MessageList](.claude/reference/scope/prompt-mode/message-list/index.md#message-list), the chat history, shown beneath the tab bar while the Chat tab is selected
+- the hint shown in the message list's place before any task has been sent, or while no project is open, as the [PromptEditor](.claude/reference/scope/prompt-mode/index.md#prompt-editor) and the [NoProjectState](.claude/reference/scope/no-project/index.md#no-project-state) say
+- an [Editor](.claude/reference/scope/editor/index.md#editor) for each open file, shown beneath the tab bar while its tab is selected
+- a task view for each task opened in a tab of its own, as its task tabs say, shown beneath the tab bar while its tab is selected
+- the [AskConversation](.claude/reference/scope/prompt-mode/ask-conversation/index.md#ask-conversation), in the Chat tab's place beneath the tab bar, while the chat input's Ask tab is selected
+- the [ChatInput](.claude/reference/scope/prompt-mode/chat-input/index.md#chat-input), along the bottom beneath whichever tab is selected but Planning, which is the one tab without it, and beneath the Ask conversation too
+- the [RightSidebar](.claude/reference/ui/components/right-sidebar/index.md#right-sidebar), at the right of all of these, the tab bar and the chat input included, while a task runs or is queued, or it is opened by hand
+
+An [InsetPanel](.claude/reference/ui/components/inset-panel/index.md#inset-panel) floats over the whole window, the body included, but is never part of it.
+
+### Body.askMode
+
+While the chat input's Ask tab is selected, the Ask conversation, as the [AskConversation](.claude/reference/scope/prompt-mode/ask-conversation/index.md#ask-conversation) says, takes the Chat tab's place in the body, filling all of it beneath the tab bar and above the chat input, as the message list fills it for every other mode: the body never splits, and nothing is shown beside the conversation. The Chat tab then reads "Ask" in Ask's colour. Selecting another mode's tab brings the message list back in its place, as it was left, and selecting Ask again brings the conversation back, scrolled where it was; the switch is at once, with nothing sliding. A file or task tab selected shows that file or task whatever mode is selected, and selecting Ask while one is shown selects the Chat tab, so the conversation is in view.
+
+### Body.tabs
+
+Along the top of the body runs a tab bar, in gpui-kit's default tab styling, across the width the message list takes: from the project sidebar to the right sidebar while a task runs, and to the window's right edge otherwise. Its first tab, Chat, shows the message list, and is always there: it can't be closed or moved. Once Planning has been opened, its tab, "Planning" with a checklist icon, comes right after Chat, and is pinned there as Chat is: it has no close button, nothing else closes it either, and it can't be dragged, so once there it stays in the bar. After them comes a tab for each open file and each task opened in a tab of its own, files and tasks together, in the order they were opened unless they have been dragged since, scrolling sideways once there are more than fit.
+Planning's tab is opened from the ribbon: opening the ribbon's Planning tab, by clicking it, with Alt+2, or by Ctrl+clicking it to open it alongside other ribbon tabs, opens Planning's tab here and selects it, or selects it if it is already open, as the [RibbonPlanningTab](.claude/reference/ui/components/ribbon/planning-tab/index.md#ribbon-planning-tab) says. Opening another ribbon tab, or closing the ribbon's Planning tab with Ctrl+click, changes nothing here: Planning's tab stays in the bar and the selected tab stays selected.
+Just one tab's contents show at a time, filling the space between the tab bar and the chat input. The chat input stays along the bottom whichever tab is selected but Planning, so a prompt can be written while a file or a task shows. The body starts with Chat selected, and clicking a tab selects it.
+Planning is the one tab without the chat input: while its tab is selected, the chat input isn't shown, and Planning fills the body from the tab bar to the body's bottom. Selecting Chat, a file, or a task tab brings the chat input back straight away, along the bottom as before. Nothing slides: it goes and comes back at once, and the selected tab's contents take or give up its room at once too. Hiding it keeps all it holds: its draft text, its attachments, and its selected mode tab are there again, as they were, when it shows. If it had keyboard focus when Planning was selected, it has keyboard focus again when it shows.
+Every tab in the bar, Chat and each file's alike, is laid out the same plain way, with nothing extra around it: the bar's full height, 32 pixels, its contents centred up and down in it, 12 pixels of padding at its left, and 12 at its right, and no margin of its own above, below, or beside it, so one tab ends where the next begins, with only the tab styling's own line between them. Nothing is inset from the bar's top or bottom, and the first tab starts at the bar's left edge.
+A file's tab shows the file's name, then, while it has unsaved changes, a dot, and then a small close button, an icon button 16 pixels square, set close beside the name, 4 pixels from it or from the dot, with no more room between them however long or short the name is. Since the button has room of its own around its icon, a file tab's right padding is 6 pixels rather than 12, so the icon sits as far from the tab's right edge as the name does from its left; the tab is only as wide as its padding, name, dot, and close button need. Chat's spinner, while something runs, sits 6 pixels after its label, inside the same padding. Hovering a file's tab shows the file's path in the project as its tooltip.
+A file's tab can be dragged along the tab bar to reorder the files, as the [DragReorderBehaviour](.claude/reference/ui/behaviours/drag-reorder/index.md#drag-reorder-behaviour) says, a vertical line showing the gap between two tabs it will land in, and the tab dragged following the pointer as the file's name. Chat stays first, and Planning, while its tab is there, right after it: no gap before a file's or task's first tab, between Chat or Planning and it, shows the indicator, so no file or task tab is ever dropped in front of either, and neither Chat nor Planning can be dragged. Dragging a tab selects it, as clicking it does, and the selection follows the tab to its new place; nothing else about its editor changes. A press on a tab's close button closes it rather than starting a drag. A file opened afterwards still gets its new tab just after the one selected, or, while Chat is selected and Planning's tab is there, just after Planning's, never between the two.
+
+### Body.taskTabs
+
+The Chat tab shows only the task the harness is working on now, and those running beside it, as the [MessageList](.claude/reference/scope/prompt-mode/message-list/index.md#message-list)'s header shows them, or, while none runs, the task that finished last, until the next is sent. It never shows any other task: a task opened from the right sidebar's Tasks tab, as the [TasksTab](.claude/reference/ui/components/right-sidebar/tasks/index.md#tasks-tab) says, or from anywhere else that opens a task, opens in a tab of its own in the body's tab bar, as a file does: a task not open yet gets a new tab just after the one selected, and is selected; opening one that already has a tab selects that tab; and opening the task Chat is showing selects Chat instead.
+A task's tab is laid out as a file's is: a bar 2 pixels wide down its left in its mode's colour, its status, a spinner while it is under way, a tick, cross, or dash once it has ended, then its name, the first line of its prompt cut off with an ellipsis at 24 characters, then its close button. Hovering it shows its prompt's first lines and its mode as its tooltip. It can be dragged among the files' tabs, and closed as they are, closing it changing nothing about the task.
+Beneath it, the task shows as it would at the head of the Chat tab, on its own: its header, with its status, time, compiled prompt, and buttons, then its output table, then the files it changed, scrolled to its top the first time it is shown, and as it was left after. A task still running shows its output as it comes, its table locked to the bottom while scrolled there, as the latest task's is, and carries on in its tab whether or not the tab is selected. Its tab stays open once it finishes. Opening a task in a tab doesn't select it in the Chat tab or change what Chat shows, and Chat's running tasks are never opened in tabs of their own unless asked for, a running task opened from the Tasks tab selecting it in Chat's header instead. Each open project keeps its own task tabs, as its file tabs are kept, and none is reopened when the project is opened again.
+
+### Body.openFile
+
+A file opened, from the [FileTree](.claude/reference/ui/components/file-tree/index.md#file-tree) or anywhere else the [OpenFile](.claude/reference/scope/open-file/index.md#open-file) says, shows in an [Editor](.claude/reference/scope/editor/index.md#editor) in a tab of its own, as many files open at once as are opened. A file not open yet gets a new tab, just after the one selected, and is selected. Opening a file that already has a tab selects that tab instead, leaving its editor as it was, unsaved changes and all.
+Nothing slides: a file's tab is selected, and its editor shows, at once, and closing it takes it away at once too. Files never split the body among themselves; the file takes the tab bar's full width above the chat input.
+Closing a file's tab, with its close button or the editor's, closes the file, the editor first asking to discard any unsaved changes. Closing the selected tab selects the tab to its right, or, with none to its right, the one to its left, which is Planning, while its tab is there, or else Chat, once no file is left. Closing a tab that isn't selected leaves the selection as it is.
+
+## RibbonPlanningTab
+
+Anchor in `.claude/reference/ui/components/ribbon/planning-tab/index.md#ribbon-planning-tab`, declared as a `ui-component`, extending `UiComponent`.
+
+=== spec/scope/planning/index.pi#Planning.description
+# Planning.description
+
+The part of the specification `Planning.description` depends on, from `.claude/reference/scope/planning/index.md#description` and the declarations it reaches. Each declaration appears once, and the names used in the text refer to the sections below.
+
+The entry reaches it through [`BuildApplication.refactoring`](.claude/skills/build-application/SKILL.md), [`Application.projectFiles`](.claude/reference/scope/application/index.md#project-files), and [`ProjectData.contents`](.claude/reference/scope/project-data/index.md#contents), which are included too.
+
+## Planning
+
+Anchor in `.claude/reference/scope/planning/index.md#planning`, declared as a `ui-component`, extending `UiComponent`.
+
+### Planning.howToBuild
+
+Inherited from `Component`.
+
+A Planning should be built as a reusable component that will be reused throughout the rest of the codebase.  A component is configurable through arguments or properties that alter its behaviour, appearance, and details.  A Planning should encapsulate all of its own reusable behaviour, while leaving the wiring, integration, and integration to the domain of the application.
+
+### Planning.theme
+
+Inherited from `UiComponent`, with the same value.
+
+### Planning.pitch
+
+A plain, quick list of the work still to do, as Linear keeps issues: stories written ahead of time, each saying how it will be sent, Code, Chain, Spec, Ask, or Freeform, gathered into the next sprint and sent to the agent in order, all at once.
+
+### Planning.description
+
+Planning opens in a tab of its own in the body, "Planning", with a checklist icon, pinned right after Chat, as the [Body](.claude/reference/scope/application/Body.md#body) says, from the ribbon's Planning tab or the palette's "Planning". Once opened, its tab stays: it has no close button, and nothing closes it. It is a kanban board, filling the body beneath the tab bar, as the [Body](.claude/reference/scope/application/Body.md#body) places it, from the tab bar down to the bottom of the body and from the body's left edge to its right, since the chat input isn't shown while Planning's tab is selected. Its sections sit side by side as columns, in the order work moves, left to right: "Draft", the first, "Backlog", "Next sprint", "Current sprint", and "Done", then "Findings", the last, as research says. Draft holds rough stories, ideas written down quickly that aren't ready to plan yet, until they are moved to the Backlog. The Draft column is not drafting: "Draft stories", the Backlog's button that asks the agent for proposals, as creating says, is apart from it and never puts anything in it. Each column is headed by its name and count, with its actions, as the layout says, and holds its stories as cards, one beneath another. Every column is always there, whatever it holds; one with nothing in it shows its empty state, as the states say.
+
+### Planning.stories
+
+A story is one piece of work, written as it will be sent: a title, a prompt, and how it will be sent. Each is a story card in its column, as the parts say, quiet and dense, as Linear keeps an issue, showing all a story shows: a drag grip at its top left; its title beside it, the card's one primary thing, in the body's text colour, wrapping onto a second line and cut off with an ellipsis only after that; and beneath the title, a single muted property row of small
+
+#### Items
+
+a small mode picker, a pill reading its mode, "Code", "Chain",
+
+"Spec", "Ask", or "Freeform", in that mode's colour, as the [PromptModes](.claude/reference/scope/prompt-mode/modes/index.md#prompt-modes) colours it; its step count and a small icon for anything attached, when it has them; and, once it has been sent, its status, as a task's is shown, at the row's right. Hovering a card shows a menu button at its top right. A story has no Send of its own, as the sprint says.
+A column is too narrow to open a story in place, so clicking a card never expands it beneath itself or moves the cards below it: it opens the story in the side panel, docked at the board's right, as the layout places it and the parts draw a panel, headed by the story's title. The panel holds all an open story holds: its title, editable in place; its prompt, in a [GrowingTextInput](.claude/reference/ui/components/growing-text-input/index.md#growing-text-input) with the chat input's highlighting, completions, and slicing, as the [ChatInput](.claude/reference/scope/prompt-mode/chat-input/index.md#chat-input) has, and its attachments beneath; its parameters, its mode, model, effort, and Slice, as the chat input shows them; its steps, with Add step, as its steps say; and its Spec citations, as the spec grounding says. Every change is saved as it is made. While its story is open, its card stays highlighted, its line in the theme's accent, so which story the panel shows is always plain. Only one story is open at a time: clicking another card opens that one in the panel instead. Escape, the panel's close button, or clicking the open story's card again closes it, and its card's highlight with it.
+
+### Planning.creating
+
+Creating a story is quick, as adding a card is in Trello and adding an issue is in Linear: a story is added in the list it belongs in, right where it will sit. Draft, the Backlog, and Next sprint each end with an "Add story" line at their foot, beneath their last card, or beneath their empty state when they have none. Clicking it opens a composer in its place: a blank story card, drawn as the parts draw one, whose title is a text box, focused, in the mode last picked for a story, with nothing else to fill in. Typing a title and pressing Enter adds the story to that list, where the composer was, and opens another composer beneath it, so a list can be written down without the mouse. Enter with the title empty adds nothing. Escape discards the composer, and whatever was typed in it, and the "Add story" line comes back; clicking away while its title is empty discards it too, and clicking away with a title typed adds the story, as Enter does, but opens no other composer. A story added this way is not opened in the side panel; its card is there to be clicked, as the stories say, once more than its title is wanted.
+Hovering Draft's, the Backlog's, or Next sprint's heading shows a labelled "+ Add" button in it, as the layout places it, which opens the composer at the top of that list, above its first card, so a story can go first without being dragged there; Enter adds it there and opens the next composer beneath it, so stories written one after another keep the order they were written in. Ctrl+N (Cmd+N on macOS) while Planning has focus opens the composer at the foot of the list that has focus, Draft, the Backlog, or Next sprint, as the keyboard says, and at the foot of Next sprint when none of them has it. Only one composer is open at a time: opening another discards an empty one and adds one with a title, as clicking away does. Current sprint, Done, and Findings have no "Add story" line, no "+ Add", and no composer, and Ctrl+N never adds a story to them.
+A story goes into the list it was added to, then: Draft, the Backlog, or Next sprint, whichever composer it was written in. A duplicate goes into its original's list, just beneath it, and a story added from an Ask answer's card with "Add to sprint" goes into Next sprint, at its end. An accepted proposal for a new story, from drafting, research, or an Ask answer's proposal card, still goes into the Backlog, at its end, as the proposal cards say, and reaches a sprint only once it is moved to Next sprint; nothing the agent proposes ever goes into Draft. A story can always be moved among Draft, the Backlog, and Next sprint afterwards, as the sprint says. Adding a story never starts a sprint by itself, except where Start automatically starts one when a story is added to an empty Next sprint, as auto start says; a story added to Draft or the Backlog never starts one. A title with no prompt sends its title as its prompt.
+A story can also be prompted into existence: "Draft stories", a button beside the Backlog's heading, and Draft Stories on the [RibbonPlanningTab](.claude/reference/ui/components/ribbon/planning-tab/index.md#ribbon-planning-tab), which opens Planning first, open a small box to say what is wanted, in a sentence or a paragraph, whose request asks the harness, in a run of its own with no session, with the planning prompt of the [BakedSystemPrompts](.claude/reference/scope/harness-integration/baked-prompts/index.md#baked-system-prompts), to break it into stories, each with a title, a prompt, and the mode that fits it. They come back as proposals, as the drafting and proposals say, each to be accepted, edited, or rejected, and none reaches the plan until it is accepted. An Ask answer's prompt cards also offer "Add to sprint", which adds the card's prompt as a story in its mode to Next sprint.
+
+### Planning.sprint
+
+Stories move among Draft, the Backlog, and Next sprint by dragging, as the [DragReorderBehaviour](.claude/reference/ui/behaviours/drag-reorder/index.md#drag-reorder-behaviour) says, a card dragged by its grip from one of them into a gap in another as within any one, the gap opened in the column the pointer is over, as motion says; an empty one takes a drop at its top. Dragged near the board's left or right edge, the board scrolls sideways, and near a column's top or bottom, that column scrolls, as dragging says. Only Draft, the Backlog, and Next sprint take drops: Current sprint and Done open no gap, a story dropped on them stays where it was, and their cards can't be picked up, nor can a finding. Stories move too from a card's menu: in Draft, "Move to backlog"; in the Backlog, "Move to next sprint" and "Move to draft"; in Next sprint, "Move to backlog". Their order within Next sprint is the order they will be sent. A card's menu also has "Duplicate" and "Delete".
+"Send sprint", a primary button at the right of Next sprint's heading, enabled while it holds a story, sends every story in it, in order, as though each had been written in the chat input on its mode's tab and sent, one after another, as the [PromptSending](.claude/reference/scope/prompt-mode/sending/index.md#prompt-sending) says: each task queues in its lane behind the one before it, in the order of the sprint, and each question runs at once. The stories go into the queue as one block, so nothing sent later comes between them, and the queue's auto-send carries them on as ever, as the [QueueList](.claude/reference/scope/prompt-mode/queue-list/index.md#queue-list) says.
+Each story starts a conversation of its own, as though New conversation had been pressed just before it, and so does each later step of a story's chain: a story never carries on the conversation of the story before it, nor of anything its lane ran before the sprint. New conversation, pressed before the sprint was sent, is left for the next prompt written in the chat input.
+A story can't be sent on its own. The only way a story reaches work is through the sprint: a story in Draft or the Backlog waits until it is moved into Next sprint and the sprint is sent, a story in Draft never reaching a sprint without first moving to the Backlog or Next sprint, and a story in Next sprint goes when the sprint does. Nothing in Planning, its cards, their menus, the open story, the keyboard, the palette, or the ribbon, sends a single story, and nothing elsewhere sends a story by any other route: a story can't be dragged or copied into the chat input or the queue to be sent from there, and its menu has no "Send" or "Edit in chat input". The chat input's own prompts are not stories and are sent as ever; once a prompt is a story, the sprint is its only way to work. To send one story at once, it is the only story in Next sprint when Send sprint is pressed. A story that failed or was cancelled is sent again the same way, with the next sprint.
+Sending the sprint moves its stories into the "Current sprint" column, to the right of Next sprint, so Next sprint is empty again and stories added meanwhile go there, to be the sprint after. Current sprint and Done are columns of the board whatever they hold, never appearing, disappearing, or collapsing; while no sprint is under way Current sprint is empty and shows its empty state, as Done does before anything is done. A story in Current sprint keeps its place, its card showing its task's status as it queues, runs, and ends, and clicking it opens its task in the Tasks tab; it can't be moved or edited there. Once every story of Current sprint has ended, its column's heading offers "Close sprint", which moves the stories that are done into the Done column, their cards muted, and those that failed, were cancelled, or stopped to the start of Next sprint, in their order, to be sent again. While a sprint is current, Send sprint is disabled, its tooltip saying a sprint is already under way.
+Send sprint only ever moves into Current sprint the stories it actually sent. A story with nothing to send, its title and its prompt both empty, is skipped: it stays in Next sprint, where it was, and Send sprint's result says, muted, how many it skipped and why, as "1 empty story left in Next sprint". A sprint where every story is empty sends nothing and makes no Current sprint.
+Once a sprint is done, it can always be closed. Every story of Current sprint counts as ended once its task has ended, done, failed, cancelled, or stopped, or once its task can no longer be found, as when its record was deleted, it was never recorded, or the application quit before it was. A story whose task is missing is never shown as Queued, or as anything still to come: its card reads "Task missing", muted, in the theme's warning colour, its tooltip saying its task can't be found, and it counts as ended and not Done. A story still waiting in its lane's queue, or held for review, as the paused section says, is still to come and hasn't ended. So Close sprint shows as soon as no story of Current sprint is building, compiling, running, paused, queued, or held, and never waits on a task that can't arrive.
+Close sprint treats a story whose task is missing as it treats one that failed or was cancelled: it goes back to the start of Next sprint, with the others sent again, in their order, never into Done. Closing saves the sections, Done, Next sprint, the Backlog, Draft, and the emptied Current sprint, to `order.json` straight away, as the [ProjectData](.claude/reference/scope/project-data/index.md#project-data) says, and Current sprint's state is worked out afresh from the stories' tasks whenever the plan is read, so a sprint that finished, or whose tasks went missing, before a reload or a restart can still be closed after it, as before.
+
+### Planning.motion
+
+Dragging a card on the board feels as it does in Trello, and the board opens the gap, as the [DragReorderBehaviour](.claude/reference/ui/behaviours/drag-reorder/index.md#drag-reorder-behaviour) lets its user do, in place of the accent line alone. Only the board's cards move this way; steps in an open story, and every other list, are dragged as the [DragReorderBehaviour](.claude/reference/ui/behaviours/drag-reorder/index.md#drag-reorder-behaviour) says, with its line.
+A card picked up by its grip lifts off the board as a full-size copy of itself, the same width and height, drawn as the parts draw a story card, tilted a few degrees, about 3, on the theme's overlay surface with its edge border and the soft shadow the [Theme](.claude/reference/ui/theme/index.md#theme)'s elevation gives floating surfaces, the one shadow on the board. It follows the pointer, held where it was grabbed, and never takes the mouse. The card's own place in its column becomes the gap it left, empty, the card's height, so the column doesn't jump as it lifts.
+Where the card would land, the cards slide apart to open a placeholder the dragged card's height, 8 pixels from the cards either side, as the cards are spaced: a box the card's size on the theme's well surface, with its corners rounded 6 pixels as a card's are, and no border, so it reads as an empty slot. The gap is chosen as the [DragReorderBehaviour](.claude/reference/ui/behaviours/drag-reorder/index.md#drag-reorder-behaviour) chooses it, among the cards of the column the pointer is over, and only one is open at a time: as the pointer moves into another gap, or another column, the gap it left closes as the new one opens, and the gap the card came from closes once the pointer leaves its column, opening again if it comes back. A column that takes no drops opens no gap, and its cards never move while a card is dragged over it.
+Nothing waits on motion while the user is waiting on it. The gap the card would drop into is updated at once, the moment the pointer crosses the middle of a card, exactly as the [DragReorderBehaviour](.claude/reference/ui/behaviours/drag-reorder/index.md#drag-reorder-behaviour) says, and a drop always goes where the gap was chosen, even while the cards are still sliding toward it; only the sliding of the cards around it is animated, quickly, as below.
+Dropped over an open gap, the copy settles into it: it straightens, its shadow fades, and it moves from where it was released into the placeholder, which it then is, the story saved in its new place at the moment of the drop, as every change to the plan is. Dropped anywhere else, or where it began, it settles back into the gap it came from the same way, and nothing changes. Escape while dragging cancels it, settling the card back where it was.
+A card moved any other way animates to its new place, as Linear's do, in a quick motion of about 150 milliseconds, eased out, sliding from where it was to where it now is, the cards it passes or leaves sliding to close and open the room it takes, never fading or bouncing. That covers every move the sprint describes: "Move to next sprint", "Move to backlog", and "Move to draft" from a card's menu, or the bulk bar, Alt+Up, Alt+Down, Alt+Left, and Alt+Right, Ctrl+Enter, Send sprint moving its stories into Current sprint, and Close sprint moving them into Done and back to the start of Next sprint. A card added, as by a composer or Duplicate, slides the cards below it down to make room, and a card deleted slides them up to close it, in the same motion. The board scrolls sideways, and a column up or down, to keep a moved card that has focus in view, as the keyboard says. Focus goes with the card at once, not when its motion ends, and the plan is saved at once.
+The side panel slides in from the board's right as it opens, in the same quick motion, the board narrowing alongside it, and slides back out to the right as it closes, the board widening as it goes; replacing what it holds with another story, drafting, or research changes its content in place, with no slide. Its content, and focus in it, are there as soon as it starts to open.
+The open story's card is kept in view, however the board changes around it. As the side panel opens and the board narrows, the board scrolls sideways alongside it, in the same quick motion, just enough to keep the open story's card fully in view, when it was fully in view before; a card already partly out of view is left where it is. A story opened from anywhere outside the board, as a proposal's "Added to Backlog" or "Added to <story>" link, or a palette or ribbon action that opens one, scrolls the board sideways and its column up or down, in the same motion, just enough that its card is fully in view, then highlights it as the open story. Clicking a card only partly in view opens it and scrolls the board and its column just enough to show it all; a card already fully in view never scrolls anything. Each scroll moves only as far as it must, the card landing at the nearest edge of the view, never centred.
+Nothing above the view moves what is in it. In a column scrolled away from its top, a card above the view that is added, deleted, or changes height, as a story's status or step lines arriving in Current sprint, or a sprint closing and its stories leaving, never moves the cards in view: the column's scroll shifts by the same amount, at once and with no motion, so they stay exactly where they were, and the column's thumb moves without jumping, as the [Scrollbar.steadiness](.claude/reference/ui/components/scrollbar/index.md#steadiness) says. A column at its top keeps its top, and cards in view move as the motion above says.
+Every motion here takes about 150 milliseconds, never longer, and a move made while another is still under way starts from wherever the card is then, never queued behind it.
+
+### Planning.autoStart
+
+Next sprint can start on its own: a "Start automatically" switch on Next sprint's heading, beside Send sprint, its tooltip saying the next sprint starts as soon as the current one is done. It starts off, and is saved with the plan, in `order.json`, so it is kept across reloads and restarts.
+While it is on, once every story of Current sprint has ended Done, the current sprint closes by itself, as Close sprint closes it, and Next sprint, if it holds a story, is sent at once, as Send sprint sends it, with nobody having to start it; and while no sprint is current, a story added to an empty Next sprint starts it the same way. A sprint that ended with a story failed, cancelled, stopped, or with its task missing, never starts the next by itself: it waits, Close sprint offered as ever, and the switch's row says, in the theme's warning colour, why the next didn't start. Nor does the next start while planning is paused, as the paused section says: it starts once the pause is ended by Resume, or Approve, if the switch is still on. An empty Next sprint starts nothing.
+Each time a sprint starts by itself, a passive notification says so, "Next sprint started: 4 stories", with a link that opens Planning, and the debug log records it. Turning the switch off never stops a sprint already sent; it only keeps the next from starting by itself. Turning it on while no sprint is current and Next sprint holds a story starts Next sprint at once, as adding a story to it would, unless planning is paused.
+The switch works while Planning isn't open, from the plan as saved, whichever tab is shown. When the project is opened, or the application starts, with the switch on, no sprint current, and Next sprint holding a story, it doesn't start by itself; the switch's row says, muted, "Waiting to start", with a "Start now" button, so a sprint never begins unseen as the application opens. A current sprint whose stories were cut off when the application quit, as every run is, ended them, and never starts the next by itself.
+While the switch is on, Next sprint's heading shows "Auto" beside its count, in the theme's accent, and the ribbon's Send Sprint button's tooltip says the next sprint starts automatically.
+
+### Planning.saving
+
+=== spec/ui/components/left-sidebar/index.pi#LeftSidebar.description
+# LeftSidebar.description
+
+The part of the specification `LeftSidebar.description` depends on, from `.claude/reference/ui/components/left-sidebar/index.md#description` and the declarations it reaches. Each declaration appears once, and the names used in the text refer to the sections below.
+
+The entry reaches it through [`BuildApplication.refactoring`](.claude/skills/build-application/SKILL.md), [`Application.mainWindow`](.claude/reference/scope/application/index.md#main-window), and [`MainWindow.layout`](.claude/reference/scope/application/MainWindow.md#layout), which are included too.
+
+## LeftSidebar
+
+Anchor in `.claude/reference/ui/components/left-sidebar/index.md#left-sidebar`, declared as a `sidebar`, extending `SidebarBase`. Only the properties this slice needs are shown.
+
+### LeftSidebar.description
+
+It runs the full height of the window beneath the ribbon, to the left of the body and the chat input along its bottom, the only sidebar on the body's left. It is two parts side by side: the view bar, a narrow strip of icons down its left edge, and beside it the view picked, which holds that view's panels. Only one view shows at a time. The sidebar's thin line, its resize handle, is down the right edge of the view, where it meets the body.
+
+## BuildApplication
+
+Anchor in `.claude/skills/build-application/SKILL.md`, declared as a `build-scope`, extending `BuildScope`. Only the properties this slice needs are shown.
+
+### BuildApplication.refactoring
+
+Inherited from `BuildScope`.
+
+Always build from the latest spec, checking what's already build in [Application](.claude/reference/scope/application/index.md#application) against the spec.  Spec is the source of truth, and the code should be refactored to match the spec.
+
+## Application
+
+Anchor in `.claude/reference/scope/application/index.md#application`, declared as a `feature`, extending `Feature`. Only the properties this slice needs are shown.
+
+### Application.mainWindow
+
+[MainWindow](.claude/reference/scope/application/MainWindow.md#main-window)
+
+## MainWindow
+
+Anchor in `.claude/reference/scope/application/MainWindow.md#main-window`, declared as a `ui-component`, extending `UiComponent`. Only the properties this slice needs are shown.
+
+### MainWindow.layout
+
+#### Sidebar
+
+[LeftSidebar](.claude/reference/ui/components/left-sidebar/index.md#left-sidebar)
+
+#### Body
+
+[Body](.claude/reference/scope/application/Body.md#body)
+
+#### Open Diff
+
+A file's [DiffView](.claude/reference/ui/components/diff-view/index.md#diff-view), opened from the [FileTree](.claude/reference/ui/components/file-tree/index.md#file-tree), opens in an [InsetPanel](.claude/reference/ui/components/inset-panel/index.md#inset-panel). It leaves the body's tabs alone: every file open in them stays open, unsaved changes and all. Opening another file's diff replaces the one in the panel, as does opening one while a new project is being set up. Opening the file from the diff closes the panel and opens the file, as the [OpenFile](.claude/reference/scope/open-file/index.md#open-file) says.
+
+#### Analyze Divergence
+
+The ribbon's Analyze Divergence command opens the [Divergence](.claude/reference/scope/divergence/index.md#divergence) as a [MinimizablePanel](.claude/reference/ui/components/minimizable-panel/index.md#minimizable-panel), to analyze, in place of whatever else is open there, or brings back one that was minimized.
+
+#### Rescope
+
+The ribbon's Rescope command opens the [Rescope](.claude/reference/scope/rescope/index.md#rescope) as a [MinimizablePanel](.claude/reference/ui/components/minimizable-panel/index.md#minimizable-panel), in place of whatever else is open there, or brings back one that was minimized. Its Refactor sends its prompt to the prompt mode on the application's behalf, as the [PromptSending](.claude/reference/scope/prompt-mode/sending/index.md#prompt-sending) says.
+
+#### Run
+
+The Code tab's run commands open the [RunTargets](.claude/reference/scope/run-targets/index.md#run-targets)'s panel as a [MinimizablePanel](.claude/reference/ui/components/minimizable-panel/index.md#minimizable-panel), in place of whatever else is open there, or bring back one that was minimized, as it says.
+
+#### View Divergence Reports
+
+The ribbon's View Divergence Reports command opens the [Divergence](.claude/reference/scope/divergence/index.md#divergence) the same way, to view the reports, without starting an analysis.
+
+#### New Project
+
+The ribbon's New Project command opens the [NewProject](.claude/reference/scope/new-project/index.md#new-project) in an [InsetPanel](.claude/reference/ui/components/inset-panel/index.md#inset-panel), fresh each time, in place of any diff open there. Once the project is created, the panel closes and the new project is open.
+
+#### Import Project
+
+The ribbon's Import Project command opens the [ImportProject](.claude/reference/scope/import-project/index.md#import-project) in an [InsetPanel](.claude/reference/ui/components/inset-panel/index.md#inset-panel) the same way, fresh each time, in place of any diff or New Project form open there, as opening New Project replaces an Import Project form. Once the folder is imported, the panel closes and the project is open.
+
+#### Open Project
+
+The Open Project commands, from the ribbon or the palette, show the [OpenProject](.claude/reference/scope/project/open-project/index.md#open-project) in an [InsetPanel](.claude/reference/ui/components/inset-panel/index.md#inset-panel), in place of whatever else is open there.
+
+#### Settings
+
+=== spec/ui/components/left-sidebar/index.pi#LeftSidebar.viewBar
+# LeftSidebar.viewBar
+
+The part of the specification `LeftSidebar.viewBar` depends on, from `.claude/reference/ui/components/left-sidebar/index.md#view-bar` and the declarations it reaches. Each declaration appears once, and the names used in the text refer to the sections below.
+
+The entry reaches it through [`BuildApplication.refactoring`](.claude/skills/build-application/SKILL.md), [`Application.mainWindow`](.claude/reference/scope/application/index.md#main-window), and [`MainWindow.layout`](.claude/reference/scope/application/MainWindow.md#layout), which are included too.
+
+## LeftSidebar
+
+Anchor in `.claude/reference/ui/components/left-sidebar/index.md#left-sidebar`, declared as a `sidebar`, extending `SidebarBase`. Only the properties this slice needs are shown.
+
+### LeftSidebar.viewBar
+
+The view bar is 40 pixels wide, the full height of the sidebar, on the theme's darkest surface, a step darker than the views, with a thin line in the theme's line colour down its right. It holds a button per view, top to bottom, each 40 pixels square, its icon 20 pixels, centred, in the theme's muted text colour, and its tooltip the view's name with its shortcut. The view showing has its icon in the theme's text colour and a bar 2 pixels wide down the button's left edge in the theme's accent, as VS Code marks it; hovering any button shows the theme's hover behind it. The views, in order:
+- Files, a folder icon, Ctrl+Shift+E (Cmd+Shift+E on macOS)
+- Git, a branch icon, Ctrl+Shift+G (Cmd+Shift+G on macOS), with a small badge on its icon counting the files changed and not yet committed, in the theme's accent, left out at none
+- Run, a play-circle icon, Ctrl+Shift+R (Cmd+Shift+R on macOS), with a small spinner on its icon while a task runs, and a dot in the theme's accent once a task has started since the view was last shown
+Clicking a view's button shows that view. Clicking the button of the view already showing collapses the sidebar to the view bar alone, leaving the body the rest of the width, and clicking any button then expands it again, showing that view at the width it had. Each view's shortcut does the same as clicking its button. The bar is always there, collapsed or not, and never scrolls; its buttons never take keyboard focus away from the chat input but when pressed.
+
+## BuildApplication
+
+Anchor in `.claude/skills/build-application/SKILL.md`, declared as a `build-scope`, extending `BuildScope`. Only the properties this slice needs are shown.
+
+### BuildApplication.refactoring
+
+Inherited from `BuildScope`.
+
+Always build from the latest spec, checking what's already build in [Application](.claude/reference/scope/application/index.md#application) against the spec.  Spec is the source of truth, and the code should be refactored to match the spec.
+
+## Application
+
+Anchor in `.claude/reference/scope/application/index.md#application`, declared as a `feature`, extending `Feature`. Only the properties this slice needs are shown.
+
+### Application.mainWindow
+
+[MainWindow](.claude/reference/scope/application/MainWindow.md#main-window)
+
+## MainWindow
+
+Anchor in `.claude/reference/scope/application/MainWindow.md#main-window`, declared as a `ui-component`, extending `UiComponent`. Only the properties this slice needs are shown.
+
+### MainWindow.layout
+
+#### Sidebar
+
+[LeftSidebar](.claude/reference/ui/components/left-sidebar/index.md#left-sidebar)
+
+#### Body
+
+[Body](.claude/reference/scope/application/Body.md#body)
+
+#### Open Diff
+
+A file's [DiffView](.claude/reference/ui/components/diff-view/index.md#diff-view), opened from the [FileTree](.claude/reference/ui/components/file-tree/index.md#file-tree), opens in an [InsetPanel](.claude/reference/ui/components/inset-panel/index.md#inset-panel). It leaves the body's tabs alone: every file open in them stays open, unsaved changes and all. Opening another file's diff replaces the one in the panel, as does opening one while a new project is being set up. Opening the file from the diff closes the panel and opens the file, as the [OpenFile](.claude/reference/scope/open-file/index.md#open-file) says.
+
+#### Analyze Divergence
+
+The ribbon's Analyze Divergence command opens the [Divergence](.claude/reference/scope/divergence/index.md#divergence) as a [MinimizablePanel](.claude/reference/ui/components/minimizable-panel/index.md#minimizable-panel), to analyze, in place of whatever else is open there, or brings back one that was minimized.
+
+#### Rescope
+
+The ribbon's Rescope command opens the [Rescope](.claude/reference/scope/rescope/index.md#rescope) as a [MinimizablePanel](.claude/reference/ui/components/minimizable-panel/index.md#minimizable-panel), in place of whatever else is open there, or brings back one that was minimized. Its Refactor sends its prompt to the prompt mode on the application's behalf, as the [PromptSending](.claude/reference/scope/prompt-mode/sending/index.md#prompt-sending) says.
+
+#### Run
+
+The Code tab's run commands open the [RunTargets](.claude/reference/scope/run-targets/index.md#run-targets)'s panel as a [MinimizablePanel](.claude/reference/ui/components/minimizable-panel/index.md#minimizable-panel), in place of whatever else is open there, or bring back one that was minimized, as it says.
+
+#### View Divergence Reports
+
+The ribbon's View Divergence Reports command opens the [Divergence](.claude/reference/scope/divergence/index.md#divergence) the same way, to view the reports, without starting an analysis.
+
+#### New Project
+
+The ribbon's New Project command opens the [NewProject](.claude/reference/scope/new-project/index.md#new-project) in an [InsetPanel](.claude/reference/ui/components/inset-panel/index.md#inset-panel), fresh each time, in place of any diff open there. Once the project is created, the panel closes and the new project is open.
+
+#### Import Project
+
+The ribbon's Import Project command opens the [ImportProject](.claude/reference/scope/import-project/index.md#import-project) in an [InsetPanel](.claude/reference/ui/components/inset-panel/index.md#inset-panel) the same way, fresh each time, in place of any diff or New Project form open there, as opening New Project replaces an Import Project form. Once the folder is imported, the panel closes and the project is open.
+
+#### Open Project
+
+=== spec/ui/components/right-sidebar/index.pi#RightSidebar.showing
+# RightSidebar.showing
+
+The part of the specification `RightSidebar.showing` depends on, from `.claude/reference/ui/components/right-sidebar/index.md#showing` and the declarations it reaches. Each declaration appears once, and the names used in the text refer to the sections below.
+
+The entry reaches it through [`BuildApplication.refactoring`](.claude/skills/build-application/SKILL.md), [`Application.mainWindow`](.claude/reference/scope/application/index.md#main-window), [`MainWindow.layout`](.claude/reference/scope/application/MainWindow.md#layout), and [`Body.description`](.claude/reference/scope/application/Body.md#description), which are included too.
+
+## RightSidebar
+
+Anchor in `.claude/reference/ui/components/right-sidebar/index.md#right-sidebar`, declared as a `sidebar`, extending `SidebarBase`.
+
+### RightSidebar.howToBuild
+
+Inherited from `Component`.
+
+A RightSidebar should be built as a reusable component that will be reused throughout the rest of the codebase.  A component is configurable through arguments or properties that alter its behaviour, appearance, and details.  A RightSidebar should encapsulate all of its own reusable behaviour, while leaving the wiring, integration, and integration to the domain of the application.
+
+### RightSidebar.theme
+
+Inherited from `UiComponent`, with the same value.
+
+### RightSidebar.side
+
+Type: `string`. Overrides `SidebarBase.side`.
+
+right
+
+### RightSidebar.width
+
+Type: `number`. Inherited from `SidebarBase`, with the same value.
+
+### RightSidebar.minWidth
+
+Type: `number`. Inherited from `SidebarBase`, with the same value.
+
+### RightSidebar.panels
+
+Type: `list`. Overrides `SidebarBase.panels`.
+
+- [TasksTab](.claude/reference/ui/components/right-sidebar/tasks/index.md#tasks-tab)
+
+### RightSidebar.sidebar
+
+Inherited from `SidebarBase`. Reads [`RightSidebar.side`](.claude/reference/ui/components/right-sidebar/index.md#side), [`RightSidebar.width`](.claude/reference/ui/components/right-sidebar/index.md#width), [`RightSidebar.minWidth`](.claude/reference/ui/components/right-sidebar/index.md#min-width).
+
+It runs along the right of what it sits beside, with a thin line down its left edge, where the two meet. It is resized by dragging that edge: it starts 260 pixels wide and can't be dragged narrower than 160.
+It holds its panels one above the other, in the order it lists them, each across its full width. A single thin line, in the theme's line colour, lies between one panel and the next, never two, unless the next panel says its own change of colour is the edge. A panel that isn't shown for the moment takes no room and leaves no line.
+It is on the theme's base surface, as its panels' bodies are.
+
+### RightSidebar.pitch
+
+A second [Sidebar](.claude/reference/ui/components/sidebar/index.md#sidebar), at the right of the message list and the chat input beneath it, holding the project's tasks, what has run, what is running, and what is queued, as the [TasksTab](.claude/reference/ui/components/right-sidebar/tasks/index.md#tasks-tab) says. What the running task is working from, its referenced files, understanding, and subagents, is in the left sidebar's Run view.
+
+### RightSidebar.description
+
+It runs the full height of the body, beside the body's tab bar, the message list or file beneath it, and the chat input beneath those, which stops at its left edge rather than running beneath it. It keeps the width it was dragged to while the application runs.
+It holds the [TasksTab](.claude/reference/ui/components/right-sidebar/tasks/index.md#tasks-tab) alone, filling it, with no tab row along its top: the list begins directly beneath the sidebar's top edge, its section headings the first thing in it.
+
+### RightSidebar.look
+
+The sidebar's body is on the ribbon's command area colour, #222222 in dark mode.        The only line is the one down its left edge, where it meets the message list and the chat input, which is the handle it is resized by, a line nowhere else. In light mode the same steps are taken, as the ribbon's are.
+
+### RightSidebar.showing
+
+It is there while a task is running, from the moment a task is sent from the Code, Chain, or Spec tab until its run is over, and while the queue holds a prompt, and whenever it is opened by hand: a small ghost button with a sidebar icon at the right end of the body's tab bar, or Ctrl+Alt+B (Cmd+Alt+B on macOS), opens it, and closes it again, its tooltip saying which. Opened by hand, it stays until closed by hand, whatever runs; otherwise it slides back once nothing runs and nothing is queued. Questions from the Ask tab never show it, even when one is sent from the queue.
+When a task starts, it slides out from the right edge of the message list and the chat input, growing from nothing to its width, its contents sliding into view from behind that edge as it does. When the run is over, it slides back the same way. The slide is quick and settles without bouncing. It pushes rather than covers: from the first frame of the slide to the last, the body's tab bar, the message list or open file beneath it, and the chat input end exactly at the sidebar's left edge, narrowing as it grows and widening as it shrinks, laid out again each frame, as the [Body](.claude/reference/scope/application/Body.md#body) says. Nothing runs beneath the sliding sidebar, nothing is clipped by it, and nothing jumps to a new width once the slide settles.
+
+## Body
+
+Anchor in `.claude/reference/scope/application/Body.md#body`, declared as a `ui-component`, extending `UiComponent`.
+
+### Body.howToBuild
+
+Inherited from `Component`.
+
+A Body should be built as a reusable component that will be reused throughout the rest of the codebase.  A component is configurable through arguments or properties that alter its behaviour, appearance, and details.  A Body should encapsulate all of its own reusable behaviour, while leaving the wiring, integration, and integration to the domain of the application.
+
+### Body.theme
+
+Inherited from `UiComponent`, with the same value.
+

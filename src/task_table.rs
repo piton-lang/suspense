@@ -244,6 +244,8 @@ pub(crate) struct Reply {
     pending_action: Option<RunAction>,
     /// Once the run is over, what it did, heading its final summary.
     outcome: Vec<OutcomeTag>,
+    /// The verdict its last result's reply ended with, if any.
+    verdict: Option<Verdict>,
     /// Unique among replies, so a table drawn for one knows when it is given
     /// another.
     uid: u64,
@@ -287,6 +289,30 @@ fn harness_error(result: &str) -> String {
         result.to_string()
     }
 }
+
+/// What a task's run said of the work, in the line it is asked to end its
+/// reply with, as the HarnessIntegrationScope's failures say: read from
+/// that line alone, never guessed from the wording of the reply.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Verdict {
+    Done,
+    Failed,
+}
+
+impl Verdict {
+    /// The verdict `line` gives, trimmed and read without regard to case.
+    fn of_line(line: &str) -> Option<Self> {
+        match line.trim().to_ascii_lowercase().as_str() {
+            "suspense-verdict: done" => Some(Self::Done),
+            "suspense-verdict: failed" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+
+/// What heads the reply of a task whose run reported, in its verdict, that
+/// it couldn't do the work: the reply beneath it says why.
+pub(crate) const VERDICT_FAILED: &str = "The run reported that it couldn't do the work.";
 
 /// What a run that couldn't start offers, from its row: for one whose
 /// sandbox couldn't be applied, the sandbox's documentation, as the
@@ -377,6 +403,11 @@ impl TextPart {
 
     fn push_str(&mut self, delta: &str) {
         self.text.push_str(delta);
+        self.shown = OnceCell::new();
+    }
+
+    fn set(&mut self, text: String) {
+        self.text = text;
         self.shown = OnceCell::new();
     }
 
@@ -614,6 +645,7 @@ impl Default for Reply {
             preparing: false,
             pending_action: None,
             outcome: Vec::new(),
+            verdict: None,
             uid: NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             edit: 0,
             changes: Vec::new(),
@@ -914,6 +946,8 @@ impl Reply {
                 if !self.has_text() && !result.is_empty() {
                     self.parts.push(ReplyPart::Text(TextPart::new(result)));
                 }
+                // The run's last result: its verdict is the run's.
+                self.verdict = self.take_verdict();
             }
             // A result that leaves messages sent to the run unanswered: the
             // calls it made are over, and the run goes on.
@@ -925,6 +959,10 @@ impl Reply {
                 });
                 if is_error {
                     self.parts.push(ReplyPart::Error(harness_error(&result)));
+                } else {
+                    // Only the last result's verdict counts, but none is
+                    // ever shown.
+                    self.take_verdict();
                 }
             }
             HarnessEvent::Sent { text, .. } => self.parts.push(ReplyPart::Sent(text)),
@@ -966,6 +1004,7 @@ impl Reply {
     pub(crate) fn resume(&mut self) {
         self.done = false;
         self.outcome.clear();
+        self.verdict = None;
         self.refresh();
     }
 
@@ -1000,6 +1039,61 @@ impl Reply {
         self.parts
             .iter()
             .rposition(|part| matches!(part, ReplyPart::Tool(call) if call.id == tool_id))
+    }
+
+    /// The reply text the run ended on: its last piece of reply text with
+    /// anything in it, unless a tool call or anything else came after it.
+    fn last_text_part(&self) -> Option<usize> {
+        let last = self
+            .parts
+            .iter()
+            .rposition(|part| !matches!(part, ReplyPart::Text(text) if text.trim().is_empty()))?;
+        matches!(self.parts[last], ReplyPart::Text(_)).then_some(last)
+    }
+
+    /// Takes the verdict line off the end of the reply, its last line that
+    /// isn't blank, so it is never shown nor handed on, and gives what it
+    /// says; none where the reply ends on no verdict, which is left as it is.
+    fn take_verdict(&mut self) -> Option<Verdict> {
+        let part = self.last_text_part()?;
+        let ReplyPart::Text(text) = &mut self.parts[part] else {
+            return None;
+        };
+        let kept = text.trim_end();
+        let line_start = kept.rfind('\n').map_or(0, |at| at + 1);
+        let verdict = Verdict::of_line(&kept[line_start..])?;
+        let rest = kept[..line_start].trim_end().to_string();
+        text.set(rest);
+        if let Some(row) = self.row_of(part) {
+            self.touch(row);
+        }
+        Some(verdict)
+    }
+
+    /// The verdict the run's last result ended with, once it has come; none
+    /// where it gave none.
+    pub(crate) fn verdict(&self) -> Option<Verdict> {
+        self.verdict
+    }
+
+    /// Heads the reply the run ended on with `heading`, so what it says
+    /// stands beneath it; with no reply text left, the heading alone ends
+    /// the output.
+    pub(crate) fn head_reply(&mut self, heading: &str) {
+        let heading = format!("**{heading}**");
+        match self.last_text_part() {
+            Some(part) => {
+                if let ReplyPart::Text(text) = &mut self.parts[part] {
+                    let reply = format!("{heading}\n\n{}", text.trim_start_matches(['\n', '\r']));
+                    text.set(reply);
+                }
+                if let Some(row) = self.row_of(part) {
+                    self.touch(row);
+                }
+            }
+            None => self.parts.push(ReplyPart::Text(TextPart::new(heading))),
+        }
+        self.refresh();
     }
 
     /// Whether the run has ended, with a result or without.

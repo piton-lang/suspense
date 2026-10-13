@@ -1,0 +1,1279 @@
+{
+  "draft": [
+    {
+      "story": "Story_605609d0d61a0ae3",
+      "title": "When I click on a story that's currently running, it should pop up the planning sidebar, then from there I can click into the various steps."
+    },
+    {
+      "story": "Story_0e8129a6de2e7bf4",
+      "title": "I think Drafts or more like epics.  And every story that is generated from one should be tied back to that epic.  And if we regenerate the stories of an epic, some of those existing stories can be modified or removed, etc."
+    },
+    {
+      "story": "Story_0be6fafba82c61b2",
+      "title": "The task queue has way too much indentation on the left"
+    },
+    {
+      "story": "Story_7fbf4d21d67cfd7e",
+      "title": "Run prompts with Muse Code",
+      "updated": true,
+      "highlight": 1,
+      "spec": [
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.harnesses",
+          "note": "adds Muse Code as a fourth harness, run its own way and read into the same reply",
+          "kind": "Section",
+          "quote": "The harness in use is the project's: Claude Code, Codex, or OpenCode"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.description",
+          "note": "its HARNESS_DIRECTORY and how the system prompt is given",
+          "kind": "Section",
+          "quote": "Its directory, which a system prompt's HARNESS_DIRECTORY stands for, is that of the harness in use"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.failures",
+          "note": "a Muse Code run that fails says why in its own words",
+          "kind": "Section",
+          "quote": "A run that fails always says what went wrong, in the harness's own words"
+        },
+        {
+          "link": "spec/scope/prompt-mode/mode-system-prompts/index.pi#ModeSystemPrompts",
+          "note": "HARNESS_DIRECTORY gets a value for Muse Code",
+          "kind": "Section",
+          "quote": ".claude for Claude Code, .opencode for OpenCode, and .codex for Codex"
+        },
+        {
+          "link": "spec/scope/application/index.pi#Application",
+          "note": "the muse command is found on the user's own PATH",
+          "kind": "Section",
+          "quote": "each harness, Claude Code's `claude`, Codex's `codex`, and OpenCode's `opencode`, is found where the user's own terminal would find it"
+        },
+        {
+          "note": "Muse Code, its command, its one-off/streaming mode, or its session resume"
+        },
+        {
+          "link": "spec/scope/settings-window/index.pi#SettingsWindow.agent",
+          "note": "a fourth radio row for Muse Code",
+          "kind": "Section",
+          "quote": "Then a row for each harness, in order: Claude Code, Codex, and OpenCode"
+        },
+        {
+          "link": "spec/scope/new-project/index.pi#NewProject.agents",
+          "note": "the Harness group, which offers only agents with a Belay adapter",
+          "kind": "Section",
+          "quote": "one per agent Belay has an adapter for"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.harnesses",
+          "note": "the fallback for projects with no saved harness, picked by adapter",
+          "kind": "Section",
+          "quote": "uses the first harness its piton.config.pi builds for, by its adapters in order"
+        },
+        {
+          "link": "spec/scope/project-data/index.pi#ProjectData",
+          "note": "the harness saved in settings.json",
+          "kind": "Section",
+          "quote": "the harness its runs go to"
+        },
+        {
+          "note": "a Muse Code adapter in Belay"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.context",
+          "note": "sessions copied into the project after each run and put back before resuming",
+          "kind": "Section",
+          "quote": "Codex and OpenCode sessions are kept and restored the same way, wherever each harness keeps them"
+        },
+        {
+          "link": "spec/scope/sandbox/index.pi#Sandbox",
+          "note": "the run's sandbox lets it reach Muse Code's own session folder on the host",
+          "kind": "Section",
+          "quote": "Every run keeps its conversation's sessions where the harness keeps them on the host"
+        },
+        {
+          "note": "where Muse Code keeps its sessions"
+        }
+      ]
+    },
+    {
+      "story": "Story_2d43e0d649a8797b",
+      "title": "Freeform mode shouldn't be sandboxed or anything.  It should be basically the same as using an agent outside of Suspense"
+    }
+  ],
+  "next": [],
+  "backlog": [],
+  "done": [
+    {
+      "story": "Story_0dc254a5778c46b9",
+      "title": "Polish planning mode UI",
+      "task": "PolishPlanningModeUI3"
+    },
+    {
+      "story": "Story_c4904282c008294a",
+      "title": "Ask proposes tasks as new stories or additions to the current story",
+      "task": "AskProposesTasksAsNewStoriesOrAdditions3"
+    },
+    {
+      "story": "Story_a3f70b58b2ec6f12",
+      "title": "Add steps to stories",
+      "task": "AddStepsToStories3"
+    },
+    {
+      "story": "Story_4930cf3913a68c50",
+      "title": "Research mode: ask can investigate and pause before implementation",
+      "task": "ResearchModeAskCanInvestigateAndPause3"
+    },
+    {
+      "story": "Story_0bc9fd2f33a71da1",
+      "title": "Route stories through Next Sprint",
+      "task": "RouteStoriesThroughNextSprint3"
+    },
+    {
+      "story": "Story_ef041e7f28bec826",
+      "title": "Automatically start the next sprint",
+      "task": "AutomaticallyStartTheNextSprint3"
+    },
+    {
+      "story": "Story_756666ec53f96963",
+      "title": "Story drafting searches the spec for references",
+      "task": "StoryDraftingSearchesTheSpecFor3"
+    },
+    {
+      "story": "Story_00f40bea2f3f63c7",
+      "title": "Close sprint always reachable once the sprint is done",
+      "spec": [
+        {
+          "link": ".claude/reference/scope/planning/index.md#sprint",
+          "note": "Current sprint, when \"Close sprint\" is offered, and where closing moves done and unfinished stories"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#auto-start",
+          "note": "closing by itself when every story ended Done, which relies on the same \"ended\" test"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#states",
+          "note": "the statuses a story's row shows (Queued, Running, Done, Failed, Cancelled, Paused) and \"not sent\" shown as nothing"
+        },
+        {
+          "link": ".claude/reference/scope/project-data/index.md#contents",
+          "note": "`order.json` listing the sections, which closing rewrites"
+        },
+        {
+          "note": "a story in Current sprint whose task can no longer be found (deleted, or not kept across a restart), or that was never sent because its prompt was empty; the spec doesn't say how either counts toward the sprint having ended"
+        }
+      ],
+      "task": "CloseSprintAlwaysReachableOnceTheSprint"
+    },
+    {
+      "story": "Story_f8ab93635b2a1b4d",
+      "title": "Accepted drafted stories go into the Backlog",
+      "spec": [
+        {
+          "link": ".claude/reference/scope/planning/index.md#creating",
+          "note": "\"However a story is added, it goes into Next sprint… an accepted proposal for a new story\" alike; accepted proposals become the exception that goes into the Backlog"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#proposals",
+          "note": "Accept: \"a new story goes into Next sprint, at its end\", and the note \"Added to Next sprint\" left in the card's place; Ask-answer proposals are accepted \"as above\""
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#drafting",
+          "note": "the drafting panel and its \"Accept all\", which accepts every proposal the same way"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#auto-start",
+          "note": "\"a story added to an empty Next sprint starts it\"; accepted proposals no longer go there, so they no longer start a sprint"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#sprint",
+          "note": "moving stories from the Backlog to Next sprint by dragging or \"Move to next sprint\", which is how an accepted story will reach a sprint"
+        },
+        {
+          "link": ".claude/reference/scope/prompt-mode/ask-conversation/index.md#narrow",
+          "note": "the Ask card's \"Add to sprint\", which still adds to Next sprint and doesn't change"
+        }
+      ],
+      "task": "AcceptedDraftedStoriesGoIntoTheBacklog"
+    },
+    {
+      "story": "Story_df24bb2497658df3",
+      "title": "Drafted stories cite the Piton spec source",
+      "spec": [
+        {
+          "link": ".claude/reference/scope/planning/index.md#spec-grounding",
+          "note": "the `spec` citation list: each link now points at the compiled reference heading, is checked against it, opens it on the card, and is added by hand from it"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#proposals",
+          "note": "the `suspense-story` block format the planning prompt asks for, which holds the `spec` list"
+        },
+        {
+          "link": ".claude/reference/scope/harness-integration/baked-prompts/index.md#prompts",
+          "note": "planning.pi, the baked planning prompt that tells the drafter how to cite"
+        },
+        {
+          "link": ".claude/reference/scope/prompt-mode/mode-system-prompts/index.md#reading-the-spec",
+          "note": "the rule that a run reads the spec from the compiled reference or `piton slice`, never from the Piton source, which this story relies on and keeps"
+        }
+      ],
+      "task": "DraftedStoriesCiteThePitonSpecSource"
+    },
+    {
+      "story": "Story_93df3665ec69461a",
+      "title": "Ctrl+Enter sends to the running Code task",
+      "spec": [
+        {
+          "link": ".claude/reference/scope/prompt-mode/chat-input/index.md#description",
+          "note": "Ctrl/Cmd+Enter sends, and the send button reads \"Queue\" while the selected tab's lane is busy, which this changes for the Code tab"
+        },
+        {
+          "link": ".claude/reference/scope/prompt-mode/chat-input/index.md#options",
+          "note": "\"Send to task\" says \"<Ctrl+Enter> still queues, as the send button does\", which this reverses, and \"Queue\" stays the explicit way to queue"
+        },
+        {
+          "link": ".claude/reference/scope/prompt-mode/chat-input/index.md#split-button",
+          "note": "the send half is \"the send or queue button itself\", whose label and action change here"
+        },
+        {
+          "link": ".claude/reference/scope/prompt-mode/sending/index.md#sending-to-atask",
+          "note": "what sending to the running task does (compiled as a hidden anchor, not a task of its own, queued instead if the task ends first), which the new default relies on"
+        },
+        {
+          "link": ".claude/reference/scope/prompt-mode/sending/index.md#tasks",
+          "note": "a task queues while its lane is busy, which no longer applies to Ctrl+Enter on Code while a Code task can be fed more"
+        },
+        {
+          "link": ".claude/reference/scope/prompt-mode/chat-input/index.md#editing-queued",
+          "note": "Ctrl+Enter saves the edit while editing a queued prompt, which must stay as it is"
+        },
+        {
+          "note": "a \"send now\" option by that name; the spec only has \"Send to task\", so this story uses that"
+        }
+      ],
+      "task": "CtrlEnterSendsToTheRunningCodeTask"
+    },
+    {
+      "story": "Story_a6fb68f6bd6e7946",
+      "title": "Enter submits the Draft stories request",
+      "spec": [
+        {
+          "link": ".claude/reference/scope/planning/index.md#keyboard",
+          "note": "says Ctrl+Enter starts a Draft stories run from its focused box; this changes it to Enter"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#drafting",
+          "note": "the \"Describe what you want\" request box at the top of the drafting panel, including the \"What does this story need?\" version opened from a story"
+        },
+        {
+          "note": "a key for adding a new line in the request box, which the spec doesn't describe yet"
+        }
+      ],
+      "task": "EnterSubmitsTheDraftStoriesRequest3"
+    },
+    {
+      "story": "Story_5f09426c7af1bf8c",
+      "title": "Lay Planning out as a board of columns",
+      "spec": [
+        {
+          "link": ".claude/reference/scope/planning/index.md#description",
+          "note": "the single 760 pixel centred column of sections, which becomes a board"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#layout",
+          "note": "the top-to-bottom order and row sizes, which become columns side by side"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#parts",
+          "note": "the \"row\" part, which becomes a card inside a column"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#stories",
+          "note": "what a story's row shows (grip, mode pill, title, attachments, status), which the card has to keep showing"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#sprint",
+          "note": "Current sprint \"shown only while it holds a story\" and Done \"muted, collapsed beneath the Backlog\", which become columns"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#states",
+          "note": "the empty, loading and error states for each section, which are now shown per column"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#paused",
+          "note": "the pause bar across the top, which now runs across the top of the board"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#research",
+          "note": "the Findings list beneath the Backlog, which needs a place on the board"
+        },
+        {
+          "link": ".claude/reference/scope/application/Body.md#contents",
+          "note": "Planning is shown beneath the body's tab bar while its tab is selected"
+        },
+        {
+          "link": ".claude/reference/ui/components/scrollbar/index.md#scrollbar",
+          "note": "the scrollbar used for the board's sideways scroll and each column's own scroll"
+        },
+        {
+          "note": "a kanban board, its columns, or story cards: the spec doesn't describe any of these yet"
+        }
+      ],
+      "task": "LayPlanningOutAsABoardOfColumns"
+    },
+    {
+      "story": "Story_1366747d5399b227",
+      "title": "Move cards between columns by drag and keyboard",
+      "spec": [
+        {
+          "link": ".claude/reference/scope/planning/index.md#sprint",
+          "note": "stories move between the Backlog and Next sprint by dragging or from a row's menu, and can't be moved in Current sprint"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#keyboard",
+          "note": "Up/Down between rows, Alt+Up/Alt+Down to move a story \"across sections\", Ctrl+Enter, and F6 between regions"
+        },
+        {
+          "link": ".claude/reference/ui/behaviours/drag-reorder/index.md#choosing-the-gap",
+          "note": "the drop always lands in a gap, including before the first item or after the last"
+        },
+        {
+          "link": ".claude/reference/ui/behaviours/drag-reorder/index.md#scrolling-while-dragging",
+          "note": "automatic scrolling near the edge of the scrolling area"
+        },
+        {
+          "link": ".claude/reference/ui/behaviours/drag-reorder/index.md#indicator",
+          "note": "the horizontal insertion line between the rows of a list"
+        },
+        {
+          "note": "moving a card sideways from one column to the next, or the board scrolling sideways during a drag: the spec has nothing on either yet"
+        }
+      ],
+      "task": "MoveCardsBetweenColumnsByDragAndKeyboard"
+    },
+    {
+      "story": "Story_aba3ffe5319ca2a8",
+      "title": "Open stories, drafting and research in a side panel",
+      "spec": [
+        {
+          "link": ".claude/reference/scope/planning/index.md#stories",
+          "note": "clicking a row opens the story expanded in place beneath it, and Escape closes it"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#steps",
+          "note": "the open story lists its steps, Add step and Spec citations"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#drafting",
+          "note": "the drafting panel opens beneath the Backlog's heading, or beneath the story it was started from"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#research",
+          "note": "research runs and is shown in the drafting panel"
+        },
+        {
+          "link": ".claude/reference/scope/planning/index.md#parts",
+          "note": "the \"panel\" part used for an open story, drafting and research"
+        },
+        {
+          "note": "a side panel next to the board: the spec has nothing on one yet"
+        }
+      ],
+      "task": "OpenStoriesDraftingAndResearchInASide"
+    },
+    {
+      "story": "Story_45313f9c4be0aaf9",
+      "title": "Restyle the board as Trello lists with Linear cards",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "columns get a list surface of their own, tighter Linear-like spacing",
+          "kind": "Section",
+          "quote": "A column has no background or border of its own"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.parts",
+          "note": "the story card's look, property row, and hover/focus/open states",
+          "kind": "Section",
+          "quote": "A story card: a box the full width of its column, on the theme's raised surface"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.stories",
+          "note": "the hover menu button and the open card's highlight",
+          "kind": "Behaviour",
+          "quote": "its card stays highlighted, its line in the theme's accent"
+        },
+        {
+          "link": "spec/ui/theme/index.pi#Theme.hierarchy",
+          "note": "hover, selection, and focus as separate steps",
+          "kind": "Requirement",
+          "quote": "A hover is always a smaller step than a selection, and a selection a smaller step than focus"
+        },
+        {
+          "link": "spec/ui/theme/index.pi#Theme.surfaces",
+          "note": "which surfaces the list and the card sit on",
+          "kind": "Requirement",
+          "quote": "recessed, #383838, then #e8e8e8: text inputs, lists, and trees"
+        },
+        {
+          "link": "spec/scope/prompt-mode/modes/index.pi#PromptModes.colours",
+          "note": "the mode's colour on the card",
+          "kind": "Name",
+          "quote": "Whatever shows a mode, or something sent in it, takes the mode's colour"
+        },
+        {
+          "note": "a status icon per column in its heading, Linear-style"
+        }
+      ],
+      "task": "RestyleTheBoardAsTrelloListsWithLinear"
+    },
+    {
+      "story": "Story_927fc15ab3d25ab1",
+      "title": "Add a story from any list's foot or heading",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.creating",
+          "note": "where a new story goes and how the quick-add line works \"A \"New story",
+          "kind": "Behaviour",
+          "quote": "line at the foot of Next sprint"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "a \"+\" in the heading of the lists that take stories",
+          "kind": "Section",
+          "quote": "its actions at its right, each a labelled button, never an icon alone"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.keyboard",
+          "note": "Ctrl+N adds into the focused list",
+          "kind": "Behaviour",
+          "quote": "Ctrl+N adds a story"
+        }
+      ],
+      "task": "AddAStoryFromAnyListSFootOrHeading"
+    },
+    {
+      "story": "Story_6c4375602d052723",
+      "title": "Give cards Trello's drag and Linear's motion",
+      "spec": [
+        {
+          "link": "spec/ui/behaviours/drag-reorder/index.pi#DragReorderBehaviour.dragging",
+          "note": "what the dragged card looks like on the board",
+          "kind": "Behaviour",
+          "quote": "The item dragged follows the pointer as a small floating copy … as its user says"
+        },
+        {
+          "link": "spec/ui/behaviours/drag-reorder/index.pi#DragReorderBehaviour.indicator",
+          "note": "the board opens a gap instead of only drawing a line",
+          "kind": "Requirement",
+          "quote": "taking no room of its own, so nothing moves to make space"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.sprint",
+          "note": "cards moving between columns by drag, menu, and Close sprint",
+          "kind": "Behaviour",
+          "quote": "Stories move between the Backlog and Next sprint by dragging"
+        },
+        {
+          "link": "spec/ui/theme/index.pi#Theme.elevation",
+          "note": "the shadow on the lifted card",
+          "kind": "Requirement",
+          "quote": "are the only things with a shadow"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "the side panel sliding in",
+          "kind": "Section",
+          "quote": "It is docked at the right of Planning's tab, 400 pixels wide"
+        }
+      ],
+      "task": "GiveCardsTrelloSDragAndLinearSMotion"
+    },
+    {
+      "story": "Story_58500e8f76282c11",
+      "title": "Select and act on many cards, Linear-style",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.keyboard",
+          "note": "J/K, X to select, and shortcuts acting on the hovered card",
+          "kind": "Behaviour",
+          "quote": "Everything in Planning can be done from the keyboard"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.sprint",
+          "note": "moving, duplicating, and deleting stories, now in bulk \"Stories move too from a card's menu, \"Move to next sprint\" or \"Move to backlog\"\"",
+          "kind": "Behaviour"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.parts",
+          "note": "how a selected card looks, distinct from focused and open",
+          "kind": "Section",
+          "quote": "A story card: a box the full width of its column"
+        },
+        {
+          "note": "selecting several stories at once, a bulk-action bar, and a right-click context menu on cards"
+        }
+      ],
+      "task": "SelectAndActOnManyCardsLinearStyle"
+    },
+    {
+      "story": "Story_6ee6e4943cbdfc6c",
+      "title": "Wheel and trackpad scrolling on the board",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "which part of the board scrolls which way; touches the per-column and sideways scrolling it already sets out",
+          "kind": "Section",
+          "quote": "Each column scrolls up and down on its own"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "the board's sideways scroll, used only while the columns don't fit",
+          "kind": "Section",
+          "quote": "The board scrolls sideways when its columns are wider than the tab"
+        },
+        {
+          "link": "spec/ui/components/scrollbar/index.pi#Scrollbar.track",
+          "note": "the column's and board's scrollbars follow wheel scrolling as they follow a drag",
+          "kind": "Behaviour",
+          "quote": "placed as far down the track as the list is scrolled"
+        },
+        {
+          "note": "what the mouse wheel, Shift+wheel, and sideways trackpad swipes do over a column, its heading, the gaps between columns, or the board's padding"
+        },
+        {
+          "note": "whether a wheel turn over a column that is already at its end, or has nothing to scroll, passes on to the board"
+        }
+      ],
+      "task": "WheelAndTrackpadScrollingOnTheBoard"
+    },
+    {
+      "story": "Story_e471b2497736bfd9",
+      "title": "Keep the card in hand in view",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.motion",
+          "note": "extends \"keep a moved card in view\" to the other changes that can push a card out of sight",
+          "kind": "Section",
+          "quote": "The board scrolls sideways, and a column up or down, to keep a moved card that has focus in view"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "the side panel narrowing the board can hide the open story's card",
+          "kind": "Section",
+          "quote": "While it is open the board narrows to the space left of it"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.keyboard",
+          "note": "the keyboard already scrolls the board to show focus; this applies the same rule to the cases below",
+          "kind": "Section",
+          "quote": "scrolling the board sideways to show it"
+        },
+        {
+          "link": "spec/ui/components/scrollbar/index.pi#Scrollbar.steadiness",
+          "note": "a column's thumb must stay steady while cards above the view change height",
+          "kind": "Behaviour",
+          "quote": "The thumb never jumps"
+        },
+        {
+          "note": "scrolling to the open story's card when the side panel opens and narrows the board"
+        },
+        {
+          "note": "scrolling to a story opened from a link, such as a proposal's \"Added to Backlog\" note"
+        },
+        {
+          "note": "keeping what's in view still when cards above it are added, removed, or grow (as Current sprint's step lines do) while a column is scrolled"
+        }
+      ],
+      "task": "KeepTheCardInHandInView"
+    },
+    {
+      "story": "Story_5d713c8660461fb6",
+      "title": "Board keeps its scroll when you come back",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.description",
+          "note": "Planning is a body tab like a file, so switching away and back applies to it",
+          "kind": "Section",
+          "quote": "Planning opens in a tab of its own in the body"
+        },
+        {
+          "link": "spec/scope/application/Body.pi#Body.description",
+          "note": "the Body keeps other tabs' scroll as they were left, but doesn't say so for Planning",
+          "kind": "Section",
+          "quote": "scrolled to its top the first time it is shown, and as it was left after"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "the board's sideways scroll and each column's own scroll are what's kept",
+          "kind": "Section",
+          "quote": "Each column scrolls up and down on its own"
+        },
+        {
+          "note": "Planning's board and column scroll positions across tab switches, closing and reopening the tab, and reloads"
+        }
+      ],
+      "task": "BoardKeepsItsScrollWhenYouComeBack"
+    },
+    {
+      "story": "Story_f67c82d1d5a15fcb",
+      "title": "Scroll the board sideways with a horizontal scroll wheel",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "how the wheel and trackpad scroll the board and its columns",
+          "kind": "Section",
+          "quote": "Shift with the wheel, or a sideways trackpad swipe, anywhere on the board, over a column or not, scrolls the board sideways"
+        },
+        {
+          "note": "a mouse's horizontal scroll wheel (tilt wheel or thumb wheel) as a way to scroll sideways"
+        }
+      ],
+      "task": "ScrollTheBoardSidewaysWithAHorizontal"
+    },
+    {
+      "story": "Story_9a9bee8bd027fbab",
+      "title": "Give each kanban column a look of its own",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "how a column is set apart from the board and its neighbours",
+          "kind": "Section",
+          "quote": "its surface and the gaps between columns set it apart, and it has no border"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.parts",
+          "note": "the list part, whose surface is the same for every column and whose status icon is the only thing that differs",
+          "kind": "Name",
+          "quote": "each only repeating the column's name, never standing for it"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.description",
+          "note": "the five columns in the order work moves — \"Backlog\", \"Next sprint\", \"Current sprint\", and \"Done\", then",
+          "kind": "Section",
+          "quote": "Findings"
+        },
+        {
+          "link": "spec/ui/theme/index.pi#Theme.hierarchy",
+          "note": "how far a column's look may go from the base",
+          "kind": "Requirement",
+          "quote": "nothing decorative is ever as far as state"
+        },
+        {
+          "link": "spec/ui/theme/index.pi#Theme.surfaces",
+          "note": "the recessed surface the lists use today",
+          "kind": "Requirement",
+          "quote": "text inputs, lists, and trees, a step toward the well"
+        },
+        {
+          "note": "anything that gives each column its own look, beyond its heading's status icon"
+        }
+      ],
+      "task": "GiveEachKanbanColumnALookOfItsOwn"
+    },
+    {
+      "story": "Story_9cfcd4093466bdfe",
+      "title": "Hide the chat input on the Planning tab",
+      "spec": [
+        {
+          "link": "spec/scope/application/Body.pi#Body.tabs",
+          "note": "the chat input showing under every tab, which Planning now becomes an exception to",
+          "kind": "Section",
+          "quote": "The chat input stays along the bottom whichever tab is selected"
+        },
+        {
+          "link": "spec/scope/application/Body.pi#Body.contents",
+          "note": "where the chat input is listed as part of the body under any tab",
+          "kind": "Section",
+          "quote": "along the bottom beneath whichever tab is selected"
+        },
+        {
+          "link": "spec/scope/application/Body.pi#Body.contents",
+          "note": "what the Planning tab shows in the body",
+          "kind": "Section",
+          "quote": "beneath the tab bar while its tab is selected"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.description",
+          "note": "the board's lower edge, which now reaches the bottom of the body",
+          "kind": "Section",
+          "quote": "from the tab bar down to the chat input"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.description",
+          "note": "the open story panel's height, which reaches the chat input the same way",
+          "kind": "Section",
+          "quote": "as tall as the tab, from the tab bar down to the chat input"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.description",
+          "note": "stories never go through the chat input, so hiding it there takes nothing away",
+          "kind": "Section",
+          "quote": "a story can't be dragged or copied into the chat input"
+        },
+        {
+          "note": "what happens to the chat input's draft, selected mode tab, and keyboard focus when it hides for Planning and shows again"
+        }
+      ],
+      "task": "HideTheChatInputOnThePlanningTab"
+    },
+    {
+      "story": "Story_3bd34dfd267a2c18",
+      "title": "Draft Stories and Research in the ribbon's Planning tab",
+      "spec": [
+        {
+          "link": "spec/ui/components/ribbon/planning-tab/index.pi#RibbonPlanningTab.groups",
+          "note": "the tab's groups, which gain the two commands; \"A \"Plan",
+          "kind": "Section",
+          "quote": "group holds the Open Planning command, then New Story, then Send Sprint."
+        },
+        {
+          "link": "spec/ui/components/ribbon/planning-tab/index.pi#RibbonPlanningTab.commands",
+          "note": "the command list the two new buttons join, written like newStory;",
+          "kind": "Name",
+          "quote": "Clicking it opens Planning and adds a story to Next sprint"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.creating",
+          "note": "what Draft stories opens and runs; \"\"Draft stories",
+          "kind": "Behaviour",
+          "quote": ", a button beside the Backlog's heading, opens a small box to say what is wanted"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.research",
+          "note": "what Research opens and runs; \"\"Research\", a button beside \"Draft stories",
+          "kind": "Behaviour",
+          "quote": "on the Backlog's heading"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.drafting",
+          "note": "the side panel the ribbon's Draft Stories opens, request box focused;",
+          "kind": "Behaviour",
+          "quote": "Drafting stories shows its work in one place, the side panel"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.keyboard",
+          "note": "the shortcuts the new tooltips give;",
+          "kind": "Requirement",
+          "quote": "Ctrl+Shift+D opens Draft stories, focusing its request box"
+        },
+        {
+          "link": "spec/ui/components/ribbon/index.pi#Ribbon.commands",
+          "note": "button sizes, tooltips, and primary marking the new commands follow;",
+          "kind": "Requirement",
+          "quote": "A command's tooltip explains what it does rather than repeating its label, and gives its keyboard shortcut if it has one."
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.paused",
+          "note": "Research stays available while planning is paused;",
+          "kind": "Behaviour",
+          "quote": "A second research while paused keeps the pause, naming the latest."
+        }
+      ],
+      "task": "DraftStoriesAndResearchInTheRibbonS"
+    },
+    {
+      "story": "Story_126d4b89c161d7b7",
+      "title": "Add a Draft column to the board",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.description",
+          "note": "the board's columns and their order, \"Backlog\", \"Next sprint\", \"Current sprint\", and \"Done\", then \"Findings\"\"",
+          "kind": "Section"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.creating",
+          "note": "which lists have an \"Add story\" line, \"+ Add\", and Ctrl+N, \"The Backlog and Next sprint each end with an \"Add story",
+          "kind": "Behaviour",
+          "quote": "line"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.sprint",
+          "note": "which columns take drops and the card menu's moves",
+          "kind": "Behaviour",
+          "quote": "Only the Backlog and Next sprint take drops"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.keyboard",
+          "note": "Alt+Left/Alt+Right moves between columns that take drops",
+          "kind": "Behaviour",
+          "quote": "Alt+Left and Alt+Right move it into the column beside it"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "column order and each column's top edge colour",
+          "kind": "Requirement",
+          "quote": "Backlog, Next sprint, Current sprint, Done, and Findings, the last"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.parts",
+          "note": "each column's status icon and colour",
+          "kind": "Requirement",
+          "quote": "its heading's status icon one per column, each always the same"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.parts",
+          "note": "which stories can be selected and what the bulk bar moves",
+          "kind": "Requirement",
+          "quote": "Only a story in the Backlog or Next sprint can be selected"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.states",
+          "note": "each column's empty-state wording, \"Nothing waiting.",
+          "kind": "Requirement",
+          "quote": "in the Backlog"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.saving",
+          "note": "sections saved in order.json",
+          "kind": "Requirement",
+          "quote": "an `order.json` listing the sections and their stories"
+        },
+        {
+          "link": "spec/scope/project-data/index.pi#ProjectData.contents",
+          "note": "the sections order.json lists",
+          "kind": "Requirement",
+          "quote": "`order.json` listing the Next sprint, Backlog, and Done sections"
+        },
+        {
+          "note": "a Draft column, or a section for stories that are only rough ideas and aren't ready for the Backlog yet"
+        }
+      ],
+      "task": "AddADraftColumnToTheBoard"
+    },
+    {
+      "story": "Story_f229d89d04dc851c",
+      "title": "Draft stories with the agent from their right-click menu, in parallel",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.drafting",
+          "note": "drafting started from a story with \"Ask agent\", \"Drafting can also be started from an open story, with \"Ask agent\"\"",
+          "kind": "Behaviour"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.parts",
+          "note": "the right-click menu, the selection, and the bulk bar",
+          "kind": "Behaviour",
+          "quote": "Right-clicking a card opens its menu at the pointer"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "the side panel holds only one thing at a time",
+          "kind": "Requirement",
+          "quote": "Only one thing is in it at a time"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.proposals",
+          "note": "the agent only proposes, never writes the plan",
+          "kind": "Requirement",
+          "quote": "The agent never writes the plan itself"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.proposalCards",
+          "note": "what accepting a proposal for a story does",
+          "kind": "Behaviour",
+          "quote": "an addition is added to the named story as a new step at its end"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.specGrounding",
+          "note": "every drafted proposal cites the spec",
+          "kind": "Requirement",
+          "quote": "A drafted story is grounded in the project's spec"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.states",
+          "note": "loading and error states on the part that shows them",
+          "kind": "Requirement",
+          "quote": "Loading: a spinner and a short muted label of what is happening"
+        },
+        {
+          "link": "spec/scope/harness-integration/baked-prompts/index.pi#BakedSystemPrompts.prompts",
+          "note": "the planning prompt each draft run uses",
+          "kind": "Name",
+          "quote": "planning.pi, for breaking what is wanted into stories"
+        },
+        {
+          "note": "drafting several stories at once, each in a run of its own running in parallel"
+        },
+        {
+          "note": "a \"Draft with agent\" item in a card's menu or the bulk bar"
+        },
+        {
+          "note": "where a story's draft proposals wait while the side panel shows something else"
+        }
+      ],
+      "task": "DraftStoriesWithTheAgentFromTheirRight"
+    },
+    {
+      "story": "Story_b441db061746bce6",
+      "title": "Ribbon's Planning tab opens a pinned Planning tab in the body",
+      "spec": [
+        {
+          "link": "spec/ui/components/ribbon/index.pi#Ribbon.keyboard",
+          "note": "Alt+2 opens the Planning ribbon tab and must do the same in the body;",
+          "kind": "Behaviour",
+          "quote": "<Alt+2> opening Planning"
+        },
+        {
+          "link": "spec/ui/components/ribbon/index.pi#Ribbon.openingSeveralTabs",
+          "note": "Ctrl+click adding Planning to the open tabs counts as switching to it;",
+          "kind": "Behaviour",
+          "quote": "Ctrl+clicking one … opens it alongside whichever tabs are already open"
+        },
+        {
+          "link": "spec/scope/application/Body.pi#Body.tabs",
+          "note": "Planning's tab becomes always-present and unclosable, like Chat;",
+          "kind": "Section",
+          "quote": "Its first tab, Chat, shows the message list, and is always there: it can't be closed or moved"
+        },
+        {
+          "link": "spec/scope/application/Body.pi#Body.contents",
+          "note": "the tab bar holds Planning only \"while it is open\";",
+          "kind": "Section",
+          "quote": "the Planning tab while it is open"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.description",
+          "note": "Planning opens \"as a file opens\" and must stop being closable like one; \"Planning opens in a tab of its own in the body, \"Planning",
+          "kind": "Section",
+          "quote": ", with a checklist icon, as a file opens"
+        },
+        {
+          "note": "what the body shows when the ribbon switches away from Planning"
+        }
+      ],
+      "task": "RibbonSPlanningTabOpensAPinnedPlanning"
+    },
+    {
+      "story": "Story_38491dd3c805ec7f",
+      "title": "Hide both sidebars while Planning is showing",
+      "spec": [
+        {
+          "link": "spec/scope/application/Body.pi#Body.tabs",
+          "note": "Planning already hides the chat input, and the sidebars should hide the same way;",
+          "kind": "Section",
+          "quote": "Planning is the one tab without the chat input"
+        },
+        {
+          "link": "spec/scope/application/Body.pi#Body.description",
+          "note": "the body is placed to the right of the LeftSidebar, with the RightSidebar at its right while a task runs;",
+          "kind": "Section",
+          "quote": "to the right of the [LeftSidebar](../../ui/components/left-sidebar/index.md#left-sidebar), which runs the full height beside it"
+        },
+        {
+          "link": "spec/ui/components/right-sidebar/index.pi#RightSidebar.showing",
+          "note": "shows while a task runs or the queue holds a prompt, or when opened by hand, with no exception for Planning;",
+          "kind": "Behaviour",
+          "quote": "It is there while a task is running … and whenever it is opened by hand"
+        },
+        {
+          "link": "spec/ui/components/left-sidebar/index.pi#LeftSidebar.description",
+          "note": "the left sidebar is always there, its view bar included;",
+          "kind": "Section",
+          "quote": "It runs the full height of the window beneath the ribbon"
+        },
+        {
+          "link": "spec/ui/components/left-sidebar/index.pi#LeftSidebar.viewBar",
+          "note": "the view bar is never hidden;",
+          "kind": "Behaviour",
+          "quote": "The bar is always there, collapsed or not"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.description",
+          "note": "the board fills the body edge to edge, which now means the full window width;",
+          "kind": "Section",
+          "quote": "from the body's left edge to its right"
+        }
+      ],
+      "task": "HideBothSidebarsWhilePlanningIsShowing"
+    },
+    {
+      "story": "Story_58610de07106cb71",
+      "title": "Draw the board's sideways scrollbar as the column turned on its side",
+      "updated": true,
+      "highlight": 0,
+      "spec": [
+        {
+          "link": "spec/ui/components/scrollbar/index.pi#Scrollbar.description",
+          "note": "only a column along a list's right is described; a bar along a foot needs saying.",
+          "kind": "Section",
+          "quote": "A narrow column along the right of the list, always shown"
+        },
+        {
+          "link": "spec/ui/components/scrollbar/index.pi#Scrollbar.surface",
+          "note": "the sideways bar takes the same white-over-surface steps.",
+          "kind": "Section",
+          "quote": "Every scrollbar is this one, wherever it is."
+        },
+        {
+          "link": "spec/ui/components/scrollbar/index.pi#Scrollbar.buttons",
+          "note": "button sizes, arrow size and placement, turned to point left and right.",
+          "kind": "Section",
+          "quote": "The column is 18 pixels wide, and each button is 17 pixels tall"
+        },
+        {
+          "link": "spec/ui/components/scrollbar/index.pi#Scrollbar.track",
+          "note": "border lines, the thumb and its end rows, turned to run along the bar.",
+          "kind": "Section",
+          "quote": "bordered by a line a pixel wide down both its sides"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "where the sideways bar sits on the board, and when it scrolls.",
+          "kind": "Section",
+          "quote": "with the Scrollbar along its foot; while they fit, it doesn't scroll"
+        },
+        {
+          "note": "how the Scrollbar looks laid along a list's foot rather than its right (orientation, which end the buttons sit at, which way the arrows point)"
+        },
+        {
+          "link": "spec/ui/components/scrollbar/index.pi#Scrollbar.track",
+          "note": "pressing and dragging the thumb, pressing the track, and the smaller-hit-area rule, along a bar.",
+          "kind": "Section",
+          "quote": "pressing the track elsewhere moves the thumb there, from where it can be dragged straight away"
+        },
+        {
+          "link": "spec/ui/components/scrollbar/index.pi#Scrollbar.buttons",
+          "note": "the end buttons scroll a little each way.",
+          "kind": "Section",
+          "quote": "scrolls the list up a little"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "the board scrolls sideways only while its columns are wider than the tab.",
+          "kind": "Section",
+          "quote": "The board scrolls sideways when its columns are wider than the tab"
+        },
+        {
+          "note": "which way the left and right buttons and a sideways drag move a board scrolled along a foot"
+        }
+      ],
+      "task": "DrawTheBoardSSidewaysScrollbarAsThe2"
+    },
+    {
+      "story": "Story_20bfa87c93332450",
+      "title": "Draft with agent can split a story into several",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.draftingWithAgent",
+          "note": "what each run is asked for, how its proposals are counted on the card, and what accepting moves a Draft story;",
+          "kind": "Behaviour",
+          "quote": "asked to turn it into a full story, a fuller prompt, the mode that fits it, the steps it needs"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.drafting",
+          "note": "a draft about a story proposes a rewrite and additions;",
+          "kind": "Behaviour",
+          "quote": "may propose rewriting it"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.proposals",
+          "note": "the targets a proposal may have; \"either \\\"New story\\",
+          "kind": "Requirement",
+          "quote": ", to become a story of its own"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.proposalCards",
+          "note": "how a new story is labelled and where it goes on Accept;",
+          "kind": "Behaviour",
+          "quote": "a new story goes into the Backlog, at its end"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.description",
+          "note": "the Draft column is not drafting and nothing the agent proposes goes into it;",
+          "kind": "Name",
+          "quote": "is apart from it and never puts anything in it"
+        },
+        {
+          "note": "a rough story split into several stories, and how the split-off stories are told apart from the original's rewrite"
+        },
+        {
+          "link": "spec/scope/harness-integration/baked-prompts/index.pi#BakedSystemPrompts.prompts",
+          "note": "what planning.pi asks for when it drafts one story;",
+          "kind": "Section",
+          "quote": "for turning one story into a full story, proposing its rewrite and the steps it needs"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.draftingWithAgent",
+          "note": "the run uses the planning prompt;",
+          "kind": "Behaviour",
+          "quote": "with the planning prompt of the"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.proposals",
+          "note": "the suspense-story block form and its targets;",
+          "kind": "Requirement",
+          "quote": "its target, `new`, the story's id, or `rewrite`"
+        }
+      ],
+      "task": "DraftWithAgentCanSplitAStoryIntoSeveral"
+    },
+    {
+      "story": "Story_f77f5431ee6dd24a",
+      "title": "Redraw only what changes",
+      "spec": [
+        {
+          "link": "spec/scope/application/index.pi#Application",
+          "note": "where the new window-wide behaviour goes, beside its other behaviours, as Memory Pressure is:",
+          "kind": "Section",
+          "quote": "desktop application"
+        },
+        {
+          "link": "spec/scope/application/Body.pi#Body.sliding",
+          "note": "must keep holding while views are cached:",
+          "kind": "Behaviour",
+          "quote": "moves smoothly with it, frame by frame"
+        },
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.virtualized",
+          "note": "running rows redraw in place:",
+          "kind": "Behaviour",
+          "quote": "Running rows update their time and spinner in place, redrawing only what is in view"
+        },
+        {
+          "link": "spec/scope/application/Body.pi#Body",
+          "note": "the views the window splits into: the tab bar, the selected tab's contents, the chat input, the right sidebar:",
+          "kind": "Section",
+          "quote": "the tab bar, the selected tab's contents, the Ask conversation while it shows, and the chat input"
+        },
+        {
+          "note": "a rule for the whole window that an animation or a tick redraws only the view that shows it"
+        }
+      ],
+      "task": "RedrawOnlyWhatChanges"
+    },
+    {
+      "story": "Story_7e7c0efa32653ae6",
+      "title": "Planning draft mode should focus more on creating multiple stories than a single story with multiple steps.  In general we should have a chain mode prompt that has the usuaul spec and code task possibly with a followup spec task.  And when listing steps, it should show all steps not prompt+rest.",
+      "task": "PlanningDraftModeShouldFocusMoreOn"
+    },
+    {
+      "story": "Story_fa382ca848b0f855",
+      "title": "Mark a task Failed when its reply says it failed",
+      "spec": [
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.feeding",
+          "note": "what decides the state a task finishes in",
+          "kind": "Behaviour",
+          "quote": "it then finishes in the state of that last result"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.failures",
+          "note": "what a failed run shows",
+          "kind": "Behaviour",
+          "quote": "A run that fails always says what went wrong, in the harness's own words"
+        },
+        {
+          "link": "spec/scope/prompt-mode/message-list/Status.pi#MessageListStatus.description",
+          "note": "the Failed label such a task takes, \"\\\"Failed\\",
+          "kind": "Name",
+          "quote": "in red"
+        },
+        {
+          "link": "spec/scope/prompt-mode/index.pi#PromptEditor.chainedTasks",
+          "note": "a chain whose step failed stops there",
+          "kind": "Behaviour",
+          "quote": "A step whose chain step before it failed or was cancelled is never sent"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.sprint",
+          "note": "a failed story goes back to Next sprint, not Done",
+          "kind": "Behaviour",
+          "quote": "those that failed, were cancelled, or stopped to the start of Next sprint"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.autoStart",
+          "note": "a failed story keeps the next sprint from starting by itself",
+          "kind": "Behaviour",
+          "quote": "A sprint that ended with a story failed ... never starts the next by itself"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.states",
+          "note": "the story card's status label",
+          "kind": "Section",
+          "quote": "Queued, Running with its spinner and time, Done, Failed"
+        },
+        {
+          "note": "deciding from what a run's reply says, rather than from its result or exit, that the run did not do its work"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.feeding",
+          "note": "the state a task finishes in",
+          "kind": "Behaviour",
+          "quote": "it then finishes in the state of that last result"
+        },
+        {
+          "link": "spec/scope/harness-integration/index.pi#HarnessIntegration.failures",
+          "note": "what a failed run says",
+          "kind": "Behaviour",
+          "quote": "in the harness's own words"
+        },
+        {
+          "note": "the verdict a run's reply gives and how the application reads it"
+        }
+      ],
+      "task": "MarkATaskFailedWhenItsReplySaysItFailed"
+    },
+    {
+      "story": "Story_0bf15ea7eb7b30c4",
+      "title": "Accepting a story's draft creates new stories",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.drafting",
+          "note": "a draft about a story proposes rewriting it and adding steps to it, which becomes new stories instead;",
+          "quote": "a proposal whose target is the story itself, to be rewritten"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.draftingWithAgent",
+          "note": "what accepting the rewrite, an addition, or Accept all does to the drafted story, and moving a Draft story to the Backlog;",
+          "quote": "Accepting the story's rewrite rewrites it as proposed, and accepting an addition adds its step to the story's end"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.proposalCards",
+          "note": "the \"Rewrite this story\" / \"Add to this story\" labels and what Accept records;",
+          "quote": "a rewrite replaces the story's title, prompt, mode, and spec citations with the proposal's"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.proposals",
+          "note": "the targets a proposal can name; \"either \\\"New story\\\", to become a story of its own, or \\\"Add to\\",
+          "quote": "a story"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.creating",
+          "note": "where an accepted new story goes;",
+          "quote": "An accepted proposal for a new story, from drafting, research, or an Ask answer's proposal card, still goes into the Backlog, at its end"
+        }
+      ],
+      "task": "AcceptingAStorySDraftCreatesNewStories"
+    },
+    {
+      "story": "Story_3e5b9c6972d904d5",
+      "title": "Drafting a Draft card creates its stories and marks it Drafted",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.draftingWithAgent",
+          "note": "when a run ends its proposals wait to be accepted, which for a Draft card become stories at once;",
+          "quote": "When a run ends, its card's property row shows how many of its proposals are waiting"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.proposals",
+          "note": "the rule that nothing reaches the plan until accepted, which this makes an exception to;",
+          "quote": "nothing it proposes reaches the plan until the user accepts it"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.states",
+          "note": "the drafting card's done state and status labels, where \"Drafted\" would show; \"done, its waiting proposals counted on its card, as \\\"3 proposals\\\"\""
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.specGrounding",
+          "note": "proposals without citations aren't stories; \"A proposal with no element at all, and no \\\"No match\\",
+          "quote": ", isn't shown as a story"
+        },
+        {
+          "note": "a \"Drafted\" mark on a story, or proposals added to the plan without being accepted"
+        }
+      ],
+      "task": "DraftingADraftCardCreatesItsStoriesAnd"
+    }
+  ],
+  "auto_start": true
+}

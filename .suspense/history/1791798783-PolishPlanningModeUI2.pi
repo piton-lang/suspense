@@ -1,0 +1,73 @@
+
+export anchor PolishPlanningModeUI2:
+    userPrompt:
+        \\\
+        The planning mode interface is cleaner and easier to scan. Story list, research output, pause state, and task proposals have consistent spacing, labels, and states (loading, empty, paused, error). Controls are clearly labelled and reachable by keyboard.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The planning mode interface is cleaner and easier to scan. Story list, research output, pause state, and task proposals have consistent spacing, labels, and states (loading, empty, paused, error). Controls are clearly labelled and reachable by keyboard.
+            \\\
+        result:
+            \\\
+            I added four sections to the Planning spec covering layout, states, drafting and keyboard use. `piton check` reports no problems and `piton build` wrote 86 files.
+
+            Planning had no "research output", "pause state" or "task proposals" as such. I read them as the "Draft stories" run's progress, stories whose task is paused, and the drafted stories. If you meant something else, tell me and I'll adjust.
+
+            - **Layout** (`.claude/reference/scope/planning/index.md#layout`):
+              - **Spacing:** 24px column padding, 32px section headings with labelled buttons (never icon-only), 36px rows 2px apart, and 24px between sections.
+              - **Columns:** each row uses fixed columns: grip 16px, mode pill 72px, then the title, then a 96px right-aligned status column, so everything lines up down the list.
+            - **States** (`#states`), each shown the same way everywhere:
+              - **Empty:** one muted line saying what to do.
+              - **Loading:** a spinner with a label, shown where the result will appear.
+              - **Paused:** a "Paused" status in the warning colour with a Resume button, and the sprint's heading counts paused stories.
+              - **Error:** plain words, collapsed details, and "Try again".
+              - **Sent stories:** they use the same coloured status labels as tasks. Stories not yet sent show nothing.
+            - **Drafting** (`#drafting`): an inline panel under the Backlog heading instead of a popup.
+              - **Request:** a "Describe what you want" box.
+              - **While it runs:** a live line of what the agent is doing, with a Stop button.
+              - **Proposals:** proposed stories appear as checkable rows, with "Add N stories" and "Discard" buttons. They survive closing Planning.
+            - **Keyboard** (`#keyboard`):
+              - **Moving around:** Tab through everything, with a focus ring. Up and Down move between rows, Enter opens a story, Space ticks a proposal, and Alt+Up/Down moves a story, including across sections.
+              - **Actions:** Ctrl+N adds a story, Ctrl+Enter sends one, Ctrl+Shift+Enter sends the sprint, M opens the mode picker, Delete deletes after a confirmation, and Escape closes one layer at a time.
+              - **Labels:** every control has a screen-reader label, and its shortcut is in its tooltip.
+
+            **Anchors the code should follow:** `Planning` `#layout`, `#states`, `#drafting`, `#keyboard`, `#stories` and `#creating`, plus `PromptSending` `#pausing` and `MessageList` `#status`.
+            \\\
+
+    sentFrom: PolishPlanningModeUI
+
+    model: opus

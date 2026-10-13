@@ -1,0 +1,7 @@
+- [The tab bar is a 32 pixel strip along the top of the chat input, holding the tabs, help text, and session controls](.claude/reference/scope/prompt-mode/chat-input/index.md#overview)
+- [The help text fills the rest of the bar and is cut off rather than wrapped when the bar is too narrow](.claude/reference/scope/prompt-mode/chat-input/index.md#help)
+- [Context and New conversation sit at the far right of the bar and are never cut off; the help text gives way to them](.claude/reference/scope/prompt-mode/chat-input/index.md#session)
+- [Usage is never cut off; the help text gives way to it](.claude/reference/scope/prompt-mode/chat-input/index.md#usage)
+- [Slice, the model picker, and the effort picker sit left of the context figure and the help text gives way to them](.claude/reference/scope/prompt-mode/chat-input/index.md#slice)
+- [The button column is 88 pixels wide, Send at the top, then Queue, then Preview, each the column's full width](.claude/reference/scope/prompt-mode/chat-input/index.md#description)
+- [The send button reads Send, Queue, or Send to task, with a paper-plane icon before its label and a split chevron joined to its right](.claude/reference/scope/prompt-mode/chat-input/index.md#split-button)

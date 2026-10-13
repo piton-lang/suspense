@@ -1,0 +1,8 @@
+- [Opening, scrolling, resizing, filtering, and new tasks arriving cost the same with ten thousand previous tasks as with ten](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Every row is 28 pixels tall, so where each row lies is known from its place in the list alone](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Running rows update their time and spinner in place, redrawing only what is in view](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [A running row's time ticking never makes the rows in view jump and settle](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [A pinned heading sits over the list without moving any row](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [Day labels follow the clock, reading "Yesterday" once midnight passes without reopening the tab](.claude/reference/ui/components/right-sidebar/tasks/index.md#days)
+- [A day's divider stays pinned below Previous's heading until the next day's divider pushes it out](.claude/reference/ui/components/right-sidebar/tasks/index.md#days)
+- [A spinner turning or a running task's time ticking redraws only the view that shows it, never the Tasks tab](.claude/reference/scope/application/index.md#redrawing)

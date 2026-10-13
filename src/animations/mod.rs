@@ -2,3 +2,6 @@
 //! can use.
 
 pub mod rise_in;
+pub mod slide;
+pub mod steady;
+pub mod tilt;

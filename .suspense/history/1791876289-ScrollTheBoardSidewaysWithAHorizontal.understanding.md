@@ -1,0 +1,5 @@
+- [Shift with the wheel or a sideways swipe anywhere on the board scrolls it sideways while its columns are wider than the tab, and does nothing while they fit](.claude/reference/scope/planning/index.md#layout)
+- [A vertical wheel turn over a column scrolls only that column and never passes on to the board](.claude/reference/scope/planning/index.md#layout)
+- [A vertical wheel turn outside every column scrolls the board sideways, down moving it right and up left](.claude/reference/scope/planning/index.md#layout)
+- [A diagonal swipe over a column splits its shares between the column and the board](.claude/reference/scope/planning/index.md#layout)
+- [Scrolling over the side panel, the pause bar, or the bulk bar never moves the board or its columns](.claude/reference/scope/planning/index.md#layout)

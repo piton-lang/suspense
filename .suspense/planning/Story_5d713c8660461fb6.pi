@@ -1,0 +1,23 @@
+
+export anchor Story_5d713c8660461fb6:
+    userPrompt:
+        \\\
+        Planning is a body tab, as spec/scope/planning/index.pi#Planning.description
+        says. The Body keeps a task tab "as it was left", as
+        spec/scope/application/Body.pi#Body.description says, but the spec says
+        nothing about Planning's scroll, so this is new. Once it's done:
+        - Switching to another tab and back shows the board scrolled sideways
+          exactly as it was left, and every column scrolled up or down as it was,
+          with nothing animating.
+        - The same holds when the side panel opens or closes in the meantime: the
+          columns keep their own scroll, and only the board's sideways scroll
+          moves, as the panel's opening needs.
+        - Closing the Planning tab and opening it again, or reloading the window,
+          starts the board at its left edge and every column at its top. Scroll
+          positions aren't saved with the plan in `order.json`.
+        Write this into Planning's layout section first, then make the board match.
+        \\\
+
+    mode: combined
+
+    model: opus

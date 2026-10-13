@@ -1,0 +1,30 @@
+
+export anchor Story_e471b2497736bfd9:
+    userPrompt:
+        \\\
+        The spec keeps a moved, focused card in view, as
+        spec/scope/planning/index.pi#Planning.motion and
+        spec/scope/planning/index.pi#Planning.keyboard say. It says nothing yet about
+        the other ways a card can go out of sight, so this is new. Once it's done:
+        - When the side panel opens and the board narrows, as
+          spec/scope/planning/index.pi#Planning.layout says, the board scrolls
+          sideways, in the same quick motion, just enough to keep the open story's
+          card fully in view, as long as it was in view before.
+        - A story opened from anywhere outside the board, such as a proposal's
+          "Added to Backlog" or "Added to <story>" link, or a palette or ribbon
+          action that opens one, scrolls the board sideways and its column up or
+          down so its card is fully in view, then highlights it as the open story.
+        - Clicking a card that is only partly in view opens it and scrolls just
+          enough to show it all.
+        - In a column scrolled away from its top, cards above the view that are
+          added, deleted, or change height (a story's status or step lines
+          arriving in Current sprint, or a sprint closing) never move the cards in
+          view. The column's scroll shifts by the same amount instead, and the
+          thumb moves without jumping, as
+          spec/ui/components/scrollbar/index.pi#Scrollbar.steadiness says.
+        Write this into Planning's motion section first, then make the board match.
+        \\\
+
+    mode: combined
+
+    model: opus

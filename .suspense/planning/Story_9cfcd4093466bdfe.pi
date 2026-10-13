@@ -1,0 +1,28 @@
+
+export anchor Story_9cfcd4093466bdfe:
+    userPrompt:
+        \\\
+        While the body's Planning tab is selected, the chat input is not shown.
+        The Planning board fills the body from the tab bar to the bottom of the
+        body, and the open story's panel is just as tall. Selecting Chat, a file,
+        or a task tab brings the chat input back straight away. Nothing slides.
+
+        Change spec/scope/application/Body.pi#Body.tabs, which currently says the
+        chat input stays whichever tab is selected, and
+        spec/scope/application/Body.pi#Body.contents, so that both name Planning
+        as the one tab without it. Also change
+        spec/scope/planning/index.pi#Planning.description, where the board and the
+        story panel each reach "down to the chat input", so they reach the bottom
+        of the body instead. That same description says stories are never sent
+        through the chat input, so hiding it on Planning removes nothing a story needs.
+
+        The spec has nothing yet on what happens to the chat input's state while
+        it is hidden, so this part is new. Its draft text, attachments, and
+        selected mode tab are kept as they were and are there again when it shows.
+        If it had keyboard focus when Planning was selected, it gets focus back
+        when it shows again. Then make the code match the spec.
+        \\\
+
+    mode: combined
+
+    model: opus

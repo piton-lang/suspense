@@ -1,0 +1,10 @@
+
+export anchor Story_45313f9c4be0aaf9:
+    userPrompt:
+        \\\
+        Planning's board looks like Trello and reads like Linear, as spec/scope/planning/index.pi#Planning.layout and spec/scope/planning/index.pi#Planning.parts now describe. Each column is a Trello-style list: a rounded container, corners 8 pixels, on a surface of its own one step from the base (recessed, per spec/ui/theme/index.pi#Theme.surfaces), with its heading and cards inside. This replaces the rule that a column has no background. Each heading reads like a Linear group heading: a small status icon for the column, its name, its muted count, and its labelled actions. Cards are quieter and denser, in Linear's way: the title is primary, and beneath it sits a single muted property row with the mode pill, step count, attachments, and status as small items. Hovering raises a card one surface step. Focus shows the accent ring, and the open story keeps its accent line. These stay three distinct steps, per spec/ui/theme/index.pi#Theme.hierarchy. The mode's colour comes from spec/scope/prompt-mode/modes/index.pi#PromptModes.colours. The spec has nothing yet on per-column status icons, so that part is new. Everything uses theme roles in both dark and light mode. Update the spec first, then make src/planning.rs match it.
+        \\\
+
+    mode: combined
+
+    model: opus

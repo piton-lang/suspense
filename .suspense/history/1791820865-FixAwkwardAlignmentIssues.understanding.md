@@ -1,0 +1,4 @@
+- [A task's header is one slim line, 32 pixels tall: mode bar, then its status, a spinner while under way and its status label, with its elapsed time beside it, then its summary, then its buttons](.claude/reference/scope/prompt-mode/message-list/index.md#description)
+- [A task's status is a coloured label that spells it out, "Running" in yellow, readable in light and dark mode](.claude/reference/scope/prompt-mode/message-list/index.md#status)
+- [The elapsed time sits beside the status label in small muted tabular figures, wherever the status label shows](.claude/reference/scope/prompt-mode/message-list/index.md#elapsed)
+- [While writing, the output rate sits right after the elapsed time, muted, in the same small tabular figures](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)

@@ -60,6 +60,8 @@ pub fn never(_: &Path, _: &str) -> Result<String> {
 
 /// A name being found for a prompt: see [`start`].
 pub struct Naming {
+    /// Named already, as a story sent from the plan is.
+    fixed: Option<String>,
     project_dir: PathBuf,
     base: Option<String>,
     title: Option<(Receiver<Result<String>>, Instant)>,
@@ -82,9 +84,31 @@ pub fn start(
         (receiver, Instant::now() + WAIT)
     });
     Naming {
+        fixed: None,
         project_dir: project_dir.to_path_buf(),
         base,
         title,
+    }
+}
+
+/// A prompt named `name` already, one [`name_for`] gave: nothing is asked.
+pub fn named(project_dir: &Path, name: String) -> Naming {
+    Naming {
+        fixed: Some(name),
+        project_dir: project_dir.to_path_buf(),
+        base: None,
+        title: None,
+    }
+}
+
+/// The name a prompt titled `title` is given straight away, as a story
+/// sent from the plan is, so it is known by it before it is queued: the
+/// title as an anchor's name, numbered where the project has one, or a
+/// random name where the title gives none.
+pub fn name_for(project_dir: &Path, title: &str) -> String {
+    match anchor_name(title) {
+        Some(base) => unique(&base, project_dir),
+        None => HiddenAnchor::random_name(),
     }
 }
 
@@ -92,6 +116,9 @@ impl Naming {
     /// The prompt's name, waiting for its title until it has been asked for
     /// as long as it may be; random when there is none to be had.
     pub fn wait(self) -> String {
+        if let Some(name) = self.fixed {
+            return name;
+        }
         let base = self.base.or_else(|| {
             let (receiver, deadline) = self.title?;
             let timeout = deadline.saturating_duration_since(Instant::now());

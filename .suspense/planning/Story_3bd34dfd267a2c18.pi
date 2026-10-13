@@ -1,0 +1,48 @@
+
+export anchor Story_3bd34dfd267a2c18:
+    userPrompt:
+        \\\
+        The ribbon's Planning tab offers Draft Stories and Research, so either can
+        be started without first opening the board and finding the Backlog's
+        heading. Read these first:
+        spec/ui/components/ribbon/planning-tab/index.pi#RibbonPlanningTab.groups,
+        spec/ui/components/ribbon/planning-tab/index.pi#RibbonPlanningTab.commands,
+        spec/ui/components/ribbon/index.pi#Ribbon.commands,
+        spec/scope/planning/index.pi#Planning.creating,
+        spec/scope/planning/index.pi#Planning.research,
+        spec/scope/planning/index.pi#Planning.drafting,
+        spec/scope/planning/index.pi#Planning.keyboard and
+        spec/scope/planning/index.pi#Planning.paused.
+
+        Once this is done:
+        - RibbonPlanningTab has a second group, "Agent", after the "Plan" group.
+          It holds two slim buttons that are not primary, so the collapsed ribbon
+          leaves them out: "Draft Stories" with a sparkle icon, then "Research"
+          with a magnifying-glass icon. Add both to RibbonPlanningTab.groups and
+          RibbonPlanningTab.commands, written the way newStory and sendSprint are.
+        - Clicking Draft Stories opens Planning, or selects its tab where it is
+          already open. It then opens drafting in the side panel with the "Describe
+          what you want" box focused, exactly as the Backlog heading's "Draft
+          stories" button and Ctrl+Shift+D do (Planning.creating,
+          Planning.drafting, Planning.keyboard).
+        - Clicking Research does the same for research, with the "What should be
+          looked into?" box focused, exactly as the Backlog heading's "Research"
+          button and Ctrl+Shift+R do (Planning.research).
+        - Each tooltip explains what the command does and gives its shortcut,
+          Ctrl+Shift+D or Ctrl+Shift+R (Cmd on macOS), as Ribbon.commands
+          requires.
+        - Neither button is disabled while planning is paused. Drafting and
+          research only change the plan, and a second research while paused keeps
+          the pause (Planning.paused).
+        - The ribbon's buttons and the Backlog heading's buttons share one route
+          into the side panel, so there is no second copy of the open-and-focus
+          behaviour.
+
+        Update the spec first: RibbonPlanningTab gains the group and both
+        commands, and Planning.creating and Planning.research say that the ribbon's
+        Planning tab offers them too. Then change the ribbon code to match.
+        \\\
+
+    mode: combined
+
+    model: opus

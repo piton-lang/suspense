@@ -1,0 +1,8 @@
+- [While Planning's tab is selected the whole left sidebar, view bar included, is hidden](.claude/reference/scope/application/Body.md#description)
+- [While Planning's tab is selected the right sidebar isn't there, even while a task runs, a prompt is queued, or it was opened by hand](.claude/reference/ui/components/right-sidebar/index.md#showing)
+- [The tab bar's sidebar button and Ctrl+Alt+B (Cmd+Alt+B) do nothing while Planning is selected](.claude/reference/ui/components/right-sidebar/index.md#showing)
+- [Both sidebars go and come back at once, with no slide, as the chat input does](.claude/reference/scope/application/Body.md#description)
+- [The left sidebar comes back with its view, collapsed state, width, scroll and selection as left](.claude/reference/scope/application/Body.md#description)
+- [The right sidebar keeps its width and whether it was opened by hand, and comes back as a task starting or ending meanwhile leaves it](.claude/reference/scope/application/Body.md#description)
+- [The tab bar runs from the window's left edge to its right while Planning is selected](.claude/reference/scope/application/Body.md#tabs)
+- [Planning fills from the tab bar to the window's bottom across the whole window width](.claude/reference/scope/planning/index.md#description)

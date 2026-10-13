@@ -1,0 +1,102 @@
+
+export anchor MarkATaskFailedWhenItsReplySaysItFailed4:
+    userPrompt:
+        \\\
+        Settle spec/scope/harness-integration/index.pi#HarnessIntegration.feeding
+        and spec/scope/harness-integration/index.pi#HarnessIntegration.failures
+        so they say what the code now does. Cover how a run reports whether it
+        did its work, what the application reads from the reply, what happens
+        to a reply with no verdict, and what a task marked Failed this way
+        shows as its reason. Where the verdict is asked for in a mode system
+        prompt, the spec should say so there too.
+        \\\
+
+    mode: spec
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the spec located in ./spec.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        Before creating or editing any .pi file, read .suspense/fluency.md once in this conversation, unless you already have: it is how Piton is written.
+
+        Open a .pi file only to change it. Once you have changed the spec, run `piton check` and fix every error it reports, then run `piton build` and check the result in the refreshed reference under .claude/reference, not by reading the source again. Never finish with a spec that `piton check` or `piton build` reports errors in.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt was first sent to change the code, and the code has been changed to meet it. Now write the new spec and refactor old to describe what was built:
+
+        Change the spec at ./spec so it describes what the code task built, from its prompt and its final output below, as the prompt guided. Where the code task did something the prompt didn't ask for, describe what it did, and say so in your reply.
+
+        The prompt the code task was sent:
+
+        ${CODE_PROMPT}
+
+        What the code task said it built, its final output:
+
+        ${CODE_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            A task whose run ends without a harness error, but whose reply says it
+            couldn't do the work, is recorded and shown as Failed, never as Done.
+            That covers a reply saying it failed, that it couldn't write or change
+            the code, that it was blocked by the sandbox or by a missing file, or
+            that it gave up. Today a task finishes in the state of its last
+            result, as spec/scope/harness-integration/index.pi#HarnessIntegration.feeding
+            says, so any such reply reads Done. The spec has nothing yet on judging
+            a run by what its reply says, so this is new.
+
+            Have the run report whether it did the work in a form the application
+            can read reliably. For example, the mode system prompts could ask every
+            task to end its reply with a fixed verdict line, and the application
+            would read that line, rather than guessing from the wording of free
+            text. A reply that gives no verdict keeps today's behaviour. Where the
+            verdict says it failed, the task takes the "Failed" label from
+            spec/scope/prompt-mode/message-list/Status.pi#MessageListStatus.description.
+            Its output says why, in the run's own words, as
+            spec/scope/harness-integration/index.pi#HarnessIntegration.failures
+            asks of every failed run, and it is saved as Failed in its history
+            record, so it reads the same after a restart.
+
+            Since it is Failed, everything that already follows a failed task
+            follows it. In a chain, the next step is never sent and the chain reads
+            Failed, as spec/scope/prompt-mode/index.pi#PromptEditor.chainedTasks
+            says. In Planning, the story's card shows Failed, as
+            spec/scope/planning/index.pi#Planning.states says. The story never
+            counts as Done, and Close sprint sends it back to the start of Next
+            sprint rather than into Done, as spec/scope/planning/index.pi#Planning.sprint
+            says. Start automatically doesn't start the next sprint because of it,
+            as spec/scope/planning/index.pi#Planning.autoStart says.
+
+            Write this into the spec first, in HarnessIntegration's feeding or
+            failures and wherever the verdict is asked for, then make the code
+            match it.
+            \\\
+        result:
+            \\\
+            I haven't changed anything. The compiled spec says nothing about overruling a verdict, so there's nothing for the code to match yet.
+
+            The Chain's spec step didn't write this request into the spec. What it handed on as its output is my reply from the previous task, the verdict line, not a description of this change. The reference never mentions "Mark as done", "Mark as failed", an outcome set by hand, or changing a task's outcome after it ends. It doesn't say any of the details either: where the buttons go, what the record saves, the tooltip, or what happens to chains and Planning.
+
+            Building it from the prompt alone would be the workaround the instructions rule out. I'd run the spec step again first, for example with this:
+
+            ```suspense-prompt spec
+            When a task's verdict was misread, the user can overrule it after the task has ended. A task that failed because of its verdict shows "Mark as done" beside the reason it failed. A task whose verdict said done shows "Mark as failed" in the menu of its output. Either choice sets the task's status (.claude/reference/scope/prompt-mode/message-list/index.md#message-list) and saves it in the task's history record, so it still holds after a restart. The status tooltip says the outcome was set by hand. A chain stopped by the overruled step offers to send the steps it didn't run. In Planning, a story whose task is overruled to Done goes to Done when the sprint is closed, and one overruled to Failed goes back to Next sprint (.claude/reference/scope/planning/index.md#planning). Only a task that has ended can be overruled. A task that failed to compile or run, or that the harness reported as an error, offers neither choice.
+            ```
+
+            Once the spec has been built with that in it, sending the same prompt to Code will implement it against the spec.
+            \\\
+
+    sentFrom: MarkATaskFailedWhenItsReplySaysItFailed3
+
+    model: opus
+
+    addedStep: MarkATaskFailedWhenItsReplySaysItFailed 1

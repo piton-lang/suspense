@@ -1,0 +1,8 @@
+- [Each column is a list 320 pixels wide, 16 pixels apart, corners rounded 8 pixels, on the recessed surface, with no border](.claude/reference/scope/planning/index.md#layout)
+- [A list has the theme's pressed bevel inside its rounded corners, so it reads as sunk into the base](.claude/reference/scope/planning/index.md#layout)
+- [A pressed bevel is the theme's 1 pixel bevel with its light and shade swapped: top and left barely darker, bottom and right a touch lighter](.claude/reference/ui/theme/index.md#bevel)
+- [Each list has a 2 pixel edge along its top, inside its rounded corners and above its heading](.claude/reference/scope/planning/index.md#layout)
+- [The edge is its status icon's colour laid over the recessed surface at 50%](.claude/reference/scope/planning/index.md#parts)
+- [Icon and edge colours: Backlog tertiary text, Next sprint secondary text, Current sprint the accent, Done success, Findings secondary text](.claude/reference/scope/planning/index.md#parts)
+- [Only the edge and the icon carry the column's colour; heading, name, cards, empty state and the placeholder's well surface are untouched](.claude/reference/scope/planning/index.md#layout)
+- [The edge is always quieter than a card's hover, selected surface, focus ring, or the open story's 3 pixel accent line](.claude/reference/scope/planning/index.md#layout)

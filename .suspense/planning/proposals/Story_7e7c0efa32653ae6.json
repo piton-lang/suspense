@@ -1,0 +1,78 @@
+{
+  "proposals": [
+    {
+      "id": "Proposal_0bb8f05a0aa58978",
+      "title": "Draft several stories rather than one story with many steps",
+      "prompt": "Drafting, whether from Draft stories, Ask agent, or Draft with agent, prefers\nseveral stories to one story with many steps. Each separate piece of work,\nanything someone would send and check off on its own, becomes a story of its\nown, a \"New story\" proposal, as spec/scope/planning/index.pi#Planning.drafting\nand spec/scope/planning/index.pi#Planning.draftingWithAgent describe the split.\nSteps, as spec/scope/planning/index.pi#Planning.steps defines them, are kept\nfor pieces that only make sense after the one before, within one piece of work.\n\nNew behaviour is proposed as a single Chain story by default, one prompt that\nruns the usual spec step and then the code step, plus a spec follow-up when\nthe chain asks for one, as spec/scope/prompt-mode/index.pi#PromptEditor.chainedTasks\nsays and spec/scope/prompt-mode/modes/index.pi#PromptModes.modes describes Chain.\nThe drafter never splits that into a Spec step and a Code step of its own, or\nadds a step only to update the spec after the code: Chain already does both.\n\nChange the Planning spec's drafting sections to say this, and the planning\nprompt, planning.pi, listed in\nspec/scope/harness-integration/baked-prompts/index.pi#BakedSystemPrompts.prompts,\nso that it asks for it. Its guidance and its examples should show a request\nbecoming several Chain stories, with steps only where one piece truly follows\nanother, and stop asking for \"the steps it needs\" as though every story needs\nsome.",
+      "mode": "chain",
+      "target": "Story_7e7c0efa32653ae6",
+      "rewrite": true,
+      "about": "Story_7e7c0efa32653ae6",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.drafting",
+          "note": "how a draft about a story splits into a rewrite, its steps, and new stories;",
+          "kind": "Behaviour",
+          "quote": "Where a story holds more than one piece of work, the draft splits it"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.draftingWithAgent",
+          "note": "what each story's draft run is asked for;",
+          "kind": "Behaviour",
+          "quote": "turn it into a full story, a fuller prompt, the mode that fits it, the steps it needs"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.steps",
+          "note": "what a step is for, kept for genuine follow-on pieces;",
+          "kind": "Requirement",
+          "quote": "one or more further prompts, each a piece of the story done after the one before"
+        },
+        {
+          "link": "spec/scope/harness-integration/baked-prompts/index.pi#BakedSystemPrompts.prompts",
+          "note": "the planning prompt's description, which this changes;",
+          "kind": "Name",
+          "quote": "for turning one story into a full story, proposing its rewrite and the steps it needs"
+        },
+        {
+          "link": "spec/scope/prompt-mode/index.pi#PromptEditor.chainedTasks",
+          "note": "what one Chain story already runs, so the drafter needn't spell it out as steps;",
+          "kind": "Behaviour",
+          "quote": "first the Chain task itself, which writes the spec; then the same prompt sent to Code"
+        },
+        {
+          "link": "spec/scope/prompt-mode/modes/index.pi#PromptModes.modes",
+          "note": "Chain as the mode for new behaviour;",
+          "kind": "Name",
+          "quote": "Chain: changes the code and the spec together"
+        }
+      ]
+    },
+    {
+      "id": "Proposal_fcf86e373312432e",
+      "title": "List every step of a story, its prompt as step 1",
+      "prompt": "Wherever a story's steps are listed, every step is listed, the story's own\nprompt among them as step 1, never the prompt on its own with \"the rest\"\nbeneath it. As spec/scope/planning/index.pi#Planning.steps and\nspec/scope/planning/index.pi#Planning.stories say today, the open story shows\nits prompt apart and numbers its steps from 2. The card's step count says\n\"3 steps\", but its tooltip, and the step lines in Current sprint and Done, list\nonly the steps after the prompt.\n\nOnce this is done:\n- The open story lists all of its steps as one numbered list, 1 to N. Step 1\n  is the story's prompt, edited in place as it is now, and it still can't be\n  moved or removed.\n- A card's tooltip lists every step, 1 to N, so it matches its count.\n- In Current sprint and Done, and in a finding started from the story, the\n  step lines start with step 1, the prompt, each with its own status.\n\nThe count and every list agree everywhere, as the spec already requires.\nChange spec/scope/planning/index.pi#Planning.steps and\nspec/scope/planning/index.pi#Planning.stories to say so, then the code to\nmatch.",
+      "mode": "chain",
+      "about": "Story_7e7c0efa32653ae6",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.steps",
+          "note": "how an open story, its card, and a sent story list their steps;",
+          "kind": "Behaviour",
+          "quote": "each a row numbered from 2, the story's own prompt being 1"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.steps",
+          "note": "the card's count and tooltip; \"its card in Planning shows how many beneath its title, muted, as \\\"3 steps\\",
+          "kind": "Requirement",
+          "quote": ", with the list in its tooltip"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.stories",
+          "note": "the open story's fields, where the prompt sits apart from its steps;",
+          "kind": "Behaviour",
+          "quote": "its prompt, in a GrowingTextInput … its steps, with Add step"
+        }
+      ]
+    }
+  ]
+}

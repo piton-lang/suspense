@@ -1,0 +1,8 @@
+- [The ribbon's Planning tab sits between Project and Code, its Plan group opening Planning](.claude/reference/ui/components/ribbon/planning-tab/index.md#groups)
+- [The body's tab bar holds Chat, then tabs for open files and tasks, reorderable](.claude/reference/scope/application/Body.md#tabs)
+- [Prompts are sent in Code, Chain, Spec, Ask, or Freeform, each with its colour](.claude/reference/scope/prompt-mode/modes/index.md#modes)
+- [A task sent while its lane is busy waits in its lane's queue, in order](.claude/reference/scope/prompt-mode/sending/index.md#lanes)
+- [Each prompt records its mode, model, effort, attachments, and Slice in its hidden anchor](.claude/reference/scope/prompt-mode/chat-input/index.md#hidden-anchor)
+- [Ask answers hand back prompts as suspense-prompt cards with send buttons](.claude/reference/scope/prompt-mode/ask-conversation/index.md#suggested-prompts)
+- [Project data under .suspense holds the history, queue, and prompts](.claude/reference/scope/project-data/index.md#contents)
+- [Planning is a body tab of stories in Next sprint and Backlog, each with a mode, sent as a sprint in order](.claude/reference/scope/planning/index.md#sprint)

@@ -1,0 +1,7 @@
+- [A story's steps are added with Add step, reordered by dragging or Alt+Up/Down, and removed](.claude/reference/scope/planning/index.md#steps)
+- [Steps are saved in the story's own file, in a steps list, in order](.claude/reference/scope/planning/index.md#steps)
+- [A story's row shows its step count; the open story, proposals, and the Tasks tab show its steps](.claude/reference/scope/planning/index.md#steps)
+- [Adding a step to a story that doesn't exist changes nothing and says so in plain words](.claude/reference/scope/planning/index.md#steps)
+- [Current sprint shows sent stories with their task's status; Close sprint moves done ones to Done](.claude/reference/scope/planning/index.md#sprint)
+- [A sent story is sent as a chain, its steps listed beneath it in the Tasks tab](.claude/reference/ui/components/right-sidebar/tasks/index.md#rows)
+- [Steps also show in Current sprint expanded with each status, and in Done, all read from the story's file](.claude/reference/scope/planning/index.md#steps)

@@ -1,0 +1,8 @@
+- [Drafting shows its proposals in a panel beneath the Backlog, or beneath the story it was asked about](.claude/reference/scope/planning/index.md#drafting)
+- [Drafting runs with the planning prompt in a run of its own with no session](.claude/reference/scope/planning/index.md#creating)
+- [Only one story is open at a time, expanded in place](.claude/reference/scope/planning/index.md#stories)
+- [Stories are saved in .suspense/planning/, a file per story, with order.json](.claude/reference/scope/planning/index.md#saving)
+- [The Question profile can read the project and change none of it](.claude/reference/scope/sandbox/index.md#profiles)
+- [Ask answers hand back prompts as suspense-prompt cards, never sent by themselves](.claude/reference/scope/prompt-mode/ask-conversation/index.md#suggested-prompts)
+- [Planning states are shown the same way: empty, loading, paused, error](.claude/reference/scope/planning/index.md#states)
+- [Proposals say New story or Add to a story; each is accepted, edited, or rejected; the agent can't write the plan](.claude/reference/scope/planning/index.md#proposals)

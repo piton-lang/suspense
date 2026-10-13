@@ -1,0 +1,94 @@
+
+export anchor HideTheChatInputOnThePlanningTab2:
+    userPrompt:
+        \\\
+        While the body's Planning tab is selected, the chat input is not shown.
+        The Planning board fills the body from the tab bar to the bottom of the
+        body, and the open story's panel is just as tall. Selecting Chat, a file,
+        or a task tab brings the chat input back straight away. Nothing slides.
+
+        Change spec/scope/application/Body.pi#Body.tabs, which currently says the
+        chat input stays whichever tab is selected, and
+        spec/scope/application/Body.pi#Body.contents, so that both name Planning
+        as the one tab without it. Also change
+        spec/scope/planning/index.pi#Planning.description, where the board and the
+        story panel each reach "down to the chat input", so they reach the bottom
+        of the body instead. That same description says stories are never sent
+        through the chat input, so hiding it on Planning removes nothing a story needs.
+
+        The spec has nothing yet on what happens to the chat input's state while
+        it is hidden, so this part is new. Its draft text, attachments, and
+        selected mode tab are kept as they were and are there again when it shows.
+        If it had keyboard focus when Planning was selected, it gets focus back
+        when it shows again. Then make the code match the spec.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            While the body's Planning tab is selected, the chat input is not shown.
+            The Planning board fills the body from the tab bar to the bottom of the
+            body, and the open story's panel is just as tall. Selecting Chat, a file,
+            or a task tab brings the chat input back straight away. Nothing slides.
+
+            Change spec/scope/application/Body.pi#Body.tabs, which currently says the
+            chat input stays whichever tab is selected, and
+            spec/scope/application/Body.pi#Body.contents, so that both name Planning
+            as the one tab without it. Also change
+            spec/scope/planning/index.pi#Planning.description, where the board and the
+            story panel each reach "down to the chat input", so they reach the bottom
+            of the body instead. That same description says stories are never sent
+            through the chat input, so hiding it on Planning removes nothing a story needs.
+
+            The spec has nothing yet on what happens to the chat input's state while
+            it is hidden, so this part is new. Its draft text, attachments, and
+            selected mode tab are kept as they were and are there again when it shows.
+            If it had keyboard focus when Planning was selected, it gets focus back
+            when it shows again. Then make the code match the spec.
+            \\\
+        result:
+            \\\
+            I've updated the spec so the chat input is hidden while the Planning tab is selected. `piton check` reports no problems, `piton build` succeeded, and the rebuilt reference shows the new text.
+
+            - **`Body.tabs`:** the chat input now stays along the bottom on every tab except Planning. A new paragraph says the chat input isn't shown on Planning, and Planning fills the body from the tab bar to its bottom. Selecting Chat, a file or a task tab brings the chat input back straight away, with nothing sliding. While hidden it keeps its draft text, attachments and selected mode tab. If it had keyboard focus when Planning was selected, it gets focus back when it shows again.
+            - **`Body.contents`:** the chat input's entry now names Planning as the one tab without it.
+            - **`Planning.description`:** the board now reaches "down to the bottom of the body" instead of down to the chat input.
+            - **`Planning.layout`:** the story panel's height wasn't in `Planning.description` as the prompt said. It was in this section, so I changed it here to reach the bottom of the body.
+
+            The code should follow these anchors: `.claude/reference/scope/application/Body.md#tabs` and `#contents`, and `.claude/reference/scope/planning/index.md#description` and `#layout`.
+            \\\
+
+    sentFrom: HideTheChatInputOnThePlanningTab
+
+    model: opus

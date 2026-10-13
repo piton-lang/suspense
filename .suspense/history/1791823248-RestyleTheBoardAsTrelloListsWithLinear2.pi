@@ -1,0 +1,69 @@
+
+export anchor RestyleTheBoardAsTrelloListsWithLinear2:
+    userPrompt:
+        \\\
+        Planning's board looks like Trello and reads like Linear, as spec/scope/planning/index.pi#Planning.layout and spec/scope/planning/index.pi#Planning.parts now describe. Each column is a Trello-style list: a rounded container, corners 8 pixels, on a surface of its own one step from the base (recessed, per spec/ui/theme/index.pi#Theme.surfaces), with its heading and cards inside. This replaces the rule that a column has no background. Each heading reads like a Linear group heading: a small status icon for the column, its name, its muted count, and its labelled actions. Cards are quieter and denser, in Linear's way: the title is primary, and beneath it sits a single muted property row with the mode pill, step count, attachments, and status as small items. Hovering raises a card one surface step. Focus shows the accent ring, and the open story keeps its accent line. These stay three distinct steps, per spec/ui/theme/index.pi#Theme.hierarchy. The mode's colour comes from spec/scope/prompt-mode/modes/index.pi#PromptModes.colours. The spec has nothing yet on per-column status icons, so that part is new. Everything uses theme roles in both dark and light mode. Update the spec first, then make src/planning.rs match it.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Planning's board looks like Trello and reads like Linear, as spec/scope/planning/index.pi#Planning.layout and spec/scope/planning/index.pi#Planning.parts now describe. Each column is a Trello-style list: a rounded container, corners 8 pixels, on a surface of its own one step from the base (recessed, per spec/ui/theme/index.pi#Theme.surfaces), with its heading and cards inside. This replaces the rule that a column has no background. Each heading reads like a Linear group heading: a small status icon for the column, its name, its muted count, and its labelled actions. Cards are quieter and denser, in Linear's way: the title is primary, and beneath it sits a single muted property row with the mode pill, step count, attachments, and status as small items. Hovering raises a card one surface step. Focus shows the accent ring, and the open story keeps its accent line. These stay three distinct steps, per spec/ui/theme/index.pi#Theme.hierarchy. The mode's colour comes from spec/scope/prompt-mode/modes/index.pi#PromptModes.colours. The spec has nothing yet on per-column status icons, so that part is new. Everything uses theme roles in both dark and light mode. Update the spec first, then make src/planning.rs match it.
+            \\\
+        result:
+            \\\
+            I've updated the Planning spec in `spec/scope/planning/index.pi`. `piton check` reports no problems, `piton build` succeeded, and the changes appear in `.claude/reference/scope/planning/index.md`.
+
+            - **Stories:** a card now shows the drag grip and the title as its one primary line. Beneath the title is a single muted property row: the mode pill in the mode's colour, the step count, the attachment icon, and, once sent, the status at the row's right.
+            - **Layout:** each column is now a Trello-style list on the theme's recessed surface, corners rounded 8 pixels, with no border and its heading and cards inside. This replaces the "no background" rule. Each column scrolls inside the list, with its scrollbar inside the list too. The heading reads like a Linear group heading: a 14-pixel status icon, the name in primary semibold text, the muted count, and the labelled actions.
+            - **Parts:** there are now five parts instead of four, all drawn in theme roles in dark and light mode.
+              - **New "list" part:** this holds the new status icons, one per column:
+                - Backlog: a dashed circle in tertiary text.
+                - Next sprint: an empty circle in secondary text.
+                - Current sprint: a half-filled circle in the accent.
+                - Done: a filled circle with a check in the success colour.
+                - Findings: a magnifying glass in secondary text.
+              - **Story card:** denser padding (8 pixels top and bottom, 10 at the sides), a 20-pixel property row 4 pixels below the title, and three distinct states. Hover moves it to the hover surface. The open story keeps a 3-pixel accent line on its left edge. Focus draws a 2-pixel accent ring on top of either.
+
+            For the code step, `src/planning.rs` should follow these sections of `.claude/reference/scope/planning/index.md`:
+            - `#layout`, for the list container and the heading row.
+            - `#parts`, for the list's measurements and status icons, and the story card's measurements, property row and hover, open and focus states.
+            - `#stories`, for what a card shows and in what order.
+
+            Mode colours come from `#colours` in `.claude/reference/scope/prompt-mode/modes/index.md`, and surfaces from `#surfaces` in `.claude/reference/ui/theme/index.md`.
+            \\\
+
+    sentFrom: RestyleTheBoardAsTrelloListsWithLinear
+
+    model: opus

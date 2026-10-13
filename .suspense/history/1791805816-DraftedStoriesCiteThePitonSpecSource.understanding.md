@@ -1,0 +1,6 @@
+- [Each spec citation links to an element in the Piton source, file.pi#Element, with a short line, or No match](.claude/reference/scope/planning/index.md#spec-grounding)
+- [Citations are checked against the Piton source on arrival: the file exists and defines the element](.claude/reference/scope/planning/index.md#spec-grounding)
+- [The drafter learns the spec only from the compiled reference or piton slice, never the Piton source](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#reading-the-spec)
+- [The suspense-story format holds a spec list, explained with an example](.claude/reference/scope/planning/index.md#proposals)
+- [planning.pi asks for citations as links into the Piton source](.claude/reference/scope/harness-integration/baked-prompts/index.md#prompts)
+- [A Code run can't read the spec location](.claude/reference/scope/sandbox/index.md#profiles)

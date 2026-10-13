@@ -1,0 +1,45 @@
+
+export anchor Story_f229d89d04dc851c:
+    userPrompt:
+        \\\
+        Right-clicking a story, or any selection of stories, offers "Draft with
+        agent". It sends each story to the agent in a draft run of its own, and
+        all the runs go in parallel. This builds on the Draft column from the
+        story before; it is meant mainly for Draft stories, but works on any
+        story in Draft, the Backlog, or Next sprint. The spec has nothing yet on
+        drafting several stories at once, on this menu item, or on where a
+        story's proposals wait, so all of that is new.
+
+        - A card's menu, which right-click opens at the pointer as
+          spec/scope/planning/index.pi#Planning.parts says, has "Draft with
+          agent". With several cards selected, right-clicking a selected card
+          drafts the whole selection, and the bulk bar has the same button.
+        - Each story drafts as "Ask agent" drafts an open story
+          (spec/scope/planning/index.pi#Planning.drafting). It runs on its own,
+          with no session, and uses the planning prompt in
+          spec/scope/harness-integration/baked-prompts/index.pi#BakedSystemPrompts.prompts.
+          The run is told the story's title and prompt and asked to turn it into
+          a full story: a fuller prompt, the mode that fits, steps, and spec
+          citations, grounded as
+          spec/scope/planning/index.pi#Planning.specGrounding says.
+        - The runs go at the same time, none waiting on another. While a story
+          drafts, its card shows the loading state
+          (spec/scope/planning/index.pi#Planning.states), "Drafting…" with a
+          spinner, plus a Stop item in its menu. A failed run shows its error on
+          that card, with "Try again".
+        - The side panel holds only one thing at a time
+          (spec/scope/planning/index.pi#Planning.layout), so the drafts never
+          take it over. When a run ends, its card shows how many proposals are
+          waiting, as "3 proposals". Opening the story shows them, as proposal
+          cards (spec/scope/planning/index.pi#Planning.proposalCards), beside
+          or beneath the story. They are kept until each one is decided, across
+          reloads.
+        - As spec/scope/planning/index.pi#Planning.proposals says, nothing
+          reaches the plan until it is accepted. Accepting rewrites the story
+          as proposed, or adds steps to it. A Draft story whose proposal is
+          accepted moves to the end of the Backlog.
+        \\\
+
+    mode: combined
+
+    model: opus

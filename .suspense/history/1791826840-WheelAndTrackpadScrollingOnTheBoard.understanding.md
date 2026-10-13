@@ -1,0 +1,7 @@
+- [The board has 24 pixels of padding at its top, sides, and foot, and its columns are 320 pixels wide and 16 pixels apart](.claude/reference/scope/planning/index.md#layout)
+- [Each column scrolls up and down on its own, its heading staying at its top, with the Scrollbar along its right while it holds more than fits](.claude/reference/scope/planning/index.md#layout)
+- [The board scrolls sideways only while its columns are wider than the tab, with the Scrollbar along its foot](.claude/reference/scope/planning/index.md#layout)
+- [The side panel scrolls up and down on its own and never covers the board](.claude/reference/scope/planning/index.md#layout)
+- [The pause bar runs across the top of the board, above every column](.claude/reference/scope/planning/index.md#layout)
+- [The bulk bar runs across the board's foot, beneath its columns, while any card is selected](.claude/reference/scope/planning/index.md#parts)
+- [Left and Right in a column scroll the board sideways to show the column focus moves to](.claude/reference/scope/planning/index.md#keyboard)

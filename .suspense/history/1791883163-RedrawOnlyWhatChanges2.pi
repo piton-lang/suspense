@@ -1,0 +1,142 @@
+
+export anchor RedrawOnlyWhatChanges2:
+    userPrompt:
+        \\\
+        The window stays fast while something animates or updates. A spinner turning, a
+        running task's time counting up every second, as
+        spec/scope/prompt-mode/message-list/Status.pi#MessageList.status says, or a
+        reply streaming in redraws only the view that shows it. It never redraws the
+        rest of the body, the tab bar, the sidebars, the Tasks tab, the chat input, or
+        an open Planning board.
+
+        The spec has nothing on this for the window as a whole yet, so it is new. Add
+        it as a behaviour of the application in
+        spec/scope/application/index.pi#Application, next to its other behaviours. It
+        extends rules the spec already has for single parts:
+        spec/ui/components/table/Drawing.pi#Table.drawing for a table's rows,
+        spec/ui/components/task-table/Scrolling.pi#TaskTable.scrolling for streamed
+        output, spec/scope/prompt-mode/message-list/Scrolling.pi#MessageList.scrolling
+        for the message list, and
+        spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.virtualized for
+        running rows. spec/scope/application/Body.pi#Body.sliding must keep holding: a
+        slide still moves every part of the body together, frame by frame.
+
+        Today no view in the window is drawn as a cached view, so every frame rebuilds
+        everything from the main window down. Split the window into views that are
+        each drawn again only when their own state changes:
+        - the body's tab bar, where the Chat tab and task tabs show their spinners
+        - the message list
+        - each task's output
+        - the Tasks tab
+        - the chat input
+        - each sidebar
+        - the Planning board
+
+        Spinners and ticking times then redraw only the views they are in.
+
+        Add a test showing that, while a task runs and nothing else changes, the Tasks
+        tab, the chat input and the sidebars are not drawn again from one frame to the
+        next. The test should also show that a right sidebar sliding out still lays out
+        the tab bar, the message list and the chat input at each width as it goes.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The window stays fast while something animates or updates. A spinner turning, a
+            running task's time counting up every second, as
+            spec/scope/prompt-mode/message-list/Status.pi#MessageList.status says, or a
+            reply streaming in redraws only the view that shows it. It never redraws the
+            rest of the body, the tab bar, the sidebars, the Tasks tab, the chat input, or
+            an open Planning board.
+
+            The spec has nothing on this for the window as a whole yet, so it is new. Add
+            it as a behaviour of the application in
+            spec/scope/application/index.pi#Application, next to its other behaviours. It
+            extends rules the spec already has for single parts:
+            spec/ui/components/table/Drawing.pi#Table.drawing for a table's rows,
+            spec/ui/components/task-table/Scrolling.pi#TaskTable.scrolling for streamed
+            output, spec/scope/prompt-mode/message-list/Scrolling.pi#MessageList.scrolling
+            for the message list, and
+            spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.virtualized for
+            running rows. spec/scope/application/Body.pi#Body.sliding must keep holding: a
+            slide still moves every part of the body together, frame by frame.
+
+            Today no view in the window is drawn as a cached view, so every frame rebuilds
+            everything from the main window down. Split the window into views that are
+            each drawn again only when their own state changes:
+            - the body's tab bar, where the Chat tab and task tabs show their spinners
+            - the message list
+            - each task's output
+            - the Tasks tab
+            - the chat input
+            - each sidebar
+            - the Planning board
+
+            Spinners and ticking times then redraw only the views they are in.
+
+            Add a test showing that, while a task runs and nothing else changes, the Tasks
+            tab, the chat input and the sidebars are not drawn again from one frame to the
+            next. The test should also show that a right sidebar sliding out still lays out
+            the tab bar, the message list and the chat input at each width as it goes.
+            \\\
+        result:
+            \\\
+            I added a new **Redrawing** behaviour to `Application`, next to Finding Programs in `spec/scope/application/index.pi`. `piton check` reports no problems and `piton build` wrote the reference cleanly.
+
+            It says the window is split into views that are each drawn again only when their own state changes. Nothing is rebuilt from the main window down on every frame anymore. The views are:
+            - the body's tab bar, with the Chat tab and task tab spinners
+            - the message list
+            - each task's output
+            - the Tasks tab
+            - the chat input
+            - each sidebar
+            - the Planning board
+
+            A spinner, a running task's ticking time or a streaming reply redraws only the view that shows it. The new section links to the existing rules for single parts as the same rule applied to the whole window: table drawing, the task table's scrolling, the message list's scrolling and status, and the Tasks tab's virtualized rows. It also keeps `Body.sliding`: a view whose width changes during a slide is laid out again at each width, so drawing only on a view's own changes never leaves it at its old width. The required test is written into the section.
+
+            The code should follow `.claude/reference/scope/application/index.md#redrawing`, plus the pages it links to:
+            - `scope/application/Body.md#sliding`
+            - `ui/components/table/Drawing.md#table-drawing`
+            - `ui/components/task-table/Scrolling.md#task-table-scrolling`
+            - `scope/prompt-mode/message-list/Scrolling.md#message-list-scrolling`
+            - `scope/prompt-mode/message-list/Status.md#message-list-status`
+            - `ui/components/right-sidebar/tasks/index.md#virtualized`
+
+            In code terms, each of those views becomes its own cached view, redrawn only when its own state changes. Add a test showing that while a task runs and nothing else changes, the Tasks tab, the chat input and the sidebars don't redraw between frames. The same test should show that a right sidebar sliding out still lays out the tab bar, the message list and the chat input at each width as it goes.
+            \\\
+
+    sentFrom: RedrawOnlyWhatChanges
+
+    model: opus

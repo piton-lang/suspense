@@ -1,0 +1,93 @@
+
+export anchor Story_f77f5431ee6dd24a:
+    userPrompt:
+        \\\
+        The window stays fast while something animates or updates. A spinner turning, a
+        running task's time counting up every second, as
+        spec/scope/prompt-mode/message-list/Status.pi#MessageList.status says, or a
+        reply streaming in redraws only the view that shows it. It never redraws the
+        rest of the body, the tab bar, the sidebars, the Tasks tab, the chat input, or
+        an open Planning board.
+
+        The spec has nothing on this for the window as a whole yet, so it is new. Add
+        it as a behaviour of the application in
+        spec/scope/application/index.pi#Application, next to its other behaviours. It
+        extends rules the spec already has for single parts:
+        spec/ui/components/table/Drawing.pi#Table.drawing for a table's rows,
+        spec/ui/components/task-table/Scrolling.pi#TaskTable.scrolling for streamed
+        output, spec/scope/prompt-mode/message-list/Scrolling.pi#MessageList.scrolling
+        for the message list, and
+        spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.virtualized for
+        running rows. spec/scope/application/Body.pi#Body.sliding must keep holding: a
+        slide still moves every part of the body together, frame by frame.
+
+        Today no view in the window is drawn as a cached view, so every frame rebuilds
+        everything from the main window down. Split the window into views that are
+        each drawn again only when their own state changes:
+        - the body's tab bar, where the Chat tab and task tabs show their spinners
+        - the message list
+        - each task's output
+        - the Tasks tab
+        - the chat input
+        - each sidebar
+        - the Planning board
+
+        Spinners and ticking times then redraw only the views they are in.
+
+        Add a test showing that, while a task runs and nothing else changes, the Tasks
+        tab, the chat input and the sidebars are not drawn again from one frame to the
+        next. The test should also show that a right sidebar sliding out still lays out
+        the tab bar, the message list and the chat input at each width as it goes.
+        \\\
+
+    mode: combined
+
+    model: opus
+
+    addedSteps:
+        step1:
+            \\\
+            mode: code
+            model: opus
+
+            Each frame of the Tasks tab costs the same with ten thousand previous tasks as
+            with ten, as spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.virtualized
+            says. That covers the work done before any row is drawn, not just the drawing.
+            Make clear in TasksTab.virtualized that working out the list's rows, the
+            groups, chains, filters, the day dividers of
+            spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.days, and which row
+            the scroll is kept on, is done again only when a task is added, removed, or
+            changes status, when a filter changes, when a section opens or closes, or at
+            midnight. A spinner or a running row's time ticking never redoes it.
+
+            Today every frame rebuilds a row for every task in timeline_rows, works out the
+            chain layout more than once, finds the previous tasks by checking each task
+            against a list of the others (cost grows with the square of the task count),
+            and searches the whole list by key for the row at the top. Keep the list of
+            rows and where each lies until something it depends on changes, and find the
+            top row and the pinned headings from the scroll position, without searching.
+            Add a test that opens the tab with ten thousand previous tasks and a running
+            task, and shows that a tick redoes none of this work.
+            \\\
+        step2:
+            \\\
+            mode: code
+            model: opus
+
+            However many stories a Planning column holds, drawing the board costs no more
+            than drawing the cards in view. Done and the Backlog only grow, and the board
+            stays as smooth with a thousand stories as with ten. The spec has nothing on
+            how a long column is drawn yet, so this is new: add it to
+            spec/scope/planning/index.pi#Planning.layout, in the same terms
+            spec/ui/components/table/Drawing.pi#Table.drawing uses for a table's rows.
+
+            Today each column is a plain scrolling list of every card. Make each column
+            lay out only the cards in view and a few either side, measuring the rest over
+            the following frames, as the table's rows are measured, so the column's
+            scrollbar holds still. Everything in spec/scope/planning/index.pi#Planning.motion
+            must keep working: the drag gap and placeholder, cards sliding about 150 ms when
+            moved, added, or deleted, the open story's card kept in view, and a change above
+            the view never moving the cards in it. Scrolling to a card, as when a story is
+            opened from outside the board, jumps straight to it without drawing the cards
+            in between.
+            \\\

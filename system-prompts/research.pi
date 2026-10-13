@@ -1,0 +1,30 @@
+// The prompt for Planning's research: a read-only investigation of a topic,
+// giving findings rather than changes. The request, the stories in the plan,
+// the story it was asked from where there is one, the reply asked for, with
+// the grounding of planning.pi that any proposals it ends with meet, then the
+// topic under its heading.
+
+export anchor Research:
+    request:
+        Investigate the topic below in this project, and on the web where it
+        helps, before anything is planned or built. Read as much as you need,
+        but change nothing: no files written, no commands that change
+        anything. This is research, not work: the person reads what you find
+        and decides what to do.
+
+    stories: The stories in the plan, by id, that a proposal can be added to
+
+    about: The story this research was asked from
+
+    reply:
+        Reply with your findings as a markdown document: what you found, and
+        where, linking each file you read with its path and line numbers;
+        what you are unsure of; and what you would suggest. Where a
+        suggestion is a concrete task, you may end with proposals, each a
+        fenced code block whose info string is suspense-story, holding a line
+        each for its title, its mode, and its target, new for a new story or
+        the id of the story to add to, then a spec line followed by its
+        citations, one per line, each begun with a dash, grounded as below,
+        then a blank line and its prompt, as this one is:
+
+    topic: What should be looked into

@@ -1,0 +1,17 @@
+
+export anchor Story_00f40bea2f3f63c7:
+    userPrompt:
+        \\\
+        Once a sprint is done, it can always be closed. Read [Sprint](.claude/reference/scope/planning/index.md#sprint), [Auto Start](.claude/reference/scope/planning/index.md#auto-start) and [States](.claude/reference/scope/planning/index.md#states) first.
+
+        Today "Close sprint" only appears on Current sprint's heading once every story there has ended. A story whose task can't be found reads as Queued forever (`status` in src/planning.rs). A story that was never sent, because `send_named` skipped its empty prompt, has no task at all. Either one keeps `sprint_ended` false, so the sprint can never be closed. The spec has nothing on either case yet, so this part is new. Specify it in [Sprint](.claude/reference/scope/planning/index.md#sprint) and then make the code match:
+
+        - A story in Current sprint whose task no longer exists counts as ended and not Done. Its row shows that its task is gone (not "Queued"), and Close sprint sends it back to the start of Next sprint, as it does with failed and cancelled stories.
+        - Send sprint never moves a story it didn't send into Current sprint. A story with an empty title and prompt stays in Next sprint.
+        - [Auto Start](.claude/reference/scope/planning/index.md#auto-start) treats a story with a missing task as it treats a failed one: the next sprint doesn't start by itself, and the switch's row says why.
+        - Closing still saves the sections to `order.json`, as [Project Data](.claude/reference/scope/project-data/index.md#contents) says. After a reload or restart, a finished sprint can still be closed.
+        \\\
+
+    mode: combined
+
+    model: opus

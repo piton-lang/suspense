@@ -26,6 +26,13 @@ pub enum AnswerPart {
         answers: Vec<String>,
         closed: bool,
     },
+    /// A story proposed for the plan, as the PlanningScope's proposals say:
+    /// what its block holds, none while it holds nothing yet, and whether
+    /// its block has closed.
+    Story {
+        proposal: Option<crate::planning::Proposal>,
+        closed: bool,
+    },
 }
 
 /// The mode a `suspense-prompt` block names, if it is one of the five.
@@ -43,7 +50,9 @@ pub fn mode_named(name: &str) -> Option<SendMode> {
 /// Whether `text` might hold a block for a card, so text without any is
 /// shown as ever, untouched.
 pub fn has_blocks(text: &str) -> bool {
-    text.contains("suspense-prompt") || text.contains("suspense-question")
+    text.contains("suspense-prompt")
+        || text.contains("suspense-question")
+        || text.contains("suspense-story")
 }
 
 /// A fence opening a code block: its character, how many of them, and its
@@ -84,7 +93,10 @@ pub fn split(text: &str) -> Vec<AnswerPart> {
         };
         let mut words = info.split_whitespace();
         let kind = words.next().unwrap_or_default();
-        if kind != "suspense-prompt" && kind != "suspense-question" {
+        if !matches!(
+            kind,
+            "suspense-prompt" | "suspense-question" | "suspense-story"
+        ) {
             in_code = Some((c, count));
             markdown.push_str(line);
             continue;
@@ -108,6 +120,11 @@ pub fn split(text: &str) -> Vec<AnswerPart> {
             AnswerPart::Prompt {
                 mode,
                 text: body,
+                closed,
+            }
+        } else if kind == "suspense-story" {
+            AnswerPart::Story {
+                proposal: crate::planning::parse_story_block(&body),
                 closed,
             }
         } else {

@@ -42,12 +42,17 @@ export ui-component ChatInput:
         shows. The preview shows in the same box, its content inset 8 pixels
         all round.
 
-        At the right, a column of three buttons, 88 pixels wide, 8 pixels
+        At the right, a column of three buttons, at least 88 pixels wide, and
+        as wide as the send button needs to show its longest label, "Send to
+        task", with its icon and its split chevron, in full, so its width
+        never changes as its label does and no label in it is ever cut off
+        with an ellipsis; the text input takes the room left. The buttons are
+        8 pixels
         apart, each as tall as the input's single row: Send at the top, then
         Queue, then Preview, each the column's full width, flat, with no
         border or shadow and corners rounded 2 pixels. Send has a paper-plane
         send icon before its label, in semibold text, and keeps its split
-        chevron, the send menu staying the only way to reach "Send to task".
+        chevron, its menu still offering "Send to task".
         Queue and Preview are flat buttons on the theme's base surface,
         #444444 in dark mode, their labels in the theme's text colour, a step
         lighter on hover, doing what the
@@ -70,6 +75,19 @@ export ui-component ChatInput:
         both busy. Otherwise it reads "Send", so Spec reads "Send" while only
         a Code task runs. On the Ask tab it always reads "Send", because a question is
         never queued. The button is only disabled while the input is empty.
+
+        On the Code tab, while the send menu offers "Send to task", as its
+        options say, the running task being a Code task in the code lane, the
+        send button reads "Send to task" instead of "Queue", its tooltip
+        saying it sends the prompt to the running task, and it and
+        <Ctrl+Enter> (<Cmd+Enter> on macOS) send to the task just as that
+        option does, rather than queueing. The Queue button and the menu's
+        "Queue" still queue the prompt. While the code lane is busy any other
+        way, a Freeform task running, a Code task whose harness can't be fed
+        more, a task building or compiling, or the previous tasks expanded
+        over its output, the button reads "Queue" and the prompt queues, as
+        ever. The Chain, Spec, Freeform, and Ask tabs never send to a task
+        this way.
 
     instructions:
         - @{ChatInputInstruction}
@@ -97,7 +115,7 @@ export ui-component ChatInput:
             The menu's options, in order:
             - "Preview Compiled Prompt", with an eye icon
             - "Queue", with a list icon, which queues the prompt rather than sending it, even while the harness is free, as the queue of the @{PromptEditor} says; like the send button, it clears the input. On the Ask tab it is disabled, since a question never queues, and the highlight passes over it
-            - "Send to task", with a send icon, only while a task is running with a harness that can be fed more, as the @{HarnessIntegration} says, and its output is shown, the previous tasks not expanded over it; never on the Ask tab, where a question runs on its own. It sends what is typed, and what is attached, to the running task instead of queueing it, as the @{PromptSending} says, and clears the input as sending does. <Ctrl+Enter> (<Cmd+Enter> on macOS) still queues, as the send button does
+            - "Send to task", with a send icon, only while a task is running with a harness that can be fed more, as the @{HarnessIntegration} says, and its output is shown, the previous tasks not expanded over it; never on the Ask tab, where a question runs on its own. It sends what is typed, and what is attached, to the running task instead of queueing it, as the @{PromptSending} says, and clears the input as sending does. On the Code tab, while it is offered for a Code task running in the code lane, it is also what the send button and <Ctrl+Enter> (<Cmd+Enter> on macOS) do, as the description says; on the other tabs they still queue
 
     editingQueued:
         Editing a queued prompt, from the queue of the @{PromptEditor}, sets
@@ -256,6 +274,27 @@ export ui-component ChatInput:
 
             It reads what the selected tab's mode is for, as the
             @{PromptModes} says.
+
+        fit:
+            The bar is exactly as wide as the chat input, however narrow the
+            chat input is, as beside a side panel or in a small window. Nothing
+            in it ever reaches past the chat input's right edge or is drawn
+            over what lies beside it, and its bottom line ends where the chat
+            input does. Nothing in it is clipped mid-label or overlaps another
+            control.
+
+            When the bar is too narrow for everything, it gives way in this
+            order, each step only once the one before is not enough, and comes
+            back in the reverse order as the bar widens: first the help text is
+            cut off, then left out; then New conversation and the Slice toggle
+            show only their icons, the model and effort pickers only their
+            chevrons and short names, and the context figure and usage summary
+            only their numbers, without "Context" and "Usage", each keeping its
+            full wording in its tooltip; then the controls at the right of the
+            tabs move onto a second line of the bar, beneath the tabs,
+            right-aligned, the bar growing to two lines and the body beneath it
+            moving down, rather than any being hidden. The tabs themselves never
+            shrink, wrap, or lose their labels.
 
         session:
             At the far right of the bar, at the right end of the help text,

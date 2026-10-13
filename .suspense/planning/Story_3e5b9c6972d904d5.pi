@@ -1,0 +1,36 @@
+
+export anchor Story_3e5b9c6972d904d5:
+    userPrompt:
+        \\\
+        When "Draft with agent" is run on a card in the Draft column, the stories
+        it proposes are created as soon as its run ends, with nothing to accept.
+
+        Once this is done:
+        - Each story the draft proposed is added at the end of the Backlog,
+          marked "From agent", as accepting it would add it per
+          spec/scope/planning/index.pi#Planning.draftingWithAgent. That is the
+          first piece with its Spec follow-up step, then each other piece, in the
+          order given.
+        - The Draft card stays in Draft and is marked "Drafted" in its property
+          row, where "3 proposals" shows today.
+        - A proposal that fails the checks in
+          spec/scope/planning/index.pi#Planning.specGrounding is not created. It
+          stays on the card as today, in the warning colour, with "Draft again".
+        - A run that proposed nothing, or that failed, leaves the card unmarked,
+          as spec/scope/planning/index.pi#Planning.states says.
+        - Drafting a "Drafted" card again drafts it again as before.
+        - Stories drafted in the Backlog or Next sprint, and drafts started with
+          "Ask agent", still wait to be accepted.
+
+        This is an exception to the rule in
+        spec/scope/planning/index.pi#Planning.proposals that nothing reaches the
+        plan until it is accepted, so say so there. The spec has nothing on a
+        "Drafted" mark yet, so that part is new. Add it to
+        spec/scope/planning/index.pi#Planning.draftingWithAgent and
+        spec/scope/planning/index.pi#Planning.states, then change the code to
+        match.
+        \\\
+
+    mode: combined
+
+    model: opus

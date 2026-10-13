@@ -162,6 +162,11 @@ enum Command {
     NewProject,
     ImportProject,
     OpenProject,
+    OpenPlanning,
+    NewStory,
+    SendSprint,
+    DraftStories,
+    Research,
     BuildSpec,
     NewScope,
     NewConcept,
@@ -230,6 +235,13 @@ pub struct Ribbon {
 
 impl EventEmitter<RevealJob> for Ribbon {}
 impl EventEmitter<RunCommand> for Ribbon {}
+impl EventEmitter<OpenedPlanning> for Ribbon {}
+
+/// Emitted as the Planning tab is opened, by a click, Alt+2, or Ctrl/Cmd+click,
+/// for Planning's tab in the body to be opened and selected, as Open Planning
+/// does, by the same route.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OpenedPlanning;
 
 /// Emitted by the Code tab's run commands.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -245,6 +257,9 @@ impl Ribbon {
         cx.observe_global::<ProjectDirectory>(|_, cx| cx.notify())
             .detach();
         cx.observe_global::<crate::run_targets::ProjectTargets>(|_, cx| cx.notify())
+            .detach();
+        // Send Sprint follows what waits in the plan's next sprint.
+        cx.observe_global::<crate::planning::SprintPending>(|_, cx| cx.notify())
             .detach();
         Self {
             // Always Project at launch: which tab was last open isn't kept.
@@ -438,8 +453,9 @@ impl Ribbon {
 
     /// A tab was clicked: it opens alone, and a double-click collapses the
     /// ribbon; with `add`, from Ctrl/Cmd+click, it opens alongside the others,
-    /// or closes if it was open, unless it is the only one. (Collapsed, there
-    /// are no tabs to click.)
+    /// or closes if it was open, unless it is the only one. Planning, opened
+    /// either way, opens Planning's tab in the body. (Collapsed, there are no
+    /// tabs to click.)
     pub(crate) fn tab_clicked(
         &mut self,
         tab: RibbonTab,
@@ -447,6 +463,8 @@ impl Ribbon {
         add: bool,
         cx: &mut Context<Self>,
     ) {
+        // Ctrl/Cmd+clicked while open, Planning only closes, opening nothing.
+        let was_open = self.open_tabs.contains(&tab);
         if add {
             self.open_tabs = toggle_open(&self.open_tabs, tab);
         } else {
@@ -454,6 +472,9 @@ impl Ribbon {
             if clicks >= 2 && !self.collapsed {
                 self.toggle_collapsed(cx);
             }
+        }
+        if tab == RibbonTab::Planning && !(add && was_open) {
+            cx.emit(OpenedPlanning);
         }
         cx.notify();
     }
@@ -469,6 +490,9 @@ impl Ribbon {
             self.toggle_collapsed(cx);
         }
         self.select_tab(tab, cx);
+        if tab == RibbonTab::Planning {
+            cx.emit(OpenedPlanning);
+        }
     }
 
     /// Opens `tab` alone, expanding the ribbon if it is collapsed, as the
@@ -559,6 +583,11 @@ impl Ribbon {
                 .into_any_element(),
             Command::ImportProject => project_tab::import_project(button),
             Command::OpenProject => project_tab::open_project(button),
+            Command::OpenPlanning => planning_tab::open_planning(button, cx),
+            Command::NewStory => planning_tab::new_story(button, cx),
+            Command::SendSprint => planning_tab::send_sprint(button, cx),
+            Command::DraftStories => planning_tab::draft_stories(button, cx),
+            Command::Research => planning_tab::research(button, cx),
             Command::BuildSpec => spec_tab::build_spec(self, button, cx),
             Command::NewScope => spec_tab::new_scope(button, cx),
             Command::NewConcept => spec_tab::new_concept(button, cx),
@@ -678,6 +707,9 @@ impl Render for Ribbon {
         // handles its own clicks, so a double-click can be told apart: it
         // collapses the ribbon.
         let hover = tab_hover(cx);
+        let planning_paused = crate::project_directory::ProjectDirectory::get(cx).is_some()
+            && crate::planning::SprintPending::get(cx).paused;
+        let warning = cx.theme().warning;
         let tabs = RibbonTab::ALL
             .into_iter()
             .enumerate()
@@ -713,6 +745,19 @@ impl Render for Ribbon {
                         ))
                     })
                     .child(div().relative().text_color(label).child(tab.label()))
+                    // Planning paused for review: a warning dot on its tab.
+                    .when(tab == RibbonTab::Planning && planning_paused, |this| {
+                        this.child(gpui_kit::TestSupportExt::test_support(
+                            div()
+                                .id("ribbon-planning-paused")
+                                .absolute()
+                                .top(px(6.))
+                                .right(px(3.))
+                                .size(px(6.))
+                                .rounded_full()
+                                .bg(warning),
+                        ))
+                    })
                     .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                         this.tab_clicked(
                             tab,

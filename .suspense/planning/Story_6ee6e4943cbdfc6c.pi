@@ -1,0 +1,29 @@
+
+export anchor Story_6ee6e4943cbdfc6c:
+    userPrompt:
+        \\\
+        The Planning board's columns each scroll on their own, and the board scrolls
+        sideways, as spec/scope/planning/index.pi#Planning.layout says, with the
+        Scrollbar of spec/ui/components/scrollbar/index.pi#Scrollbar.track. The spec
+        doesn't yet say what the wheel and trackpad do on each part of the board, so
+        this is new behaviour. Once it's done:
+        - A vertical wheel turn or two-finger swipe over a column, its heading
+          included, scrolls only that column. It never scrolls the board sideways,
+          and it never passes on to the board when the column is at its end or has
+          nothing to scroll.
+        - Shift+wheel, or a sideways trackpad swipe, anywhere on the board, columns
+          included, scrolls the board sideways while its columns are wider than the
+          tab. While they fit, it does nothing.
+        - A vertical wheel turn over the board outside any column (its padding, the
+          16-pixel gaps between columns, or the space beside the last column)
+          scrolls the board sideways, as in Trello.
+        - A diagonal trackpad swipe over a column scrolls it up or down and the
+          board sideways together, each by its own share of the swipe.
+        - Scrolling over the side panel, the pause bar, or the bulk bar never moves
+          the board or a column.
+        Write this into Planning's layout section first, then make the board match.
+        \\\
+
+    mode: combined
+
+    model: opus

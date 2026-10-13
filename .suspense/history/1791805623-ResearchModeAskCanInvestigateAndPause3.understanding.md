@@ -1,0 +1,8 @@
+- [Research is a read-only Question run producing findings saved in .suspense/planning/research/](.claude/reference/scope/planning/index.md#research)
+- [Once research ends, planning pauses and Send sprint is disabled](.claude/reference/scope/planning/index.md#paused)
+- [Only Resume or Approve and send sprint end the pause; nothing the agent does or time passing ends it](.claude/reference/scope/planning/index.md#paused)
+- [A Paused for review bar, a pause icon on the Planning tab, and a ribbon dot show the pause](.claude/reference/scope/planning/index.md#paused)
+- [The pause is saved in order.json and survives reloads and restarts](.claude/reference/scope/planning/index.md#paused)
+- [Next sprint never starts automatically while planning is paused](.claude/reference/scope/planning/index.md#auto-start)
+- [A queued prompt held, as one being edited, is never sent and its lane waits on it](.claude/reference/scope/prompt-mode/queue-list/index.md#editing)
+- [While paused, queued sprint stories and next steps are held; running ones finish](.claude/reference/scope/planning/index.md#paused)

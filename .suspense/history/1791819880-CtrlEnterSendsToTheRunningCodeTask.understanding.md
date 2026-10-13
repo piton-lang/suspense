@@ -1,0 +1,8 @@
+- ["Send to task" is offered only while a task runs with a harness that can be fed more and its output is shown, the previous tasks not expanded over it, never on Ask](.claude/reference/scope/prompt-mode/chat-input/index.md#options)
+- [Sending to a task goes to the latest task's run as a message, compiled like any prompt, spec not built first, no systemPrompt](.claude/reference/scope/prompt-mode/sending/index.md#sending-to-atask)
+- [A message whose task ends before it can be sent is queued instead, as a task](.claude/reference/scope/prompt-mode/sending/index.md#sending-to-atask)
+- [On Code the send button reads "Queue" while a task runs in the code lane; otherwise "Send"](.claude/reference/scope/prompt-mode/chat-input/index.md#description)
+- [A lane is busy while a task of its own is building, compiling, or running, or a Freeform task is; a task sent then queues](.claude/reference/scope/prompt-mode/sending/index.md#tasks)
+- [The Queue button in the column does what the menu's "Queue" does: queues even while the harness is free](.claude/reference/scope/prompt-mode/chat-input/index.md#description)
+- [The menu's "Queue" option queues the prompt and is disabled on Ask](.claude/reference/scope/prompt-mode/chat-input/index.md#options)
+- [While a queued prompt is edited, Ctrl+Enter or Save saves the edit and the send menu isn't offered](.claude/reference/scope/prompt-mode/chat-input/index.md#editing-queued)

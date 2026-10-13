@@ -1,0 +1,79 @@
+
+export anchor CtrlEnterSendsToTheRunningCodeTask2:
+    userPrompt:
+        \\\
+        On the Code tab of the [ChatInput](.claude/reference/scope/prompt-mode/chat-input/index.md#description), Ctrl+Enter (Cmd+Enter on macOS) and the send button should send to the running task, not queue, when all of these are true: a Code task is running in the code lane, its harness can be fed more, and its output is shown as the latest task. These are the same conditions under which the send menu offers "Send to task" ([Options](.claude/reference/scope/prompt-mode/chat-input/index.md#options)). The sending itself works exactly as [Sending To A Task](.claude/reference/scope/prompt-mode/sending/index.md#sending-to-atask) describes. In that state the send half of the [split button](.claude/reference/scope/prompt-mode/chat-input/index.md#split-button) reads "Send to task" (or similar), not "Queue", and its tooltip says so. The Queue button in the column and the menu's "Queue" option still queue the prompt, so queueing stays one click away. Remove the line under "Send to task" that says "<Ctrl+Enter> still queues, as the send button does", and replace it with the new default.
+
+        Everything else stays as it is now:
+        - When the code lane is busy for another reason, Ctrl+Enter queues as [Tasks](.claude/reference/scope/prompt-mode/sending/index.md#tasks) says. That covers a Freeform task running, a Code task whose harness can't be fed more, a task still building or compiling, and the previous tasks being expanded over its output.
+        - The Chain, Spec, Freeform and Ask tabs don't change.
+        - While a queued prompt is being edited, Ctrl+Enter still saves the edit ([Editing Queued](.claude/reference/scope/prompt-mode/chat-input/index.md#editing-queued)).
+
+        The spec has nothing called "send now" yet, so this story treats "send now" as "Send to task" and doesn't add a new option.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            On the Code tab of the [ChatInput](.claude/reference/scope/prompt-mode/chat-input/index.md#description), Ctrl+Enter (Cmd+Enter on macOS) and the send button should send to the running task, not queue, when all of these are true: a Code task is running in the code lane, its harness can be fed more, and its output is shown as the latest task. These are the same conditions under which the send menu offers "Send to task" ([Options](.claude/reference/scope/prompt-mode/chat-input/index.md#options)). The sending itself works exactly as [Sending To A Task](.claude/reference/scope/prompt-mode/sending/index.md#sending-to-atask) describes. In that state the send half of the [split button](.claude/reference/scope/prompt-mode/chat-input/index.md#split-button) reads "Send to task" (or similar), not "Queue", and its tooltip says so. The Queue button in the column and the menu's "Queue" option still queue the prompt, so queueing stays one click away. Remove the line under "Send to task" that says "<Ctrl+Enter> still queues, as the send button does", and replace it with the new default.
+
+            Everything else stays as it is now:
+            - When the code lane is busy for another reason, Ctrl+Enter queues as [Tasks](.claude/reference/scope/prompt-mode/sending/index.md#tasks) says. That covers a Freeform task running, a Code task whose harness can't be fed more, a task still building or compiling, and the previous tasks being expanded over its output.
+            - The Chain, Spec, Freeform and Ask tabs don't change.
+            - While a queued prompt is being edited, Ctrl+Enter still saves the edit ([Editing Queued](.claude/reference/scope/prompt-mode/chat-input/index.md#editing-queued)).
+
+            The spec has nothing called "send now" yet, so this story treats "send now" as "Send to task" and doesn't add a new option.
+            \\\
+        result:
+            \\\
+            I've updated the spec so that on the Code tab, Ctrl+Enter (Cmd+Enter on macOS) and the send button send to the running Code task instead of queueing it. `piton check` reports no problems and `piton build` succeeded.
+
+            What changed, in `spec/scope/prompt-mode/chat-input/index.pi` and `spec/scope/prompt-mode/sending/index.pi`:
+
+            - **[ChatInput Description](.claude/reference/scope/prompt-mode/chat-input/index.md#description)** has a new paragraph. It applies on the Code tab whenever the menu offers "Send to task" and the running task is a Code task in the code lane. Then:
+              - The send half of the split button reads "Send to task", and its tooltip says it sends the prompt to the running task.
+              - The send button and Ctrl+Enter both do what that menu option does.
+              - The Queue button and the menu's "Queue" still queue.
+
+              The paragraph also lists the other ways the code lane can be busy (a Freeform task running, a harness that can't be fed more, building or compiling, previous tasks expanded over the output). In those cases the button stays "Queue" and Ctrl+Enter queues. The other tabs never send to a task this way.
+            - **Paper-plane button:** the line saying the send menu is "the only way to reach Send to task" now just says its menu still offers "Send to task".
+            - **[Options](.claude/reference/scope/prompt-mode/chat-input/index.md#options):** the "Ctrl+Enter still queues" sentence is replaced with the new default, and says the other tabs still queue.
+            - **[Sending To A Task](.claude/reference/scope/prompt-mode/sending/index.md#sending-to-atask):** now names the Code tab's send button and Ctrl+Enter as ways to send to a task, alongside the menu option.
+
+            The code should follow those three anchors, plus [Editing Queued](.claude/reference/scope/prompt-mode/chat-input/index.md#editing-queued), which is unchanged. The menu isn't offered while a queued prompt is being edited, so Ctrl+Enter still saves the edit there.
+            \\\
+
+    sentFrom: CtrlEnterSendsToTheRunningCodeTask
+
+    model: opus

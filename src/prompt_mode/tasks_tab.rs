@@ -65,9 +65,168 @@ enum TimelineRow {
     Step(usize, StepRow),
 }
 
+/// The list's rows as last worked out, and where each lies, kept until
+/// what they show changes: a task added, removed, or changing status, a
+/// filter, a section opened or closed, the queue, or the day, so neither a
+/// frame nor a running row's time ticking works them out again, as the
+/// TasksTab's virtualized rows say.
+pub(super) struct Timeline {
+    rows: Vec<TimelineRow>,
+    /// Where Running's and Queued's headings are, and the first queued row.
+    running_at: usize,
+    queued_at: usize,
+    first_queued: usize,
+    /// Where the headings are, in order.
+    headings: Vec<usize>,
+    /// Where the day dividers are, in order, and where the dividers and the
+    /// headings are, which push a pinned day out.
+    days: Vec<usize>,
+    boundaries: Vec<usize>,
+    /// The queued prompts listed, by their place in the queue.
+    queued: Rc<Vec<usize>>,
+    /// Where each row is, by which row it is.
+    index: HashMap<RowKey, usize>,
+    /// How many tasks Previous lists.
+    previous: usize,
+    /// The day its dividers are labelled on.
+    today: chrono::NaiveDate,
+    /// How many tasks and queued prompts there were, and which sections
+    /// were open, as it was worked out: a change in these found at once,
+    /// before this PromptMode's change has been followed.
+    shape: (usize, usize, [bool; 3]),
+}
+
+impl Timeline {
+    /// How many rows the list has.
+    #[cfg(test)]
+    pub(super) fn len(&self) -> usize {
+        self.rows.len()
+    }
+}
+
+/// A running row, as its [`TimelineRow`] says, with whether a chain's steps
+/// follow it, or a step is its chain's last.
+#[derive(Clone)]
+enum RunningRow {
+    Task(usize, Option<StepKind>, bool),
+    Chain(usize, Vec<usize>, bool),
+    Step(usize, StepRow, bool),
+}
+
+/// Where the list last laid out its running rows, in the window, and the
+/// part of it rows show in, between the headings pinned at its top and its
+/// bottom.
+#[derive(Default)]
+pub(super) struct RunningRowsLayout {
+    rows: Vec<(RunningRow, Bounds<Pixels>)>,
+    clip: Option<Bounds<Pixels>>,
+}
+
+/// The Tasks tab's running rows, drawn over the list where it laid them out,
+/// as the TasksTab's virtualized rows say: their times and spinners update in
+/// place, drawing those rows again, never the rest of the tab, as the
+/// Application's Redrawing says. The list leaves their places empty.
+pub(super) struct RunningRows {
+    owner: WeakEntity<PromptMode>,
+    layout: Rc<RefCell<RunningRowsLayout>>,
+}
+
+impl RunningRows {
+    pub(super) fn new(owner: WeakEntity<PromptMode>, layout: Rc<RefCell<RunningRowsLayout>>) -> Self {
+        Self { owner, layout }
+    }
+}
+
+impl IntoElement for RunningRows {
+    type Element = Self;
+
+    fn into_element(self) -> Self {
+        self
+    }
+}
+
+impl Element for RunningRows {
+    type RequestLayoutState = ();
+    type PrepaintState = (Vec<AnyElement>, Option<Bounds<Pixels>>);
+
+    fn id(&self) -> Option<ElementId> {
+        Some("tasks-tab-running-rows".into())
+    }
+
+    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, ()) {
+        // Taking no room: each row is placed where the list left its place.
+        let style = Style {
+            position: Position::Absolute,
+            ..Style::default()
+        };
+        (window.request_layout(style, None, cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut (),
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        // The list was laid out just before, in this frame or as it was last.
+        let (rows, clip) = {
+            let layout = self.layout.borrow();
+            (layout.rows.clone(), layout.clip)
+        };
+        let (Some(clip), Some(owner)) = (clip, self.owner.upgrade()) else {
+            return (Vec::new(), None);
+        };
+        let mut drawn: Vec<(AnyElement, Bounds<Pixels>)> = owner.update(cx, |this, cx| {
+            rows.iter()
+                .filter_map(|(row, bounds)| Some((this.render_running_row(row, cx)?, *bounds)))
+                .collect()
+        });
+        window.with_content_mask(Some(ContentMask { bounds: clip }), |window| {
+            for (row, bounds) in &mut drawn {
+                row.layout_as_root(bounds.size.into(), window, cx);
+                row.prepaint_at(bounds.origin, window, cx);
+            }
+        });
+        (drawn.into_iter().map(|(row, _)| row).collect(), Some(clip))
+    }
+
+    fn paint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut (),
+        (rows, clip): &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let Some(clip) = *clip else {
+            return;
+        };
+        window.with_content_mask(Some(ContentMask { bounds: clip }), |window| {
+            for row in rows {
+                row.paint(window, cx);
+            }
+        });
+    }
+}
+
 /// Which row a row of the list is, whatever its place: what the list's
 /// scroll is kept on, so rows moving above it never shift the view.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum RowKey {
     Heading(Group),
     Day(String),
@@ -207,7 +366,7 @@ fn first_lines(text: &SharedString) -> SharedString {
 }
 
 /// The timeline's groups.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Group {
     Previous,
     Running,
@@ -307,6 +466,13 @@ pub(super) struct TasksTab {
     pub(super) filter_button: Rc<Cell<Option<Bounds<Pixels>>>>,
     /// The kind of time hovered in the open task's Time section.
     pub(super) time_hover: Option<crate::time_breakdown::Kind>,
+    /// Where the list last laid out its running rows, drawn over it there.
+    pub(super) running: Rc<RefCell<RunningRowsLayout>>,
+    /// The list's rows, kept until what they show changes.
+    timeline: RefCell<Option<Rc<Timeline>>>,
+    /// How many times the rows were worked out.
+    #[cfg(test)]
+    pub(super) timelines_built: Cell<usize>,
 }
 
 impl TasksTab {
@@ -337,7 +503,16 @@ impl TasksTab {
             filter_menu: false,
             filter_button: Rc::new(Cell::new(None)),
             time_hover: None,
+            running: Rc::default(),
+            timeline: RefCell::new(None),
+            #[cfg(test)]
+            timelines_built: Cell::new(0),
         }
+    }
+
+    /// Lets the rows be worked out again, what they show having changed.
+    pub(super) fn forget_rows(&self) {
+        self.timeline.borrow_mut().take();
     }
 
     /// Whether the queued prompt `id` is held, never sent: open here, being
@@ -614,20 +789,38 @@ impl PromptMode {
     /// The tasks the Previous group lists: every task that has run, none
     /// under way, nor any step of a chain running or queued.
     pub(super) fn previous_ixs(&self) -> Vec<usize> {
-        let held: Vec<usize> = self
-            .chains_where(|this, members| this.chain_state(members) != ChainState::Over)
-            .into_iter()
-            .flat_map(|(_, members)| members)
-            .collect();
+        self.previous_in(&chain_layout(&self.tasks))
+    }
+
+    /// The tasks the Previous group lists, the chains laid out as `layout`.
+    fn previous_in(&self, layout: &ChainLayout) -> Vec<usize> {
+        let mut held = vec![false; self.tasks.len()];
+        for (_, members) in self.chains_in(layout, |this, members| this.chain_state(members) != ChainState::Over) {
+            for ix in members {
+                if let Some(held) = held.get_mut(ix) {
+                    *held = true;
+                }
+            }
+        }
         (0..self.tasks.len())
-            .filter(|&ix| !self.tasks[ix].status.is_active() && !held.contains(&ix))
+            .filter(|&ix| !self.tasks[ix].status.is_active() && !held[ix])
             .collect()
     }
 
     /// Every chain, by its first step, with its steps, whose state `keep`
     /// keeps.
+    #[cfg(test)]
     fn chains_where(&self, keep: impl Fn(&Self, &[usize]) -> bool) -> Vec<(usize, Vec<usize>)> {
-        let layout = chain_layout(&self.tasks);
+        self.chains_in(&chain_layout(&self.tasks), keep)
+    }
+
+    /// Every chain laid out as `layout`, by its first step, with its steps,
+    /// whose state `keep` keeps.
+    fn chains_in(
+        &self,
+        layout: &ChainLayout,
+        keep: impl Fn(&Self, &[usize]) -> bool,
+    ) -> Vec<(usize, Vec<usize>)> {
         (0..layout.order.len())
             .filter_map(|place| {
                 let step = layout.steps[place].filter(|step| step.pos == 0)?;
@@ -647,7 +840,12 @@ impl PromptMode {
         let steps: Vec<&PromptTask> = members.iter().filter_map(|&ix| self.tasks.get(ix)).collect();
         // Under way, or between its steps while this session is still to
         // send the next: never over while a step it will run is to come.
-        if steps.iter().any(|task| task.status.is_active() || task.goes_on || task.held_for_fix) {
+        let awaiting_fix = members.iter().any(|&ix| self.awaiting_fix(ix));
+        if awaiting_fix
+            || steps
+                .iter()
+                .any(|task| task.status.is_active() || task.goes_on)
+        {
             return ChainState::Running;
         }
         // A step of it waiting in the queue, its first step having run: the
@@ -683,8 +881,7 @@ impl PromptMode {
     /// sent, then its own still to come, the one waiting in the queue and
     /// those not yet sent, then the steps added to it not yet sent; every
     /// step it will run, from the moment it is sent.
-    fn chain_step_rows(&self, head: usize, members: &[usize]) -> Vec<StepRow> {
-        let layout = chain_layout(&self.tasks);
+    fn chain_step_rows(&self, layout: &ChainLayout, head: usize, members: &[usize]) -> Vec<StepRow> {
         let mut rows: Vec<StepRow> = members
             .iter()
             .map(|&ix| StepRow::Sent(ix, layout.step_of(ix).map_or(StepKind::Spec, |step| step.kind)))
@@ -784,6 +981,8 @@ impl PromptMode {
     /// The tab, as the TasksTabScope says: the timeline, or the task open in
     /// its place.
     pub(super) fn render_tasks_tab(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        // The list lays out its running rows anew, if it shows.
+        *self.tasks_tab.running.borrow_mut() = RunningRowsLayout::default();
         let opened = self.tasks_tab.open.filter(|open| self.opened_exists(*open));
         let content = match opened {
             Some(open) => self.render_task_details(open, window, cx),
@@ -1131,9 +1330,80 @@ impl PromptMode {
     /// Previous, Running, and Queued, each headed by its label and count.
     /// With where Running's and Queued's headings are, and the first queued
     /// prompt's row.
-    fn timeline_rows(&self) -> (Vec<TimelineRow>, usize, usize, usize) {
+    /// The list's rows, worked out again only once what they show has
+    /// changed, or the day has.
+    pub(super) fn timeline(&self) -> Rc<Timeline> {
+        let today = chrono::Local::now().date_naive();
+        if let Some(timeline) = self.tasks_tab.timeline.borrow().as_ref()
+            && timeline.today == today
+            && timeline.shape == self.timeline_shape()
+        {
+            return timeline.clone();
+        }
+        let timeline = Rc::new(self.build_timeline(today));
+        #[cfg(test)]
+        self.tasks_tab
+            .timelines_built
+            .set(self.tasks_tab.timelines_built.get() + 1);
+        *self.tasks_tab.timeline.borrow_mut() = Some(timeline.clone());
+        timeline
+    }
+
+    /// How many tasks and queued prompts there are, and which sections are
+    /// open.
+    fn timeline_shape(&self) -> (usize, usize, [bool; 3]) {
+        let tab = &self.tasks_tab;
+        (
+            self.tasks.len(),
+            self.queue.len(),
+            [tab.previous_expanded, tab.running_expanded, tab.queued_expanded],
+        )
+    }
+
+    /// Works out the list's rows, and where its headings, dividers, and
+    /// queued rows lie, each chain's layout worked out once.
+    fn build_timeline(&self, today: chrono::NaiveDate) -> Timeline {
+        let (rows, running_at, queued_at, first_queued, previous) = self.timeline_rows(today);
+        let mut headings = Vec::new();
+        let mut days = Vec::new();
+        let mut boundaries = Vec::new();
+        let mut queued = Vec::new();
+        let mut index = HashMap::with_capacity(rows.len());
+        for (at, row) in rows.iter().enumerate() {
+            match row {
+                TimelineRow::Heading(..) => {
+                    headings.push(at);
+                    boundaries.push(at);
+                }
+                TimelineRow::Day(..) => {
+                    days.push(at);
+                    boundaries.push(at);
+                }
+                TimelineRow::Queued(place) => queued.push(*place),
+                _ => {}
+            }
+            index.entry(self.row_key(row)).or_insert(at);
+        }
+        Timeline {
+            rows,
+            running_at,
+            queued_at,
+            first_queued,
+            headings,
+            days,
+            boundaries,
+            queued: Rc::new(queued),
+            index,
+            previous,
+            today,
+            shape: self.timeline_shape(),
+        }
+    }
+
+    fn timeline_rows(&self, today: chrono::NaiveDate) -> (Vec<TimelineRow>, usize, usize, usize, usize) {
         let mut rows = Vec::new();
-        let previous = self.previous_ixs();
+        let layout = chain_layout(&self.tasks);
+        let previous = self.previous_in(&layout);
         let shown = self.task_visibility();
         let visible = |ix: usize| shown.as_ref().is_none_or(|shown| shown.get(ix) != Some(&false));
         // Previous, with its batch actions along its heading and its
@@ -1147,7 +1417,6 @@ impl PromptMode {
         rows.push(TimelineRow::Heading(Group::Previous, label));
         // Collapsed, its heading alone.
         if count > 0 && self.tasks_tab.previous_expanded {
-            let layout = chain_layout(&self.tasks);
             // Each item shown, a chain by its first step, with how many
             // tasks it shows.
             let mut items: Vec<(TimelineRow, usize, usize)> = Vec::new();
@@ -1185,7 +1454,6 @@ impl PromptMode {
             }
             // Under the day each was sent, a chain its first step's, each
             // day headed by its divider, counting what it shows.
-            let today = chrono::Local::now().date_naive();
             let mut day: Option<(chrono::NaiveDate, usize, usize)> = None;
             for (row, ix, shown) in items {
                 let date = self.sent_on(ix).unwrap_or(today);
@@ -1207,12 +1475,15 @@ impl PromptMode {
         }
         // Running, in either lane: every task under way, a chain still in
         // progress as one row, all its steps, done and to come, beneath it.
-        let chains = self.chains_where(|this, members| this.chain_state(members) == ChainState::Running);
+        let chains = self.chains_in(&layout, |this, members| this.chain_state(members) == ChainState::Running);
+        let mut in_chains = vec![false; self.tasks.len()];
+        for &ix in chains.iter().flat_map(|(_, members)| members) {
+            if let Some(held) = in_chains.get_mut(ix) {
+                *held = true;
+            }
+        }
         let running: Vec<usize> = (0..self.tasks.len())
-            .filter(|&ix| {
-                self.tasks[ix].status.is_active()
-                    && !chains.iter().any(|(_, members)| members.contains(&ix))
-            })
+            .filter(|&ix| self.tasks[ix].status.is_active() && !in_chains[ix])
             .collect();
         let running_at = rows.len();
         rows.push(TimelineRow::Heading(
@@ -1236,7 +1507,7 @@ impl PromptMode {
                 }
                 continue;
             };
-            let steps = self.chain_step_rows(ix, &members);
+            let steps = self.chain_step_rows(&layout, ix, &members);
             held_in_chains.extend(steps.iter().filter_map(|step| match step {
                 StepRow::Queued(at) => Some(*at),
                 _ => None,
@@ -1249,6 +1520,7 @@ impl PromptMode {
         // Queued, in its order, reordered by dragging.
         // Queued, in its order, reordered by dragging; a running chain's
         // step is listed with its chain, though it keeps its place.
+        let held_in_chains: HashSet<usize> = held_in_chains.into_iter().collect();
         let listed: Vec<usize> = (0..self.queue.len()).filter(|at| !held_in_chains.contains(at)).collect();
         let queued_at = rows.len();
         rows.push(TimelineRow::Heading(
@@ -1263,7 +1535,7 @@ impl PromptMode {
         if queued_shown {
             rows.extend(listed.into_iter().map(TimelineRow::Queued));
         }
-        (rows, running_at, queued_at, first_queued)
+        (rows, running_at, queued_at, first_queued, count)
     }
 
     /// The list, virtualized: only the rows in view, and a few either side,
@@ -1271,7 +1543,10 @@ impl PromptMode {
     /// the rest above and below them, so where every row lies, and the
     /// scrollbar, follow from the rows' count alone.
     fn render_task_timeline(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
-        let (rows, running_at, queued_at, first_queued) = self.timeline_rows();
+        let timeline = self.timeline();
+        let rows = &timeline.rows;
+        let (running_at, queued_at, first_queued) =
+            (timeline.running_at, timeline.queued_at, timeline.first_queued);
         let scroll = &self.tasks_tab.scroll;
 
         // Shown afresh, what runs is brought into view, or the queue's start
@@ -1293,7 +1568,7 @@ impl PromptMode {
             && left < px(0.)
             && scroll.offset().y == left
             && let Some((key, into)) = self.tasks_tab.anchor.borrow().clone()
-            && let Some(row) = rows.iter().position(|row| self.row_key(row) == key)
+            && let Some(&row) = timeline.index.get(&key)
         {
             let kept = ROW_HEIGHT * row as f32 + into;
             if -kept != left {
@@ -1315,7 +1590,7 @@ impl PromptMode {
             };
             let place = ROW_HEIGHT * row as f32;
             let top = -scroll.offset().y;
-            let headings = rows.iter().filter(|row| matches!(row, TimelineRow::Heading(..))).count();
+            let headings = timeline.headings.len();
             let room = ROW_HEIGHT * headings as f32;
             if place < top + room || place + ROW_HEIGHT > top + view - room {
                 let to = (place - room).max(px(0.));
@@ -1375,41 +1650,40 @@ impl PromptMode {
         // pinned at the top, in order; one whose place lies below the
         // visible rows, above those stacked beneath it, at the bottom. None
         // pushes another out.
-        let headings: Vec<usize> = (0..rows.len())
-            .filter(|&row| matches!(rows.get(row), Some(TimelineRow::Heading(..))))
-            .collect();
+        let headings = &timeline.headings;
         let n = headings.len();
         let place = |row: usize| ROW_HEIGHT * row as f32;
         let mut pins: Vec<(usize, Pixels)> = Vec::new();
+        let (mut pinned_above, mut pinned_below) = (0, 0);
         for (k, &row) in headings.iter().enumerate() {
             let at_top = top + ROW_HEIGHT * k as f32;
             let at_bottom = top + height - ROW_HEIGHT * (n - k) as f32;
             if place(row) < at_top {
                 pins.push((row, at_top));
+                pinned_above += 1;
             } else if place(row) > at_bottom {
                 pins.push((row, at_bottom));
+                pinned_below += 1;
             }
         }
         let pinned_at = |row: usize| pins.iter().find(|(pinned, _)| *pinned == row).map(|(_, y)| *y);
         // The day of the Previous rows in view, pinned just below Previous's
         // heading while Previous's rows are what is in view beneath it,
         // until the next day's divider, or the next heading, pushes it out.
-        let boundary = |row: usize| {
-            matches!(rows.get(row), Some(TimelineRow::Heading(..) | TimelineRow::Day(..)))
-        };
+        // Found from where the dividers and headings lie, without looking
+        // through the rows.
         let below_previous = top + ROW_HEIGHT;
         let pinned_day = headings
             .first()
             .filter(|&&row| matches!(rows.get(row), Some(TimelineRow::Heading(Group::Previous, _))))
             .filter(|&&row| pinned_at(row).is_some_and(|y| y == top))
             .and_then(|&heading| {
-                (heading + 1..rows.len())
-                    .take_while(|&row| place(row) < below_previous)
-                    .filter(|&row| matches!(rows.get(row), Some(TimelineRow::Day(..))))
-                    .last()
+                let above = timeline.days.partition_point(|&row| place(row) < below_previous);
+                timeline.days[..above].last().copied().filter(|&row| row > heading)
             })
             .map(|row| {
-                let next = (row + 1..rows.len()).find(|&next| boundary(next));
+                let after = timeline.boundaries.partition_point(|&at| at <= row);
+                let next = timeline.boundaries.get(after).copied();
                 let pushed = next.map_or(px(0.), |next| {
                     (place(next) - below_previous - ROW_HEIGHT).min(px(0.))
                 });
@@ -1447,14 +1721,26 @@ impl PromptMode {
                 TimelineRow::Chain(head, all) => {
                     // Its steps beneath it, the bar runs on into them.
                     let steps_follow = matches!(rows.get(first + at + 1), Some(TimelineRow::Step(h, _)) if h == head);
-                    self.render_chain_row(*head, all, steps_follow, cx)
+                    if self.chain_state(all) == ChainState::Running {
+                        self.running_place(RunningRow::Chain(*head, all.clone(), steps_follow))
+                    } else {
+                        self.render_chain_row(*head, all, steps_follow, cx)
+                    }
+                }
+                TimelineRow::Task(ix, kind, previous) if self.tasks[*ix].status.is_active() => {
+                    self.running_place(RunningRow::Task(*ix, *kind, *previous))
                 }
                 TimelineRow::Task(ix, kind, previous) => {
                     self.render_task_row(*ix, *kind, *previous, cx)
                 }
                 TimelineRow::Step(head, step) => {
                     let last_step = !matches!(rows.get(first + at + 1), Some(TimelineRow::Step(h, _)) if h == head);
-                    self.render_step_row(*head, *step, Some((false, last_step)), cx)
+                    match step {
+                        StepRow::Sent(ix, _) if self.tasks[*ix].status.is_active() => {
+                            self.running_place(RunningRow::Step(*head, *step, last_step))
+                        }
+                        _ => self.render_step_row(*head, *step, Some((false, last_step)), cx),
+                    }
                 }
                 TimelineRow::Queued(_) => match queued_rows.next() {
                     Some(row) => row,
@@ -1480,14 +1766,7 @@ impl PromptMode {
                 ));
             }
         }
-        let listed: Rc<Vec<usize>> = Rc::new(
-            rows.iter()
-                .filter_map(|row| match row {
-                    TimelineRow::Queued(at) => Some(*at),
-                    _ => None,
-                })
-                .collect(),
-        );
+        let listed = timeline.queued.clone();
         let drag_scroll = self.queue_drag_driver(first_queued, listed, cx);
         let rows = drawn;
         let (queue_gap, follow) = (self.queue_gap.clone(), self.queue_drag_scroll.clone());
@@ -1534,6 +1813,16 @@ impl PromptMode {
                         div().absolute().left_0().right_0().top(y).child(heading)
                     })),
             );
+        // Running rows show between the headings pinned at its ends.
+        let running = self.tasks_tab.running.clone();
+        let shown_rows = move |bounds: Bounds<Pixels>, _: &mut Window, _: &mut App| {
+            let top = bounds.top() + ROW_HEIGHT * pinned_above as f32;
+            let bottom = (bounds.bottom() - ROW_HEIGHT * pinned_below as f32).max(top);
+            running.borrow_mut().clip = Some(Bounds::from_corners(
+                point(bounds.left(), top),
+                point(bounds.right(), bottom),
+            ));
+        };
         v_flex()
             .relative()
             .size_full()
@@ -1547,7 +1836,40 @@ impl PromptMode {
                 cx,
             ))
             .children(drag_scroll)
+            .on_prepaint(shown_rows)
             .into_any_element()
+    }
+
+    /// A running row's place in the list, left empty: the row is drawn over
+    /// it, by [`RunningRows`], where it is laid out.
+    fn running_place(&self, row: RunningRow) -> AnyElement {
+        let running = self.tasks_tab.running.clone();
+        div()
+            .flex_none()
+            .w_full()
+            .h(ROW_HEIGHT)
+            .on_prepaint(move |bounds, _, _| running.borrow_mut().rows.push((row.clone(), bounds)))
+            .into_any_element()
+    }
+
+    /// A running row, as the list would draw it in its place, if its tasks
+    /// are still there.
+    fn render_running_row(&self, row: &RunningRow, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let there = |ix: &usize| *ix < self.tasks.len();
+        Some(match row {
+            RunningRow::Task(ix, kind, previous) if there(ix) => {
+                self.render_task_row(*ix, *kind, *previous, cx)
+            }
+            RunningRow::Chain(head, all, steps_follow) if there(head) && all.iter().all(there) => {
+                self.render_chain_row(*head, all, *steps_follow, cx)
+            }
+            RunningRow::Step(head, step, last_step)
+                if there(head) && !matches!(step, StepRow::Sent(ix, _) if !there(ix)) =>
+            {
+                self.render_step_row(*head, *step, Some((false, *last_step)), cx)
+            }
+            _ => return None,
+        })
     }
 
     /// A section's heading, with its own controls, wherever it is pinned:
@@ -1567,7 +1889,7 @@ impl PromptMode {
             Group::Previous => {
                 let mut actions = self.render_selection_actions(cx);
                 // The filters' button, while there is a task to filter.
-                let filter = (!self.previous_ixs().is_empty()).then(|| self.render_filter_button(cx));
+                let filter = (self.timeline().previous > 0).then(|| self.render_filter_button(cx));
                 // Where even the title and count giving way leaves too
                 // little room, as they were last laid out, the batch
                 // actions fold into an "N selected" menu.
@@ -1935,9 +2257,7 @@ impl PromptMode {
                     first_line(&task.text),
                     None,
                     task.took().map(|took| {
-                        h_flex()
-                            .flex_none()
-                            .gap_2()
+                        super::status_line()
                             .children(
                                 rate_label(("tasks-tab-step-rate", ix), task, None, cx)
                                     .filter(|_| task.status.is_active()),
@@ -2499,10 +2819,10 @@ impl PromptMode {
         let muted = theme.muted_foreground;
         // Its status and how long it took, on one line, first.
         let status = section("Status", cx).child(
-            h_flex()
-                .gap_2()
-                .child(task.status.tag(cx))
-                .children(task.took().map(|took| took_label(("tasks-tab-status-took", ix), took, cx))),
+            super::status_line().child(task.status.tag(cx)).children(
+                task.took()
+                    .map(|took| took_label(("tasks-tab-status-took", ix), took, cx)),
+            ),
         );
         let mut glance = section("Details", cx);
         glance = glance.child(figure("Lane", lane_label(task.mode), cx));
@@ -2582,13 +2902,19 @@ impl PromptMode {
             ));
         // What can be done with it.
         let this = cx.entity().downgrade();
-        let mut actions = h_flex().flex_wrap().gap_1().child(
-            resend_button(("resend-previous", ix))
-                .label("Resend")
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.resend(|this| &this.tasks, ix, window, cx)
-                })),
-        );
+        // A story's task is sent again only with the next sprint.
+        let mut actions = h_flex()
+            .flex_wrap()
+            .gap_1()
+            .when(!self.is_story_task(task), |actions| {
+                actions.child(
+                    resend_button(("resend-previous", ix))
+                        .label("Resend")
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.resend(|this| &this.tasks, ix, window, cx)
+                        })),
+                )
+            });
         if let Some((to, state)) = self.other_mode_state(task) {
             let (send, menu) = (this.clone(), this.clone());
             let name = task.name.clone();
@@ -3061,7 +3387,7 @@ impl PromptMode {
             if let Some((head, _)) = &task.sent.added_step {
                 return self.tasks.iter().position(|task| task.name.as_ref() == head);
             }
-            if task.sent.mode == Some(SendMode::Both) {
+            if task.sent.mode == Some(SendMode::Both) || super::heads_steps(task) {
                 return Some(at);
             }
             // Only a step handed on from the one before is of its chain.
@@ -3150,8 +3476,10 @@ impl PromptMode {
     /// still going.
     fn chain_ready_after(&self, head: usize) -> Option<usize> {
         let steps = self.chain_step_ixs(head);
-        if steps.iter().any(|&(ix, _)| self.tasks[ix].status.is_active())
-            || self.tasks[head].held_for_fix
+        if steps
+            .iter()
+            .any(|&(ix, _)| self.tasks[ix].status.is_active())
+            || self.awaiting_fix(head)
         {
             return None;
         }
@@ -3419,7 +3747,7 @@ impl PromptMode {
                                     crate::effort::label(agent, step.effort.as_deref())
                                 )),
                         )
-                        .child(step_model_menu(head, place, step.model.clone(), cx))
+                        .child(step_model_menu(head, place, step.model.clone(), agent, cx))
                         .child(
                             Button::new(("chain-step-up", place))
                                 .ghost()
@@ -3506,8 +3834,13 @@ impl PromptMode {
 
 /// The menu changing the model of a step added to a chain, and its effort
 /// where the harness takes one.
-fn step_model_menu(head: usize, place: usize, chosen: Option<String>, cx: &mut Context<PromptMode>) -> AnyElement {
-    let agent = crate::agent::of_project(cx.entity().read(cx).project_dir.as_deref());
+fn step_model_menu(
+    head: usize,
+    place: usize,
+    chosen: Option<String>,
+    agent: crate::agent::Agent,
+    cx: &mut Context<PromptMode>,
+) -> AnyElement {
     let this = cx.entity().downgrade();
     Button::new(("chain-step-model", place))
         .ghost()

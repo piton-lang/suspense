@@ -1,0 +1,40 @@
+
+export anchor Story_f67c82d1d5a15fcb:
+    userPrompt:
+        \\\
+        A mouse's horizontal scroll wheel, a tilting wheel or a thumb wheel,
+        scrolls the Planning board sideways, as a sideways trackpad swipe does
+        in spec/scope/planning/index.pi#Planning.layout. Read that element
+        first. It already says how the wheel and the trackpad scroll the board
+        and its columns. The spec says nothing yet about a horizontal wheel,
+        so this part is new.
+
+        Once this is done:
+        - Turning the horizontal wheel anywhere on the board, over a column,
+          its heading, or the gaps and padding around them, scrolls the board
+          sideways while its columns are wider than the tab, and does nothing
+          while they fit, as Shift with the wheel does.
+        - It never scrolls a column up or down, and it scrolls the board the
+          way the wheel is turned: right moves the board right, left moves it
+          left.
+        - Over the side panel, the pause bar, or the bulk bar it moves neither
+          the board nor its columns, as the layout already says of all
+          scrolling there.
+        - Everything else Planning.layout says about scrolling stays as it is:
+          Shift with the wheel, sideways and diagonal swipes, and a vertical
+          wheel over a column or outside every column.
+
+        Add this to Planning.layout, beside Shift with the wheel and the
+        sideways swipe. Then make the board match it. The board's wheel
+        handler in src/planning.rs (`wheel`, around line 3245) already sends
+        sideways movement to the board. So first find out why a horizontal
+        wheel doesn't scroll the board on Linux: whether its input never
+        arrives as sideways movement, arrives with the wrong sign, or is
+        handled first by something else. Fix it there, and add a test that
+        sends a horizontal wheel event over a column and over a gap between
+        columns.
+        \\\
+
+    mode: combined
+
+    model: opus

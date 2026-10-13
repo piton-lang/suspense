@@ -1,0 +1,10 @@
+
+export anchor Story_6c4375602d052723:
+    userPrompt:
+        \\\
+        On Planning's board, dragging a card feels like Trello. Only the board does this; spec/ui/behaviours/drag-reorder/index.pi#DragReorderBehaviour stays as it is everywhere else, apart from a line saying a user may open the gap. The card is picked up as a full-size copy, tilted a few degrees, on the overlay surface with the shadow spec/ui/theme/index.pi#Theme.elevation allows for floating things. Where it would land, the cards slide apart to open a placeholder the card's height, in place of the accent line alone. On drop, the card settles into that gap. Cards moved any other way animate to their new place with quick motion of about 150 ms, in Linear's style. That covers the card menu, Alt+arrows, Ctrl+Enter, Send sprint, and Close sprint, as spec/scope/planning/index.pi#Planning.sprint describes those moves. The side panel slides in from the right and out again. Nothing animates while the user is waiting on it: the target gap still updates at once as the pointer moves. All of this is described in spec/scope/planning/index.pi#Planning first, then built.
+        \\\
+
+    mode: combined
+
+    model: opus

@@ -1,0 +1,135 @@
+
+export anchor AddADraftColumnToTheBoard2:
+    userPrompt:
+        \\\
+        The Planning board has a new "Draft" column, the first on the board,
+        to the left of the Backlog. It holds rough stories: ideas written down
+        quickly that aren't ready to plan yet. The spec has nothing on a Draft
+        column yet, so this is new. Update every place that lists the columns
+        or decides which ones can hold stories:
+
+        - spec/scope/planning/index.pi#Planning.description and
+          spec/scope/planning/index.pi#Planning.layout give the column order as
+          Draft, Backlog, Next sprint, Current sprint, Done, Findings. Draft
+          gets a status icon and top-edge colour of its own, as
+          spec/scope/planning/index.pi#Planning.parts gives every column: for
+          example, a pencil in the theme's tertiary text colour. Its look must
+          be clearly different from the Backlog's dashed circle.
+        - Stories are written in Draft the same way as in the Backlog and Next
+          sprint, as spec/scope/planning/index.pi#Planning.creating says: an
+          "Add story" line, "+ Add" on hover, and Ctrl+N when Draft has focus.
+        - Draft takes drops, as spec/scope/planning/index.pi#Planning.sprint
+          describes for the Backlog and Next sprint. Stories move between Draft
+          and the Backlog by dragging, with Alt+Left/Alt+Right
+          (spec/scope/planning/index.pi#Planning.keyboard), and from a card's
+          menu ("Move to draft"; "Move to backlog" from Draft). Draft stories
+          can be selected, and the bulk bar can move them
+          (spec/scope/planning/index.pi#Planning.parts). A Draft story never
+          reaches a sprint without first moving to the Backlog or Next sprint.
+        - Draft's empty state, worded as in
+          spec/scope/planning/index.pi#Planning.states, says something like
+          "No drafts. Jot an idea down here."
+        - The Draft section is saved in order.json with the others, as
+          spec/scope/planning/index.pi#Planning.saving and
+          spec/scope/project-data/index.pi#ProjectData.contents say. A plan
+          saved before Draft existed loads with Draft empty.
+
+        Accepted proposals still go into the Backlog, as they do today. The
+        column is named "Draft"; keep it clearly apart from the existing
+        "Draft stories" button on the Backlog's heading.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The Planning board has a new "Draft" column, the first on the board,
+            to the left of the Backlog. It holds rough stories: ideas written down
+            quickly that aren't ready to plan yet. The spec has nothing on a Draft
+            column yet, so this is new. Update every place that lists the columns
+            or decides which ones can hold stories:
+
+            - spec/scope/planning/index.pi#Planning.description and
+              spec/scope/planning/index.pi#Planning.layout give the column order as
+              Draft, Backlog, Next sprint, Current sprint, Done, Findings. Draft
+              gets a status icon and top-edge colour of its own, as
+              spec/scope/planning/index.pi#Planning.parts gives every column: for
+              example, a pencil in the theme's tertiary text colour. Its look must
+              be clearly different from the Backlog's dashed circle.
+            - Stories are written in Draft the same way as in the Backlog and Next
+              sprint, as spec/scope/planning/index.pi#Planning.creating says: an
+              "Add story" line, "+ Add" on hover, and Ctrl+N when Draft has focus.
+            - Draft takes drops, as spec/scope/planning/index.pi#Planning.sprint
+              describes for the Backlog and Next sprint. Stories move between Draft
+              and the Backlog by dragging, with Alt+Left/Alt+Right
+              (spec/scope/planning/index.pi#Planning.keyboard), and from a card's
+              menu ("Move to draft"; "Move to backlog" from Draft). Draft stories
+              can be selected, and the bulk bar can move them
+              (spec/scope/planning/index.pi#Planning.parts). A Draft story never
+              reaches a sprint without first moving to the Backlog or Next sprint.
+            - Draft's empty state, worded as in
+              spec/scope/planning/index.pi#Planning.states, says something like
+              "No drafts. Jot an idea down here."
+            - The Draft section is saved in order.json with the others, as
+              spec/scope/planning/index.pi#Planning.saving and
+              spec/scope/project-data/index.pi#ProjectData.contents say. A plan
+              saved before Draft existed loads with Draft empty.
+
+            Accepted proposals still go into the Backlog, as they do today. The
+            column is named "Draft"; keep it clearly apart from the existing
+            "Draft stories" button on the Backlog's heading.
+            \\\
+        result:
+            \\\
+            I've written the Draft column into the spec, and `piton check` and `piton build` both finish with no errors. Draft is now the first column, before the Backlog. It has its own "Add story" line, "+ Add" and Ctrl+N, takes drops, has card-menu and Alt-arrow moves to and from the Backlog, can be selected and moved from the bulk bar, has its own empty state, and is saved in `order.json`. Agent proposals still go only into the Backlog.
+
+            The code should follow these anchors in `spec/scope/planning/index.pi`:
+            - **`Planning.description`:** Draft is the first column. It is kept apart from the Backlog's "Draft stories" button, and drafting never puts anything in it.
+            - **`Planning.layout`:** the column order. Draft's top edge is tertiary text, like the Backlog's. Draft's heading has no actions except "+ Add", and it gets an "Add story" line.
+            - **`Planning.parts`:** Draft's icon is a pencil in tertiary text, never a circle. Draft stories can be selected. The bulk bar gains "Move to draft", which moves Backlog stories to the end of Draft. Its "Move to backlog" also moves Draft stories. Selection order is Draft, then the Backlog, then Next sprint.
+            - **`Planning.creating`:** composer, "+ Add" and Ctrl+N work in Draft. A story added to Draft never starts a sprint.
+            - **`Planning.sprint`:** Draft, the Backlog and Next sprint all take drops. Card menus read "Move to backlog" in Draft, "Move to next sprint" and "Move to draft" in the Backlog, and "Move to backlog" in Next sprint. A Draft story reaches a sprint only after moving to the Backlog or Next sprint. Close sprint saves Draft too.
+            - **`Planning.keyboard`:** Alt+Right moves Draft→Backlog, Alt+Left moves Backlog→Draft, and Alt+Left in Draft does nothing. Ctrl+Enter in Draft moves the story to the Backlog.
+            - **`Planning.states`:** Draft's empty state reads "No drafts. Jot an idea down here."
+            - **`Planning.motion`:** "Move to draft" animates like the other moves.
+            - **`Planning.saving`** and **`spec/scope/project-data/index.pi#ProjectData.contents`:** `order.json` holds Draft, Backlog, Next sprint, Current sprint and Done. A saved plan with no Draft section loads with Draft empty and gets one the next time it's saved.
+
+            Three choices were mine rather than in your request:
+            - **Dragging Draft to Next sprint:** dragging is allowed between any of Draft, the Backlog and Next sprint. Card menus and Alt-arrows only move between neighbouring columns.
+            - **Ctrl+Enter in Draft:** it moves the story to the Backlog.
+            - **Same top-edge colour:** Draft's top edge uses the same tertiary colour as the Backlog's, so the two columns are told apart by their icons.
+            \\\
+
+    sentFrom: AddADraftColumnToTheBoard
+
+    model: opus

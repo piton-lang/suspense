@@ -1,0 +1,8 @@
+- [Planning is not shown with the chat input: no tab other than Planning hides it](.claude/reference/scope/application/Body.md#tabs)
+- [The Body's contents list the chat input beneath every selected tab except Planning](.claude/reference/scope/application/Body.md#contents)
+- [The Planning board fills the body from the tab bar to the body's bottom](.claude/reference/scope/planning/index.md#description)
+- [The open story's side panel is as tall as the tab, from the tab bar to the body's bottom](.claude/reference/scope/planning/index.md#description)
+- [Stories are never sent through the chat input, so nothing in Planning needs it](.claude/reference/scope/planning/index.md#description)
+- [Selecting Chat, a file, or a task tab shows the chat input again at once; nothing slides](.claude/reference/scope/application/Body.md#tabs)
+- [While hidden, the chat input keeps its draft, attachments, and selected mode tab](.claude/reference/scope/application/Body.md#tabs)
+- [If the chat input had focus when Planning was selected, it gets focus back when shown again](.claude/reference/scope/application/Body.md#tabs)

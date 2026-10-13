@@ -1,0 +1,8 @@
+- [Every added story goes into Next sprint, but an accepted new-story proposal, which goes into the Backlog](.claude/reference/scope/planning/index.md#creating)
+- [Accept records a proposal in the plan straight away; Add to proposals become a new step of the named story](.claude/reference/scope/planning/index.md#proposal-cards)
+- [Accepted new stories are in their mode, marked From agent with a sparkle until first opened](.claude/reference/scope/planning/index.md#proposal-cards)
+- [Citations are kept with the story once it is accepted](.claude/reference/scope/planning/index.md#spec-grounding)
+- [A story added to an empty Next sprint starts it while Start automatically is on](.claude/reference/scope/planning/index.md#auto-start)
+- [Stories move between the Backlog and Next sprint by dragging or the row's menu](.claude/reference/scope/planning/index.md#sprint)
+- [The Ask card's Add to sprint adds the prompt to Next sprint](.claude/reference/scope/prompt-mode/ask-conversation/index.md#narrow)
+- [Accepted new-story proposals go to the end of the Backlog, never Next sprint, so accepting never starts a sprint](.claude/reference/scope/planning/index.md#proposal-cards)

@@ -1,0 +1,71 @@
+
+export anchor OpenStoriesDraftingAndResearchInASide2:
+    userPrompt:
+        \\\
+        A column on the board is too narrow to open a story in place, so clicking a card no longer expands it beneath itself, as [Stories](.claude/reference/scope/planning/index.md#stories) says today. Instead it opens a panel docked at the board's right, full height, drawn as the panel in [Parts](.claude/reference/scope/planning/index.md#parts) describes. The panel holds what the open story holds now: its title, its prompt with the chat input's highlighting and completions, its attachments, its mode, model, effort and Slice, its steps with Add step as [Steps](.claude/reference/scope/planning/index.md#steps) says, and its Spec citations. The card stays highlighted while it is open. Only one story is open at a time, and Escape, the panel's close button, or clicking the card again closes it.
+
+        The [Drafting](.claude/reference/scope/planning/index.md#drafting) and [Research](.claude/reference/scope/planning/index.md#research) panels open in the same docked place instead of beneath the Backlog's heading or beneath a story. They show their proposals there with the same cards and buttons as today. Opening one replaces whatever is open, and the board narrows to make room. It is never covered.
+
+        The spec has nothing on a side panel next to the board yet, so that part is new.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            A column on the board is too narrow to open a story in place, so clicking a card no longer expands it beneath itself, as [Stories](.claude/reference/scope/planning/index.md#stories) says today. Instead it opens a panel docked at the board's right, full height, drawn as the panel in [Parts](.claude/reference/scope/planning/index.md#parts) describes. The panel holds what the open story holds now: its title, its prompt with the chat input's highlighting and completions, its attachments, its mode, model, effort and Slice, its steps with Add step as [Steps](.claude/reference/scope/planning/index.md#steps) says, and its Spec citations. The card stays highlighted while it is open. Only one story is open at a time, and Escape, the panel's close button, or clicking the card again closes it.
+
+            The [Drafting](.claude/reference/scope/planning/index.md#drafting) and [Research](.claude/reference/scope/planning/index.md#research) panels open in the same docked place instead of beneath the Backlog's heading or beneath a story. They show their proposals there with the same cards and buttons as today. Opening one replaces whatever is open, and the board narrows to make room. It is never covered.
+
+            The spec has nothing on a side panel next to the board yet, so that part is new.
+            \\\
+        result:
+            \\\
+            I've updated the Planning spec (`spec/scope/planning/index.pi`) so stories, Drafting and Research all open in one side panel docked at the board's right. `piton check` reports no problems and `piton build` succeeded.
+
+            **What changed in the spec:**
+            - **Stories:** clicking a card no longer expands it in its column. It opens the story in the side panel, headed by the story's title. The panel holds the title, prompt (with the chat input's highlighting, completions and slicing), attachments, mode, model, effort and Slice, its steps with Add step, and its Spec citations.
+            - **Card highlight and closing:** the open story's card keeps its outline in the theme's accent colour while it is open. Only one story is open at a time; clicking another card replaces it. Escape, the close button, or clicking the card again closes it.
+            - **Layout:** a new paragraph defines the panel. I chose a width of 400 pixels, since the prompt didn't give one. It runs from the tab bar down to the chat input, with a 1 pixel line on its left, and scrolls on its own with its heading fixed at the top. It holds one thing at a time, and opening something replaces what it held. The board narrows to the space left of it, its columns keeping their 320 pixel width and scrolling sideways as before; nothing ever covers anything. The pause bar sits beside the panel, never over it.
+            - **Parts:** a "panel" is now this docked panel with square corners, instead of an inset area 16 pixels below what opened it.
+            - **Drafting and Research:** both open in the side panel, replacing whatever it held. Drafting started from an open story takes that story's place, and the story's card stays highlighted. Research shows its proposals with the same cards, buttons, and Accept all / Reject all as drafting.
+            - **Keyboard:** Escape closes a menu first, then the side panel. F6 reaches the side panel as one stop when it is open.
+
+            While in Layout I also fixed an existing slip: a line starting "moves:" had been read as a key, which put a stray "Moves" heading in the middle of the compiled Layout section.
+
+            **Anchors the code should follow,** all in `.claude/reference/scope/planning/index.md`: `#stories`, `#layout` (the side panel paragraph), `#parts` (the panel), `#drafting`, `#research`, and `#keyboard`.
+            \\\
+
+    sentFrom: OpenStoriesDraftingAndResearchInASide
+
+    model: opus

@@ -1,0 +1,99 @@
+
+export anchor WheelAndTrackpadScrollingOnTheBoard2:
+    userPrompt:
+        \\\
+        The Planning board's columns each scroll on their own, and the board scrolls
+        sideways, as spec/scope/planning/index.pi#Planning.layout says, with the
+        Scrollbar of spec/ui/components/scrollbar/index.pi#Scrollbar.track. The spec
+        doesn't yet say what the wheel and trackpad do on each part of the board, so
+        this is new behaviour. Once it's done:
+        - A vertical wheel turn or two-finger swipe over a column, its heading
+          included, scrolls only that column. It never scrolls the board sideways,
+          and it never passes on to the board when the column is at its end or has
+          nothing to scroll.
+        - Shift+wheel, or a sideways trackpad swipe, anywhere on the board, columns
+          included, scrolls the board sideways while its columns are wider than the
+          tab. While they fit, it does nothing.
+        - A vertical wheel turn over the board outside any column (its padding, the
+          16-pixel gaps between columns, or the space beside the last column)
+          scrolls the board sideways, as in Trello.
+        - A diagonal trackpad swipe over a column scrolls it up or down and the
+          board sideways together, each by its own share of the swipe.
+        - Scrolling over the side panel, the pause bar, or the bulk bar never moves
+          the board or a column.
+        Write this into Planning's layout section first, then make the board match.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The Planning board's columns each scroll on their own, and the board scrolls
+            sideways, as spec/scope/planning/index.pi#Planning.layout says, with the
+            Scrollbar of spec/ui/components/scrollbar/index.pi#Scrollbar.track. The spec
+            doesn't yet say what the wheel and trackpad do on each part of the board, so
+            this is new behaviour. Once it's done:
+            - A vertical wheel turn or two-finger swipe over a column, its heading
+              included, scrolls only that column. It never scrolls the board sideways,
+              and it never passes on to the board when the column is at its end or has
+              nothing to scroll.
+            - Shift+wheel, or a sideways trackpad swipe, anywhere on the board, columns
+              included, scrolls the board sideways while its columns are wider than the
+              tab. While they fit, it does nothing.
+            - A vertical wheel turn over the board outside any column (its padding, the
+              16-pixel gaps between columns, or the space beside the last column)
+              scrolls the board sideways, as in Trello.
+            - A diagonal trackpad swipe over a column scrolls it up or down and the
+              board sideways together, each by its own share of the swipe.
+            - Scrolling over the side panel, the pause bar, or the bulk bar never moves
+              the board or a column.
+            Write this into Planning's layout section first, then make the board match.
+            \\\
+        result:
+            \\\
+            I've added the wheel and trackpad rules to Planning's layout section, after the sentence about the board scrolling sideways. `piton check` and `piton build` both finished without errors.
+
+            The code should follow **[Planning.layout](.claude/reference/scope/planning/index.md#layout)**, in the paragraph that starts "Each column scrolls up and down on its own". What the spec now says:
+
+            - **Vertical wheel or two-finger swipe over a column, heading included:** scrolls only that column. It never moves the board sideways and never passes on to the board, even when the column is at its top or end or has nothing to scroll.
+            - **Shift+wheel or a sideways trackpad swipe anywhere on the board, over a column or not:** scrolls the board sideways while the columns are wider than the tab. While they fit, it does nothing.
+            - **Vertical wheel outside every column** (the padding, the 16-pixel gaps, the space beside the last column): scrolls the board sideways, as in Trello. I added one detail you didn't specify: scrolling down moves the board right, and up moves it left.
+            - **Diagonal trackpad swipe over a column:** the up-and-down part scrolls the column and the sideways part scrolls the board, both at once.
+            - **Side panel, pause bar and bulk bar:** scrolling over them never moves the board or a column. The side panel scrolls only itself, and the two bars scroll nothing.
+
+            The column and board scrollbars stay as [Scrollbar](.claude/reference/ui/components/scrollbar/index.md#scrollbar) describes them.
+            \\\
+
+    sentFrom: WheelAndTrackpadScrollingOnTheBoard
+
+    model: opus

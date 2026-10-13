@@ -1,0 +1,7 @@
+- [Planning's drafting runs read-only as a Question run and never writes the plan](.claude/reference/scope/planning/index.md#proposals)
+- [Drafting shows its work in a panel beneath the Backlog's heading, never a popup](.claude/reference/scope/planning/index.md#drafting)
+- [Planning states are shown the same way: empty, loading, paused, error](.claude/reference/scope/planning/index.md#states)
+- [Send sprint sends Next sprint's stories in order as one block in the queue](.claude/reference/scope/planning/index.md#sprint)
+- [The Question profile can read the project and change none of it](.claude/reference/scope/sandbox/index.md#profiles)
+- [The plan is saved in .suspense/planning/ and comes back as it was left](.claude/reference/scope/planning/index.md#saving)
+- [Research is a read-only run producing saved findings; afterwards planning pauses, visibly and persistently, until Resume or Approve](.claude/reference/scope/planning/index.md#paused)

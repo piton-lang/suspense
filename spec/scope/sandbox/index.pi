@@ -94,7 +94,8 @@ export feature Sandbox:
         settings, and sessions, as `~/.claude`, read-write; the toolchains'
         caches that builds write to, as `~/.cargo/registry`, read-write; and
         a temporary directory of the run's own, read-write, made for it and
-        removed after it, given as TMPDIR, TMP, and TEMP, so a build's
+        removed after it, given as TMPDIR, TMP, and TEMP, and as zsh's
+        TMPPREFIX for its heredocs, so a build's
         scratch files never land in a shared place. No grant outside the
         project ever reaches into it: one that would, as a toolchain folder
         holding the project, is cut at the project's edge, and the project is
@@ -188,9 +189,12 @@ export feature Sandbox:
         run the piton command for it, on the host, as trusted work, and
         streams back what it prints and its exit status. Only what the run's
         profile allows is run: a Spec run may build, check, format, and
-        slice; a Code or Question run may only slice with an adapter, which
-        prints compiled output, never the source; anything else is refused,
-        the shim saying so. The real `piton` on the host, if the run finds
+        slice; a Code or Question run may slice with an adapter, which
+        prints compiled output, never the source; and a Code run may also
+        compile files of its own code, as a build that bakes Piton into the
+        application does, given only as files, with no options, each under
+        the project's code locations and none in its spec; anything else is
+        refused, the shim saying so. The real `piton` on the host, if the run finds
         it, can only read what the sandbox lets it.
 
     channels:

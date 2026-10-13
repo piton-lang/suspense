@@ -1,0 +1,118 @@
+
+export anchor RedrawOnlyWhatChanges4:
+    userPrompt:
+        \\\
+        However many stories a Planning column holds, drawing the board costs no more
+        than drawing the cards in view. Done and the Backlog only grow, and the board
+        stays as smooth with a thousand stories as with ten. The spec has nothing on
+        how a long column is drawn yet, so this is new: add it to
+        spec/scope/planning/index.pi#Planning.layout, in the same terms
+        spec/ui/components/table/Drawing.pi#Table.drawing uses for a table's rows.
+
+        Today each column is a plain scrolling list of every card. Make each column
+        lay out only the cards in view and a few either side, measuring the rest over
+        the following frames, as the table's rows are measured, so the column's
+        scrollbar holds still. Everything in spec/scope/planning/index.pi#Planning.motion
+        must keep working: the drag gap and placeholder, cards sliding about 150 ms when
+        moved, added, or deleted, the open story's card kept in view, and a change above
+        the view never moving the cards in it. Scrolling to a card, as when a story is
+        opened from outside the board, jumps straight to it without drawing the cards
+        in between.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The window stays fast while something animates or updates. A spinner turning, a
+            running task's time counting up every second, as
+            spec/scope/prompt-mode/message-list/Status.pi#MessageList.status says, or a
+            reply streaming in redraws only the view that shows it. It never redraws the
+            rest of the body, the tab bar, the sidebars, the Tasks tab, the chat input, or
+            an open Planning board.
+
+            The spec has nothing on this for the window as a whole yet, so it is new. Add
+            it as a behaviour of the application in
+            spec/scope/application/index.pi#Application, next to its other behaviours. It
+            extends rules the spec already has for single parts:
+            spec/ui/components/table/Drawing.pi#Table.drawing for a table's rows,
+            spec/ui/components/task-table/Scrolling.pi#TaskTable.scrolling for streamed
+            output, spec/scope/prompt-mode/message-list/Scrolling.pi#MessageList.scrolling
+            for the message list, and
+            spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.virtualized for
+            running rows. spec/scope/application/Body.pi#Body.sliding must keep holding: a
+            slide still moves every part of the body together, frame by frame.
+
+            Today no view in the window is drawn as a cached view, so every frame rebuilds
+            everything from the main window down. Split the window into views that are
+            each drawn again only when their own state changes:
+            - the body's tab bar, where the Chat tab and task tabs show their spinners
+            - the message list
+            - each task's output
+            - the Tasks tab
+            - the chat input
+            - each sidebar
+            - the Planning board
+
+            Spinners and ticking times then redraw only the views they are in.
+
+            Add a test showing that, while a task runs and nothing else changes, the Tasks
+            tab, the chat input and the sidebars are not drawn again from one frame to the
+            next. The test should also show that a right sidebar sliding out still lays out
+            the tab bar, the message list and the chat input at each width as it goes.
+            \\\
+        result:
+            \\\
+            The Tasks tab now keeps its list of rows instead of rebuilding it every frame, and the new test passes. A running task's tick no longer works the rows out again.
+
+            **The spec doesn't say this yet.** The compiled `TasksTab.virtualized` doesn't have the new rule, and its reference file is older than this chain. The "spec step" output pasted into this prompt is my previous reply, not the spec step's. I went ahead under the cost rule `TasksTab.virtualized` already states ("cost the same with ten thousand previous tasks as with ten"). The rule asked for still needs adding to the spec.
+
+            **What changed** (in `src/prompt_mode/tasks_tab.rs`):
+            - **Kept rows:** a new `Timeline` holds the rows, where the headings, day dividers and queued rows lie, and an index from each row's key to its place. Previous's task count is in it too, so the heading no longer recounts.
+            - **When it's rebuilt:** whenever `PromptMode` changes, which covers tasks added or changing status, filters, and sections opening or closing. It's also rebuilt at midnight, and when the number of tasks or queued prompts changes. Ticks, spinners, streaming and scrolling never rebuild it.
+            - **Each rebuild is cheaper:**
+              - The chain layout is worked out once, not three or more times.
+              - Previous and Running mark the tasks held in chains in a flag list, so finding them is no longer square in the task count.
+            - **No searching per frame:** the top row is found from the key index. The pinned day divider and the next divider or heading are found by binary search over where they lie.
+            - **Test:** `the_tasks_tab_keeps_its_rows_while_a_task_runs` opens the tab with 10,000 previous tasks and one running. After the sidebar settles, three seconds of ticks neither rebuild the rows nor redraw the Tasks tab. Scrolling halfway down redraws the tab from the rows it kept.
+
+            **Tests:** I ran them in a scratch copy with empty stand-ins for the prompt files the sandbox blocks. The new test and the related Tasks tab, redraw and slide tests pass. The `main_window`, `prompt_mode`, `scrollbar` and `project_tree` suites have 21 failures. None is new. Twenty need `piton` or `git`, which the sandbox blocks. The other is `scrollbar::tests::the_bar_is_the_column_on_its_side`, which only uses its own test views and was failing before this change.
+
+            **A caveat:** rebuilding on any `PromptMode` change is broader than the rule you described. Something unrelated, like opening a file tab, also rebuilds the rows once. That's still never per frame, and never on a tick.
+            \\\
+
+    sentFrom: RedrawOnlyWhatChanges3
+
+    model: opus
+
+    addedStep: RedrawOnlyWhatChanges 1

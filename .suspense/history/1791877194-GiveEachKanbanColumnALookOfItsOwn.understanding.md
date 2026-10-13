@@ -1,0 +1,8 @@
+- [Planning draws only in the theme's roles, in both dark and light mode, never colours of its own](.claude/reference/scope/planning/index.md#theme)
+- [Columns are 320 pixels wide, 16 pixels apart, on the recessed surface, corners rounded 8 pixels](.claude/reference/scope/planning/index.md#layout)
+- [Each column's status icon colour: Backlog tertiary, Next sprint secondary, Current sprint accent, Done success, Findings secondary](.claude/reference/scope/planning/index.md#parts)
+- [The open story keeps a 3 pixel accent line along its left edge; hover, selected surface, and a 2 pixel accent focus ring mark a card's states](.claude/reference/scope/planning/index.md#parts)
+- [The drag placeholder is a box on the theme's well surface with no border](.claude/reference/scope/planning/index.md#motion)
+- [Nothing decorative is ever as far from the base as state; structure is a step from the base](.claude/reference/ui/theme/index.md#hierarchy)
+- [A surface pressed in can have the pressed bevel, laid over rather than a colour, not a border](.claude/reference/ui/theme/index.md#bevel)
+- [A tint of a colour is that colour laid over its surface at low strength](.claude/reference/ui/theme/index.md#status)

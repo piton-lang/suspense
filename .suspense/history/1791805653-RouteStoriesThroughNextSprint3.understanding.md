@@ -1,0 +1,7 @@
+- [Every added story goes to the end of Next sprint, however it is added](.claude/reference/scope/planning/index.md#creating)
+- [No single story can be sent; the only route to work is the sprint](.claude/reference/scope/planning/index.md#sprint)
+- [A story row has no Send of its own, only a menu button](.claude/reference/scope/planning/index.md#stories)
+- [Send sprint sends Next sprint's stories in order as one block in the queue](.claude/reference/scope/planning/index.md#sprint)
+- [Ask prompt cards offer Add to sprint](.claude/reference/scope/prompt-mode/ask-conversation/index.md#suggested-prompts)
+- [The ribbon's New Story adds a story to Next sprint](.claude/reference/ui/components/ribbon/planning-tab/index.md#commands)
+- [A story can't reach the chat input or queue to be sent; chat input prompts are not stories](.claude/reference/scope/planning/index.md#sprint)

@@ -1,0 +1,2 @@
+- [The verdict's text is baked in from `task-verdict.md` in this repository's `.suspense/system-prompts` directory, and a build can't be made without it](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#verdict)
+- [The verdict text says exactly what the spec quotes, ending with `SUSPENSE-VERDICT: done` or `SUSPENSE-VERDICT: failed`](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#verdict)

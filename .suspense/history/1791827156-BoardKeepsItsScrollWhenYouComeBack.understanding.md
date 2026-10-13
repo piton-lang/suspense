@@ -1,0 +1,7 @@
+- [Planning opens in a body tab of its own, as a file opens](.claude/reference/scope/planning/index.md#description)
+- [A task tab shows scrolled to its top the first time, and as it was left after](.claude/reference/scope/application/Body.md#body)
+- [The board scrolls sideways when its columns are wider than the tab; each column scrolls up and down on its own](.claude/reference/scope/planning/index.md#layout)
+- [While the side panel is open the board narrows to the space left of it, columns keeping their width](.claude/reference/scope/planning/index.md#layout)
+- [As the side panel opens the board scrolls sideways just enough to keep the open story's card in view, in the same quick motion](.claude/reference/scope/planning/index.md#motion)
+- [A column scrolled away from its top keeps cards in view steady when things above change](.claude/reference/scope/planning/index.md#motion)
+- [The plan's sections, auto start, and pause are saved in order.json](.claude/reference/scope/planning/index.md#saving)

@@ -1,0 +1,7 @@
+- [Drafting's request box reads "Describe what you want", or "What does this story need?" from an open story](.claude/reference/scope/planning/index.md#drafting)
+- [A failed draft run leaves the request in its box to try again](.claude/reference/scope/planning/index.md#drafting)
+- [In a list, Enter opens or closes the focused story](.claude/reference/scope/planning/index.md#keyboard)
+- [Ctrl+Shift+D opens Draft stories focusing its box, where Ctrl+Enter starts it](.claude/reference/scope/planning/index.md#keyboard)
+- [Research's box also starts on Ctrl+Enter and is not part of this change](.claude/reference/scope/planning/index.md#keyboard)
+- [Each shortcut is given in the tooltip of the control it stands for](.claude/reference/scope/planning/index.md#keyboard)
+- [Ctrl+Enter on a focused story moves it between Next sprint and the Backlog](.claude/reference/scope/planning/index.md#keyboard)

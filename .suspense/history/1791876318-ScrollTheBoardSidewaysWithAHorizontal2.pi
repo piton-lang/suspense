@@ -1,0 +1,118 @@
+
+export anchor ScrollTheBoardSidewaysWithAHorizontal2:
+    userPrompt:
+        \\\
+        A mouse's horizontal scroll wheel, a tilting wheel or a thumb wheel,
+        scrolls the Planning board sideways, as a sideways trackpad swipe does
+        in spec/scope/planning/index.pi#Planning.layout. Read that element
+        first. It already says how the wheel and the trackpad scroll the board
+        and its columns. The spec says nothing yet about a horizontal wheel,
+        so this part is new.
+
+        Once this is done:
+        - Turning the horizontal wheel anywhere on the board, over a column,
+          its heading, or the gaps and padding around them, scrolls the board
+          sideways while its columns are wider than the tab, and does nothing
+          while they fit, as Shift with the wheel does.
+        - It never scrolls a column up or down, and it scrolls the board the
+          way the wheel is turned: right moves the board right, left moves it
+          left.
+        - Over the side panel, the pause bar, or the bulk bar it moves neither
+          the board nor its columns, as the layout already says of all
+          scrolling there.
+        - Everything else Planning.layout says about scrolling stays as it is:
+          Shift with the wheel, sideways and diagonal swipes, and a vertical
+          wheel over a column or outside every column.
+
+        Add this to Planning.layout, beside Shift with the wheel and the
+        sideways swipe. Then make the board match it. The board's wheel
+        handler in src/planning.rs (`wheel`, around line 3245) already sends
+        sideways movement to the board. So first find out why a horizontal
+        wheel doesn't scroll the board on Linux: whether its input never
+        arrives as sideways movement, arrives with the wrong sign, or is
+        handled first by something else. Fix it there, and add a test that
+        sends a horizontal wheel event over a column and over a gap between
+        columns.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            A mouse's horizontal scroll wheel, a tilting wheel or a thumb wheel,
+            scrolls the Planning board sideways, as a sideways trackpad swipe does
+            in spec/scope/planning/index.pi#Planning.layout. Read that element
+            first. It already says how the wheel and the trackpad scroll the board
+            and its columns. The spec says nothing yet about a horizontal wheel,
+            so this part is new.
+
+            Once this is done:
+            - Turning the horizontal wheel anywhere on the board, over a column,
+              its heading, or the gaps and padding around them, scrolls the board
+              sideways while its columns are wider than the tab, and does nothing
+              while they fit, as Shift with the wheel does.
+            - It never scrolls a column up or down, and it scrolls the board the
+              way the wheel is turned: right moves the board right, left moves it
+              left.
+            - Over the side panel, the pause bar, or the bulk bar it moves neither
+              the board nor its columns, as the layout already says of all
+              scrolling there.
+            - Everything else Planning.layout says about scrolling stays as it is:
+              Shift with the wheel, sideways and diagonal swipes, and a vertical
+              wheel over a column or outside every column.
+
+            Add this to Planning.layout, beside Shift with the wheel and the
+            sideways swipe. Then make the board match it. The board's wheel
+            handler in src/planning.rs (`wheel`, around line 3245) already sends
+            sideways movement to the board. So first find out why a horizontal
+            wheel doesn't scroll the board on Linux: whether its input never
+            arrives as sideways movement, arrives with the wrong sign, or is
+            handled first by something else. Fix it there, and add a test that
+            sends a horizontal wheel event over a column and over a gap between
+            columns.
+            \\\
+        result:
+            \\\
+            I added the horizontal wheel to `Planning.layout` in `spec/scope/planning/index.pi`, next to Shift with the wheel and the sideways swipe. `piton check` and `piton build` both ran clean, and the new text shows up in `.claude/reference/scope/planning/index.md#layout`.
+
+            The new text says a mouse's horizontal wheel, tilted or a thumb wheel, anywhere on the board scrolls the board sideways while its columns are wider than the tab, and does nothing while they fit. That covers a column, its heading, and the padding and gaps around them. It also says the horizontal wheel never scrolls a column up or down, and that it moves the board the way it is turned: right moves the board right, left moves it left. The layout's existing rule that scrolling over the side panel, the pause bar or the bulk bar moves neither the board nor its columns already covers this wheel. I left everything else about scrolling as it was.
+
+            **For the code step:** follow `Planning.layout` (`#layout`).
+            - In `src/planning.rs` `wheel` (around line 3245), find why horizontal wheel input on Linux doesn't reach the board as sideways movement. It may never arrive as sideways movement, arrive with the wrong sign, or be taken first by a column's scroll area. Fix it there.
+            - Make sure the horizontal wheel never moves a column.
+            - Add a test that sends a horizontal wheel event over a column and over a gap between columns.
+            \\\
+
+    sentFrom: ScrollTheBoardSidewaysWithAHorizontal
+
+    model: opus

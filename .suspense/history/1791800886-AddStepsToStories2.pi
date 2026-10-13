@@ -1,0 +1,68 @@
+
+export anchor AddStepsToStories2:
+    userPrompt:
+        \\\
+        A user can add one or more steps to an existing story. Each step is stored with its story, keeps its order within the story, and shows up wherever the story is shown. Adding a step to a story that does not exist fails with a clear message and changes nothing.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            A user can add one or more steps to an existing story. Each step is stored with its story, keeps its order within the story, and shows up wherever the story is shown. Adding a step to a story that does not exist fails with a clear message and changes nothing.
+            \\\
+        result:
+            \\\
+            Stories can now have ordered steps. `piton check` reports no problems and `piton build` wrote 86 files.
+
+            - **What a step is** (`.claude/reference/scope/planning/index.md#steps`): a further prompt with its own mode (Code or Spec), model, effort and attachments, done after the one before. The story's own prompt is always step 1.
+            - **Editing:**
+              - An open story lists its steps numbered from 2.
+              - "Add step" adds one at the end, and you can add several in a row.
+              - Steps reorder by dragging or Alt+Up/Down, and each can be removed.
+            - **Storage:** steps are saved in the story's own file, in order. They're copied when the story is duplicated, deleted with it, and keep their order wherever the story moves.
+            - **Shown everywhere the story is:**
+              - The row shows "3 steps", with the list in its tooltip, and the open story lists them.
+              - Proposals that add to the story show its steps.
+              - When sent, the story runs as a chain, prompt first and then each step in order, and appears as one chain in the Tasks tab. A story that's been sent can't get more steps.
+            - **Missing story:** adding a step to a story that no longer exists changes and saves nothing. It says "That story no longer exists, so the step wasn't added" in the error colour and keeps what you were adding so you can put it elsewhere. Adding to an already-sent story is refused the same way.
+            - **Agent proposals:** an accepted "Add to" proposal now adds a new step instead of appending to the prompt. If the story is gone by then, the card stays and switches to "New story".
+
+            **One choice of mine:** sending a story with steps as a chain, so each step waits for the one before it.
+
+            **Anchors the code should follow:** `Planning` `#steps`, `#saving` and `#proposals`, `PromptEditor` `#chained-tasks`, and `TasksTab` `#chain-steps`.
+            \\\
+
+    sentFrom: AddStepsToStories
+
+    model: opus

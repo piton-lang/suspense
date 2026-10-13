@@ -241,10 +241,63 @@ const FREEFORM_TAB: usize = 4;
 /// a little wider than the icon it centres.
 const CHAIN_WIDTH_ESTIMATE: Pixels = px(40.);
 
-/// How wide the column of send, queue, and preview buttons is.
-/// Wide enough for Send, its icon and its longest label, "Queue", with its
-/// chevron beside it, so neither runs past the chat input's padding.
-const SEND_COLUMN_WIDTH: Pixels = px(108.);
+/// The narrowest the column of send, queue, and preview buttons is; it is
+/// wider still wherever the send button's longest label needs it.
+const SEND_COLUMN_WIDTH: Pixels = px(88.);
+
+/// The send button's longest label, which the column is always wide enough
+/// to show in full.
+const SEND_LONGEST_LABEL: &str = "Send to task";
+
+/// The least room the help text is kept in before it is left out.
+const HELP_MIN_WIDTH: Pixels = px(48.);
+
+/// Where the tab bar's widths are kept, as last laid out: the bar's own,
+/// the tabs', and the controls at their right, in full and short.
+const BAR_WIDTH: usize = 0;
+const TABS_WIDTH: usize = 1;
+const CONTROLS_FULL_WIDTH: usize = 2;
+const CONTROLS_SHORT_WIDTH: usize = 3;
+
+/// How the tab bar fits its width, as the ChatInputScope's fit says, each
+/// step only once the one before is not enough.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum BarFit {
+    /// Everything on one line, the help cut off as it needs.
+    Full,
+    /// The help text left out.
+    NoHelp,
+    /// The controls short: icons and numbers only.
+    Short,
+    /// The short controls on a second line beneath the tabs.
+    Wrapped,
+}
+
+impl BarFit {
+    /// The fit for a bar `widths` wide, as last laid out.
+    fn of(widths: [Option<Pixels>; 4]) -> Self {
+        let (Some(bar), Some(tabs)) = (widths[BAR_WIDTH], widths[TABS_WIDTH]) else {
+            return BarFit::Full;
+        };
+        let room = bar - tabs;
+        // A form not yet laid out is tried, so it can be measured.
+        let fits =
+            |width: Option<Pixels>, extra: Pixels| width.is_none_or(|width| width + extra <= room);
+        if fits(widths[CONTROLS_FULL_WIDTH], HELP_MIN_WIDTH) {
+            BarFit::Full
+        } else if fits(widths[CONTROLS_FULL_WIDTH], px(0.)) {
+            BarFit::NoHelp
+        } else if fits(widths[CONTROLS_SHORT_WIDTH], px(0.)) {
+            BarFit::Short
+        } else {
+            BarFit::Wrapped
+        }
+    }
+
+    fn short(self) -> bool {
+        matches!(self, BarFit::Short | BarFit::Wrapped)
+    }
+}
 
 /// The send button's chevron half, narrow enough that it and Send fit the
 /// column.
@@ -716,11 +769,16 @@ pub struct ChatInput {
     /// Whether the task running, its output shown, can be sent more, so the
     /// send menu offers to.
     can_send_to_task: bool,
+    /// Whether the task that can be sent more is a Code task, in the code
+    /// lane, so the Code tab sends to it by default.
+    code_task_running: bool,
     /// How the input grows to fit its text.
     fit: GrowToFit,
     /// Width of the chain's tab as last laid out, which is how far Code and
     /// Spec slide together beneath it when it is selected.
     chain_width: Option<Pixels>,
+    /// The tab bar's widths as last laid out, by BAR_WIDTH and the rest.
+    bar_widths: [Option<Pixels>; 4],
     /// What is attached to the prompt: kept across tab switches, and sent,
     /// then cleared, with the prompt.
     attachments: Vec<Attachment>,
@@ -871,8 +929,10 @@ impl ChatInput {
             context: None,
             conversation_running: false,
             can_send_to_task: false,
+            code_task_running: false,
             fit: GrowToFit::new(MAX_ROWS),
             chain_width: None,
+            bar_widths: [None; 4],
             attachments: Vec::new(),
             next_attachment_id: 0,
             send_menu: None,
@@ -1648,6 +1708,12 @@ impl ChatInput {
             || (self.preview.is_some() && self.focus_handle.is_focused(window))
     }
 
+    /// What holds its keyboard while it has it: its text, and the preview in
+    /// its place.
+    pub fn keyboard_handles(&self, cx: &App) -> [FocusHandle; 2] {
+        [self.editor.read(cx).focus_handle(cx), self.focus_handle.clone()]
+    }
+
     /// Marks the harness as working; sending then queues the prompt.
     /// Shows how much context the selected tab's conversation holds, or that
     /// the next prompt starts a new one.
@@ -1822,8 +1888,18 @@ impl ChatInput {
             .into_any_element()
     }
 
-    fn render_usage(&self, viewport: Size<Pixels>, cx: &mut Context<Self>) -> AnyElement {
-        let (text, level) = self.usage.summary();
+    fn render_usage(
+        &self,
+        viewport: Size<Pixels>,
+        short: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let (full, level) = self.usage.summary();
+        // Short, only its figure, its full wording kept in its tooltip.
+        let text = match full.strip_prefix("Usage ") {
+            Some(figure) if short => figure.to_string(),
+            _ => full.clone(),
+        };
         let color = level.color(cx).unwrap_or(cx.theme().muted_foreground);
         let hover = cx.theme().foreground;
         let bounds = self.usage_bounds.clone();
@@ -1845,8 +1921,13 @@ impl ChatInput {
                     .size_full(),
             )
             .when(!self.usage_open, |this| {
-                this.tooltip(|window, cx| {
-                    Tooltip::new("Click for the agent's usage in detail").build(window, cx)
+                this.tooltip(move |window, cx| {
+                    let tip = if short {
+                        format!("{full}. Click for the agent's usage in detail")
+                    } else {
+                        "Click for the agent's usage in detail".to_string()
+                    };
+                    Tooltip::new(tip).build(window, cx)
                 })
             })
             .on_click(cx.listener(|this, _, window, cx| this.toggle_usage(window, cx)));
@@ -1950,6 +2031,19 @@ impl ChatInput {
         self.can_send_to_task
     }
 
+    /// Marks whether the task running, its output shown, is a Code task in
+    /// the code lane.
+    pub fn set_code_task_running(&mut self, running: bool, cx: &mut Context<Self>) {
+        if self.code_task_running != running {
+            self.code_task_running = running;
+            cx.notify();
+        }
+    }
+
+    pub fn code_task_running(&self) -> bool {
+        self.code_task_running
+    }
+
     /// Takes back a prompt that couldn't be sent, with what was attached to
     /// it: into the input, ahead of anything written since.
     pub fn take_back(
@@ -2007,7 +2101,23 @@ impl ChatInput {
     }
 
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.send(Sent::AsEver, window, cx)
+        let how = if self.sends_to_task() {
+            Sent::ToTask
+        } else {
+            Sent::AsEver
+        };
+        self.send(how, window, cx)
+    }
+
+    /// Whether sending, by the send button or <Ctrl+Enter>, sends to the task
+    /// running rather than queueing: on the Code tab, while the menu offers
+    /// Send to task for a Code task in the code lane.
+    fn sends_to_task(&self) -> bool {
+        let mode = TABS[self.selected_tab];
+        mode == SendMode::Code
+            && self.editing.is_none()
+            && self.code_task_running
+            && SendOption::SendToTask.offered(mode, self.can_send_to_task)
     }
 
     /// Edits the queued prompt at `position` in the queue, counted from 1, in
@@ -2548,25 +2658,58 @@ impl Render for ChatInput {
         );
         let ask = div().relative().child(full_tab(ASK_TAB));
         let freeform = div().relative().child(full_tab(FREEFORM_TAB));
+        // How the bar fits its width, from its widths as last laid out; each
+        // is measured as it is drawn, to fit it anew from the next frame.
+        let fit = BarFit::of(self.bar_widths);
+        let short = fit.short();
+        let measure = |slot: usize| {
+            let chat_input = chat_input.clone();
+            canvas(
+                |_, _, _| {},
+                move |bounds, _, _, cx| {
+                    let width = bounds.size.width;
+                    chat_input
+                        .update(cx, |this, cx| {
+                            let kept = &mut this.bar_widths[slot];
+                            if kept.is_none_or(|old| (old - width).abs() > px(0.5)) {
+                                *kept = Some(width);
+                                cx.notify();
+                            }
+                        })
+                        .ok();
+                },
+            )
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+        };
         // What the selected tab is for, in the rest of the bar: smaller and
         // fainter than the tab labels, so it reads as a note about the tab
         // rather than another tab.
         // Each tab bar draws the line along its own bottom, and the gap
         // between Code and Spec its own; the rest of the bar, beside the help,
         // has its line here. Nothing draws a line beneath the joined tabs.
-        let help = gpui_kit::TestSupportExt::test_support(
-            div()
-                .id("tab-help")
-                .flex_1()
-                .min_w_0()
-                .self_stretch()
-                .flex()
-                .items_center()
-                .px_4()
-                .text_xs()
-                .text_color(cx.theme().muted_foreground.opacity(0.7))
-                .child(div().min_w_0().truncate().child(TABS[selected].help())),
-        );
+        // Cut off as the bar narrows, and left out once too little of it
+        // would show, the rest of the line kept empty.
+        let help = if matches!(fit, BarFit::Full) {
+            gpui_kit::TestSupportExt::test_support(
+                div()
+                    .id("tab-help")
+                    .flex_1()
+                    .min_w_0()
+                    .self_stretch()
+                    .flex()
+                    .items_center()
+                    .px_4()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground.opacity(0.7))
+                    .child(div().min_w_0().truncate().child(TABS[selected].help())),
+            )
+            .into_any_element()
+        } else {
+            div().flex_1().min_w_0().into_any_element()
+        };
         // At the far right, how much context the selected tab's conversation
         // holds, and a button to start a new one: the questions' on Ask, and
         // the tab's lane's tasks' on any other.
@@ -2591,6 +2734,7 @@ impl Render for ChatInput {
             format!("The next {run} already starts a new conversation")
         };
         let session = h_flex()
+            .relative()
             .flex_none()
             .self_stretch()
             .items_center()
@@ -2622,34 +2766,44 @@ impl Render for ChatInput {
             // the effort it goes with just left of that.
             .child(self.render_effort_picker(cx))
             .child(self.render_model_picker(cx))
-            .child(
+            .child({
+                let tip = if self.slice {
+                    "Sending the prompt with the piton slice of each spec it references"
+                } else {
+                    "Sending the prompt written as a spec, linking the specs it references"
+                };
+                // Short, only its icon, its name kept in its tooltip.
                 Button::new("slice-toggle")
                     .ghost()
                     .xsmall()
                     .icon(IconName::Scissors)
-                    .label("Slice")
+                    .when(!short, |button| button.label("Slice"))
                     .selected(self.slice)
-                    .tooltip(if self.slice {
-                        "Sending the prompt with the piton slice of each spec it references"
+                    .tooltip(if short {
+                        format!("Slice: {tip}")
                     } else {
-                        "Sending the prompt written as a spec, linking the specs it references"
+                        tip.to_string()
                     })
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.slice = !this.slice;
                         // The prompt would now be sent differently.
                         this.close_preview(window, cx);
                         cx.notify();
-                    })),
-            )
+                    }))
+            })
             .child(gpui_kit::TestSupportExt::test_support(
                 div()
                     .id("chat-context")
                     .text_xs()
                     .text_color(cx.theme().muted_foreground)
-                    .child(format!(
-                        "Context {}",
+                    .flex_none()
+                    .whitespace_nowrap()
+                    // Short, only its figure.
+                    .child(if short {
                         tokens_label(context.unwrap_or_default())
-                    ))
+                    } else {
+                        format!("Context {}", tokens_label(context.unwrap_or_default()))
+                    })
                     .tooltip(move |window, cx| {
                         let text = match context {
                             Some(tokens) => format!(
@@ -2661,17 +2815,23 @@ impl Render for ChatInput {
                     }),
             ))
             // Beside it, the agent's usage, which opens its details above it.
-            .child(self.render_usage(window.viewport_size(), cx))
+            .child(self.render_usage(window.viewport_size(), short, cx))
             .child(
+                // Short, only its icon; its tooltip says what it does.
                 Button::new("new-conversation")
                     .ghost()
                     .xsmall()
                     .icon(IconName::Sparkles)
-                    .label("New conversation")
+                    .when(!short, |button| button.label("New conversation"))
                     .disabled(context.is_none() && !self.conversation_running)
                     .tooltip(new_conversation_tooltip)
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(NewConversation))),
-            );
+            )
+            .child(measure(if short {
+                CONTROLS_SHORT_WIDTH
+            } else {
+                CONTROLS_FULL_WIDTH
+            }));
         // At the left of the bar's bottom line, a button choosing images to
         // attach.
         let attach_images = h_flex()
@@ -2689,21 +2849,49 @@ impl Render for ChatInput {
                     .tooltip("Attach files")
                     .on_click(cx.listener(|this, _, window, cx| this.pick_files(window, cx))),
             );
+        // The tabs, which never shrink, and the attach button after them.
+        let tab_row = h_flex()
+            .relative()
+            .flex_none()
+            .h_full()
+            .items_center()
+            .child(code)
+            .child(spec)
+            .child(ask)
+            .child(freeform)
+            .child(attach_images)
+            .child(measure(TABS_WIDTH));
+        // Exactly as wide as the chat input: once the controls no longer fit
+        // beside the tabs, even short, they move onto a second line beneath
+        // them, right-aligned.
+        let first_line = h_flex()
+            .w_full()
+            .min_w_0()
+            .h(TAB_STRIP_HEIGHT)
+            .items_center()
+            .child(tab_row)
+            .child(help);
         let tabs = gpui_kit::TestSupportExt::test_support(
-            div()
+            v_flex()
                 .id("chat-tabs")
                 .relative()
-                .flex()
-                .h(TAB_STRIP_HEIGHT)
-                .items_center()
+                .w_full()
+                .min_w_0()
                 .bg(strip)
-                .child(code)
-                .child(spec)
-                .child(ask)
-                .child(freeform)
-                .child(attach_images)
-                .child(help)
-                .child(session),
+                .map(|bar| {
+                    if fit == BarFit::Wrapped {
+                        bar.child(first_line).child(
+                            h_flex()
+                                .w_full()
+                                .h(TAB_STRIP_HEIGHT)
+                                .justify_end()
+                                .child(session),
+                        )
+                    } else {
+                        bar.child(first_line.child(session))
+                    }
+                })
+                .child(measure(BAR_WIDTH)),
         );
 
         // Anything attached is listed above the input.
@@ -2751,7 +2939,10 @@ impl Render for ChatInput {
         let input_row = div().flex().flex_row().items_start().gap_2();
         let previewing = self.preview.is_some();
         let editing = self.editing.is_some();
-        let send_tooltip = if queues {
+        let to_task = self.sends_to_task();
+        let send_tooltip = if to_task {
+            format!("Send to the running task ({SEND_SHORTCUT})")
+        } else if queues {
             format!("Queue until the harness is free ({SEND_SHORTCUT})")
         } else {
             format!("Send ({SEND_SHORTCUT})")
@@ -2776,6 +2967,8 @@ impl Render for ChatInput {
                     .icon(IconName::Send)
                     .label(if editing {
                         "Save"
+                    } else if to_task {
+                        "Send to task"
                     } else if queues {
                         "Queue"
                     } else {
@@ -2853,11 +3046,27 @@ impl Render for ChatInput {
             .tooltip("Preview the compiled prompt")
             .disabled(unoffered)
             .on_click(cx.listener(|this, _, window, cx| this.start_preview(window, cx)));
+        // Beneath Send, taking no height, the send button with its longest
+        // label laid out unseen, so the column is always as wide as that
+        // needs, and never changes width as the label does.
+        let longest = div().h_0().overflow_hidden().invisible().child(
+            h_flex()
+                .child(
+                    Button::new("send-longest")
+                        .icon(IconName::Send)
+                        .label(SEND_LONGEST_LABEL)
+                        .px_2()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .flex_none()
+                        .disabled(true),
+                )
+                .child(div().flex_none().w(SEND_CHEVRON_WIDTH)),
+        );
         let buttons = v_flex()
             .flex_none()
-            .w(SEND_COLUMN_WIDTH)
+            .min_w(SEND_COLUMN_WIDTH)
             .gap_2()
-            .child(send)
+            .child(v_flex().w_full().child(send).child(longest))
             .child(queue)
             .child(preview);
         let input_area = match &self.preview {
@@ -2919,6 +3128,8 @@ impl Render for ChatInput {
             .track_focus(&self.focus_handle)
             .flex()
             .flex_col()
+            // Never wider than the room it is given, whatever its bar holds.
+            .min_w_0()
             .key_context(CONTEXT)
             // Ctrl+Tab and Ctrl+Shift+Tab cycle the tabs, and the input keeps
             // focus.
@@ -3022,6 +3233,16 @@ impl Render for ChatInput {
     }
 }
 
+/// The completions a prompt written elsewhere offers, as the chat input's,
+/// such as a story's in the plan: harness mentions, and Piton from the
+/// project's language server while it runs.
+pub fn prompt_completions(cx: &App) -> Rc<dyn CompletionProvider> {
+    Rc::new(PromptCompletions {
+        lsp: ProjectLsp::get(cx).map(|client| Arc::new(PitonSession::new(client))),
+        asked: Arc::default(),
+    })
+}
+
 /// Completions for the chat input: harness mentions after `/` or `@`, and
 /// Piton from `piton lsp`, when it is running, everywhere else.
 struct PromptCompletions {
@@ -3102,6 +3323,30 @@ mod tests {
         for joined in [0., 0.5, 1.] {
             assert_eq!(at(joined).a, 1., "it isn't at full strength");
         }
+    }
+
+    /// As the bar narrows it gives way in order: the help cut off, then left
+    /// out, then the controls short, then on a line of their own; and back
+    /// in the reverse order as it widens.
+    #[test]
+    fn the_bar_gives_way_in_order() {
+        use super::BarFit;
+        use gpui_kit::px;
+        let at = |bar: f32| {
+            BarFit::of([
+                Some(px(bar)),
+                Some(px(300.)),
+                Some(px(500.)),
+                Some(px(250.)),
+            ])
+        };
+        assert_eq!(at(1200.), BarFit::Full);
+        assert_eq!(at(830.), BarFit::NoHelp);
+        assert_eq!(at(700.), BarFit::Short);
+        assert_eq!(at(500.), BarFit::Wrapped);
+        assert_eq!(at(800.), BarFit::NoHelp);
+        // Before the bar is laid out, everything is tried in full.
+        assert_eq!(BarFit::of([None; 4]), BarFit::Full);
     }
 
     /// A task queues only behind a task of its own lane: Code behind the
@@ -4400,7 +4645,7 @@ mod tests {
     /// The send menu offers Send to task only while a task can be sent more,
     /// never on the Ask tab, and picking it sends the prompt, and what is
     /// attached, to the task, clearing the input. Ctrl+Enter still sends as
-    /// ever.
+    /// ever, except on the Code tab for a Code task, which it sends to.
     #[gpui_kit::test]
     async fn send_to_task_is_offered_while_a_task_can_be_sent_more(cx: &mut TestAppContext) {
         use super::{SendMode, SendOption};
@@ -4488,7 +4733,8 @@ mod tests {
             )]
         );
 
-        // Ctrl+Enter still sends as ever: queued while the harness works.
+        // On the chain, Ctrl+Enter still sends as ever: queued while the
+        // harness works.
         cx.update_window(handle, |_, window, cx| {
             chat_input.update(cx, |input, cx| input.set_text_for_test("Next", window, cx));
             window.press("secondary-enter", cx);
@@ -4499,6 +4745,55 @@ mod tests {
             submitted.borrow()[1],
             ("Next".to_string(), Vec::new(), false, false)
         );
+
+        // On the Code tab, for a Code task in the code lane, Ctrl+Enter and
+        // Send send to it; Queue still queues.
+        chat_input.update(cx, |input, cx| input.set_code_task_running(true, cx));
+        assert!(
+            !chat_input.read_with(cx, |input, _| input.sends_to_task()),
+            "the chain sends to the task"
+        );
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| input.select_tab(0, window, cx));
+            assert!(chat_input.read(cx).sends_to_task());
+            chat_input.update(cx, |input, cx| input.set_text_for_test("More", window, cx));
+            window.press("secondary-enter", cx);
+            chat_input.update(cx, |input, cx| input.set_text_for_test("Then", window, cx));
+            window.render_frame(cx);
+            window.find("queue");
+            chat_input.update(cx, |input, cx| input.pick_send_option(1, window, cx));
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            submitted.borrow()[2..],
+            [
+                ("More".to_string(), Vec::new(), false, true),
+                ("Then".to_string(), Vec::new(), true, false)
+            ]
+        );
+        // Nor while a queued prompt is edited, or a Freeform task runs.
+        cx.update_window(handle, |_, window, cx| {
+            chat_input.update(cx, |input, cx| {
+                input.begin_editing(
+                    1,
+                    "Queued".into(),
+                    SendMode::Code,
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    window,
+                    cx,
+                );
+                assert!(!input.sends_to_task(), "an edit is sent to the task");
+                input.cancel_editing(window, cx);
+                input.set_code_task_running(false, cx);
+                assert!(!input.sends_to_task());
+                input.set_code_task_running(true, cx);
+                input.select_tab(super::DEFAULT_TAB, window, cx);
+            })
+        })
+        .unwrap();
 
         // The task ends while the menu is open on Send to task: the highlight
         // moves to an option still offered.

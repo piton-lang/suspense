@@ -1,0 +1,72 @@
+
+export anchor VagueCodingIssueReport2:
+    userPrompt:
+        \\\
+        We're having an issue with something 
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    attachedImages:
+        image1:
+            \\\
+            .suspense/images/1791820241-773d945de5cd.png
+            \\\
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            We're having an issue with something 
+            \\\
+        result:
+            \\\
+            I read the screenshot as two problems and changed the chat input spec to fix both. You didn't say exactly what was wrong, so tell me if you meant something else. `piton check` and `piton build` both pass.
+
+            **The control row overflows.** When the chat input is narrow, the row with the tabs and controls runs past its right edge. Slice, Context, Usage and New conversation end up drawn over the empty area beside it. The spec said these controls are "never cut off" but didn't say what happens once the help text has made all the room it can.
+
+            **The send button's label is cut off.** It reads "Que…" because the button column was a fixed 88 pixels.
+
+            **What changed in the spec:**
+            - **New "Fit" rule** (Tabs, `#fit`): the row is exactly as wide as the chat input and nothing in it goes past the input's edge, overlaps another control, or is clipped mid-label. As the input narrows, the row makes room in this order:
+              1. The help text is cut off, then left out.
+              2. New conversation and Slice show only their icons. Context and Usage show only their numbers. Each keeps its full wording in its tooltip.
+              3. The controls move onto a second line under the tabs, aligned right.
+
+              The tabs themselves never shrink. Widening the input reverses the steps.
+            - **Button column** (`#description`): at least 88 pixels, and wide enough for the longest label, "Send to task", with its icon and dropdown chevron. Its width doesn't change when the label does, no label is cut off with "…", and the text box takes the remaining room.
+
+            The code should follow `.claude/reference/scope/prompt-mode/chat-input/index.md#fit` and `#description`.
+            \\\
+
+    sentFrom: VagueCodingIssueReport
+
+    model: opus

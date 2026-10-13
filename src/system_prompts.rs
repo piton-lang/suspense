@@ -74,6 +74,20 @@ pub fn ask_cards() -> &'static str {
     .trim_end()
 }
 
+/// The verdict every Code, Chain, and Spec task is asked to end its reply
+/// with, last in its instructions, whatever they say: a line the application
+/// reads to tell a task that couldn't do the work from one that did (see
+/// [`crate::task_table::Verdict`]). The application's own, not a project's
+/// to edit, baked in from this repository's
+/// `.suspense/system-prompts/task-verdict.md`.
+pub fn task_verdict() -> &'static str {
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/.suspense/system-prompts/task-verdict.md"
+    ))
+    .trim_end()
+}
+
 /// What CODE_RESULT is filled in with for a code task that left no final
 /// output.
 pub const NO_CODE_RESULT: &str = "The code task left no final output: it failed, was \

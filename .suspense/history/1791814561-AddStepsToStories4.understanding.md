@@ -1,0 +1,8 @@
+- [A step is saved in its story's file, in a `steps` list, in order, straight away](.claude/reference/scope/planning/index.md#steps)
+- [Adding a step to a story that doesn't exist changes nothing and says so](.claude/reference/scope/planning/index.md#steps)
+- [A story's row shows "N steps" after its title, muted, with the list in its tooltip](.claude/reference/scope/planning/index.md#steps)
+- [In Current sprint a story with steps is expanded, a row per step beneath it, in order, indented 16 pixels, each with its own status](.claude/reference/scope/planning/index.md#steps)
+- [In Done, and in a finding started from the story, its steps are listed the same way, collapsed to its step count until expanded](.claude/reference/scope/planning/index.md#steps)
+- [Step rows are 36 pixels tall, in the same fixed columns as stories](.claude/reference/scope/planning/index.md#sprint)
+- [A sent story runs as a chain, its prompt first then each step, shown in the Tasks tab as one chain with its steps beneath](.claude/reference/scope/planning/index.md#steps)
+- [Every place reads a story's steps from the story's own file, in the same order](.claude/reference/scope/planning/index.md#steps)

@@ -1,0 +1,8 @@
+- [Spinner, status label, elapsed time, and output rate read as one line wherever they show together](.claude/reference/scope/prompt-mode/message-list/index.md#alignment)
+- [Each is centred on the line's middle; the label's text and the times share one baseline](.claude/reference/scope/prompt-mode/message-list/index.md#alignment)
+- [They are one small text size; the label's text is no larger than the times](.claude/reference/scope/prompt-mode/message-list/index.md#alignment)
+- [The spinner is 12 px square, in the status label's colour](.claude/reference/scope/prompt-mode/message-list/index.md#alignment)
+- [The label is a 20 px tall pill, 6 px each side of its text, 1 px border and faint fill in its colour, corners rounded 4 px](.claude/reference/scope/prompt-mode/message-list/index.md#alignment)
+- [They are 6 px apart throughout: spinner to label, label to time, time to rate](.claude/reference/scope/prompt-mode/message-list/index.md#alignment)
+- [Elapsed time is small muted tabular figures beside the status label](.claude/reference/scope/prompt-mode/message-list/index.md#elapsed)
+- [The output rate sits right after the elapsed time, muted, in the same small tabular figures](.claude/reference/scope/prompt-mode/message-list/index.md#output-rate)

@@ -8,6 +8,20 @@ export anchor MessageListStatus:
         a task from the history with no record of its run. The labels are
         readable in both light and dark mode.
 
+    alignment:
+        The spinner, the status label, the elapsed time, and the output rate
+        read as one line, wherever they show together. Each is centred on the
+        line's middle, the spinner and the label's box alike, so none sits
+        higher or lower than the others, and the label's text and the times
+        share one baseline. They are one text size, small: the label's text is
+        no larger than the times beside it. The spinner is 12 pixels square,
+        drawn the colour of the status label, never larger than the label's
+        text is tall. The label is a pill 20 pixels tall, its text with 6
+        pixels to each side, its 1 pixel border and faint fill in its own
+        colour, corners rounded 4 pixels. They are 6 pixels apart throughout,
+        spinner to label, label to time, and time to rate, the same gap on
+        each side, never wider on one side than the other.
+
     elapsed:
         Beside its status label, a task shows how long it has been under way,
         from when it was sent, building and compiling included, in small

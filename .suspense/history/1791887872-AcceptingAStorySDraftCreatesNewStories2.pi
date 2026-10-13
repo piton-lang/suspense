@@ -1,0 +1,126 @@
+
+export anchor AcceptingAStorySDraftCreatesNewStories2:
+    userPrompt:
+        \\\
+        When a story is drafted, with "Draft with agent" or "Ask agent", accepting
+        its suggestions never changes the story that was drafted. Instead, every
+        suggestion becomes a new story of its own.
+
+        Once this is done:
+        - Accepting what was the story's rewrite, its first piece, adds a new
+          story at the end of the Backlog, marked "From agent". The new story has
+          the proposed title, prompt, mode, and spec citations, and carries the
+          proposed Spec follow-up step as its own step.
+        - Each other piece the draft split off is still a new story at the end of
+          the Backlog, as now.
+        - On a draft about a story, no proposal card reads "Rewrite this story" or
+          "Add to this story". Each reads "New story", and the follow-up step shows
+          as part of the story it follows, not as a card that adds to the drafted
+          story.
+        - "Accept all" creates all of them together, in the order given.
+        - The drafted story keeps its title, prompt, mode, steps, and citations,
+          and stays in its column: a Draft story is no longer moved to the Backlog
+          when its draft is accepted.
+        - Accepting never marks it "Updated by agent".
+
+        Change spec/scope/planning/index.pi#Planning.drafting,
+        spec/scope/planning/index.pi#Planning.draftingWithAgent,
+        spec/scope/planning/index.pi#Planning.proposals and
+        spec/scope/planning/index.pi#Planning.proposalCards to say this. Keep where
+        new stories go as spec/scope/planning/index.pi#Planning.creating says. Then
+        change the code to match.
+
+        Proposals from "Draft stories", from research, and from Ask answers that
+        add to a named story are not part of this, and work as they do now.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            When a story is drafted, with "Draft with agent" or "Ask agent", accepting
+            its suggestions never changes the story that was drafted. Instead, every
+            suggestion becomes a new story of its own.
+
+            Once this is done:
+            - Accepting what was the story's rewrite, its first piece, adds a new
+              story at the end of the Backlog, marked "From agent". The new story has
+              the proposed title, prompt, mode, and spec citations, and carries the
+              proposed Spec follow-up step as its own step.
+            - Each other piece the draft split off is still a new story at the end of
+              the Backlog, as now.
+            - On a draft about a story, no proposal card reads "Rewrite this story" or
+              "Add to this story". Each reads "New story", and the follow-up step shows
+              as part of the story it follows, not as a card that adds to the drafted
+              story.
+            - "Accept all" creates all of them together, in the order given.
+            - The drafted story keeps its title, prompt, mode, steps, and citations,
+              and stays in its column: a Draft story is no longer moved to the Backlog
+              when its draft is accepted.
+            - Accepting never marks it "Updated by agent".
+
+            Change spec/scope/planning/index.pi#Planning.drafting,
+            spec/scope/planning/index.pi#Planning.draftingWithAgent,
+            spec/scope/planning/index.pi#Planning.proposals and
+            spec/scope/planning/index.pi#Planning.proposalCards to say this. Keep where
+            new stories go as spec/scope/planning/index.pi#Planning.creating says. Then
+            change the code to match.
+
+            Proposals from "Draft stories", from research, and from Ask answers that
+            add to a named story are not part of this, and work as they do now.
+            \\\
+        result:
+            \\\
+            I've changed the spec so that accepting a story's draft never touches the drafted story. Every suggestion now becomes a new story at the end of the Backlog, as `Planning.creating` says. `piton check` and `piton build` both pass. I didn't change any code.
+
+            What the code should follow in `spec/scope/planning/index.pi`:
+
+            - **`Planning.drafting`**: a draft from "Draft with agent" or "Ask agent" never changes the drafted story. What used to be the rewrite comes first as a "New story", with the proposed title, prompt, mode and spec citations. Its Spec follow-up step comes with it as its own step. Every other piece is also a new story. Nothing in such a draft targets the drafted story.
+            - **`Planning.draftingWithAgent`**:
+              - The card's proposal count counts each new story once; its follow-up step isn't counted separately.
+              - "Accept all" creates every new story together, at the end of the Backlog, in the order given.
+              - Accepting never changes the drafted story, never moves a Draft story to the Backlog, and never marks it "Updated by agent". Proposals on a story that was sent while they waited can still be accepted as new stories.
+            - **`Planning.proposals`**: the `suspense-story` target is now `new` or a story id; `rewrite` is gone. I had to decide how a draft returns the follow-up step, since the block had no place for it: as a separate block with `target: step` right after the story it follows, read as that story's step. For drafts about a story, the code should also accept old or stray blocks. A block targeting the drafted story (by id or `rewrite`) is read as `new`. A block adding a step to the drafted story becomes the step of the new story just before it, or a new story if there's none before it.
+            - **`Planning.proposalCards`**:
+              - On a draft about a story, every card reads "New story"; none reads "Rewrite this story" or "Add to this story".
+              - The follow-up step shows on its story's card as step 2, under the prompt.
+              - Edit's target menu leaves out the drafted story.
+              - Accepting a new story adds its step and never changes the drafted story.
+              - Additions from Ask answers and research work as before.
+
+            I left one thing alone because it wasn't in the four sections you named: the planning prompt in `BakedSystemPrompts` (`planning.pi`) still says it proposes a story's "rewrite". It should probably be updated so the agent stops proposing rewrites. I also chose `step` as the target name myself, so you may want to settle that before the code step.
+            \\\
+
+    sentFrom: AcceptingAStorySDraftCreatesNewStories
+
+    model: opus

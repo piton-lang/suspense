@@ -1,0 +1,8 @@
+- [A horizontal wheel anywhere on the board, over a column, its heading, or the padding and gaps, scrolls the board sideways](.claude/reference/scope/planning/index.md#layout)
+- [The horizontal wheel does nothing while the columns fit the tab](.claude/reference/scope/planning/index.md#layout)
+- [The horizontal wheel never scrolls a column up or down](.claude/reference/scope/planning/index.md#layout)
+- [The horizontal wheel moves the board the way it is turned: right moves it right, left moves it left](.claude/reference/scope/planning/index.md#layout)
+- [Scrolling over the side panel, the pause bar, or the bulk bar never moves the board or a column](.claude/reference/scope/planning/index.md#layout)
+- [A vertical wheel over a column scrolls only that column and never passes on to the board](.claude/reference/scope/planning/index.md#layout)
+- [A vertical wheel outside every column scrolls the board sideways, down moving it right](.claude/reference/scope/planning/index.md#layout)
+- [Shift with the wheel and a sideways swipe scroll the board sideways; a diagonal swipe over a column splits between column and board](.claude/reference/scope/planning/index.md#layout)

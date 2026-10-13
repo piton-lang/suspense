@@ -1,0 +1,6 @@
+- [Running lists every task under way, in either lane](.claude/reference/ui/components/right-sidebar/tasks/index.md#description)
+- [A chain's status is worked out only from its steps as they actually are, never from what it might still do](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain reads Running only while a step is under way, a step waits in a queue after an earlier one ran, or the application is still to send its next step in this session](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A chain that stopped short of a step it was to run, none failed or cancelled, is over and reads Stopped, never Running](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A step waiting in the queue can be cancelled there, ending the chain](.claude/reference/scope/prompt-mode/index.md#chained-tasks)
+- [A step is running only while the application has its run under way, and queued only while its prompt is in the queue](.claude/reference/scope/prompt-mode/index.md#chained-tasks)

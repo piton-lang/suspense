@@ -1,0 +1,18 @@
+
+export anchor Story_58500e8f76282c11:
+    userPrompt:
+        \\\
+        Planning's board can be worked from the keyboard and in bulk, as Linear's board can. The spec has nothing yet on multi-select, a bulk bar, or a context menu, so these are new; add them to spec/scope/planning/index.pi#Planning.keyboard and spec/scope/planning/index.pi#Planning.parts.
+        - J and K move focus down and up, alongside the arrow keys.
+        - X toggles the focused card's selection. Shift+click selects a range within a column, and Ctrl/Cmd+click toggles one card.
+        - Single-card shortcuts act on the card under the pointer when no card has focus, as Linear's do.
+        - Selected cards show the theme's selected surface, which is distinct from focus and from the open story.
+        - While any card is selected, a bar along the board's foot names how many are selected and offers labelled "Move to next sprint", "Move to backlog", "Change mode", "Duplicate", "Delete", and "Clear".
+        - Dragging a selected card carries the whole selection, in its order.
+        - Right-clicking a card opens its menu, the same one as its hover button, at the pointer.
+        Every rule in spec/scope/planning/index.pi#Planning.sprint still holds. Only the Backlog and Next sprint take moves, and nothing here sends a story. Escape clears the selection before it closes the side panel.
+        \\\
+
+    mode: combined
+
+    model: opus

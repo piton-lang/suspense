@@ -1,0 +1,44 @@
+
+export anchor Story_126d4b89c161d7b7:
+    userPrompt:
+        \\\
+        The Planning board has a new "Draft" column, the first on the board,
+        to the left of the Backlog. It holds rough stories: ideas written down
+        quickly that aren't ready to plan yet. The spec has nothing on a Draft
+        column yet, so this is new. Update every place that lists the columns
+        or decides which ones can hold stories:
+
+        - spec/scope/planning/index.pi#Planning.description and
+          spec/scope/planning/index.pi#Planning.layout give the column order as
+          Draft, Backlog, Next sprint, Current sprint, Done, Findings. Draft
+          gets a status icon and top-edge colour of its own, as
+          spec/scope/planning/index.pi#Planning.parts gives every column: for
+          example, a pencil in the theme's tertiary text colour. Its look must
+          be clearly different from the Backlog's dashed circle.
+        - Stories are written in Draft the same way as in the Backlog and Next
+          sprint, as spec/scope/planning/index.pi#Planning.creating says: an
+          "Add story" line, "+ Add" on hover, and Ctrl+N when Draft has focus.
+        - Draft takes drops, as spec/scope/planning/index.pi#Planning.sprint
+          describes for the Backlog and Next sprint. Stories move between Draft
+          and the Backlog by dragging, with Alt+Left/Alt+Right
+          (spec/scope/planning/index.pi#Planning.keyboard), and from a card's
+          menu ("Move to draft"; "Move to backlog" from Draft). Draft stories
+          can be selected, and the bulk bar can move them
+          (spec/scope/planning/index.pi#Planning.parts). A Draft story never
+          reaches a sprint without first moving to the Backlog or Next sprint.
+        - Draft's empty state, worded as in
+          spec/scope/planning/index.pi#Planning.states, says something like
+          "No drafts. Jot an idea down here."
+        - The Draft section is saved in order.json with the others, as
+          spec/scope/planning/index.pi#Planning.saving and
+          spec/scope/project-data/index.pi#ProjectData.contents say. A plan
+          saved before Draft existed loads with Draft empty.
+
+        Accepted proposals still go into the Backlog, as they do today. The
+        column is named "Draft"; keep it clearly apart from the existing
+        "Draft stories" button on the Backlog's heading.
+        \\\
+
+    mode: combined
+
+    model: opus

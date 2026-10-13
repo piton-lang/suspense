@@ -1675,6 +1675,31 @@ pub fn one_off_command(project_dir: &Path) -> Command {
     command
 }
 
+/// A one-off run as [`one_off_command`] gives, which can also search and
+/// read the web, for research: still reading, never changing anything.
+#[cfg_attr(test, allow(dead_code))]
+pub fn research_command(project_dir: &Path) -> Command {
+    let agent = agent::of_project(Some(project_dir));
+    let command = one_off_command(project_dir);
+    if agent == Agent::Claude {
+        let args: Vec<std::ffi::OsString> = command
+            .get_args()
+            .map(|arg| {
+                if arg == "Read,Glob,Grep" {
+                    "Read,Glob,Grep,WebSearch,WebFetch".into()
+                } else {
+                    arg.to_owned()
+                }
+            })
+            .collect();
+        let mut with_web = crate::process::command(agent.command());
+        with_web.envs(agent.env().iter().copied());
+        with_web.args(args).current_dir(project_dir);
+        return with_web;
+    }
+    command
+}
+
 /// Asks the harness in use something quick in `project_dir`, which it
 /// answers from `prompt` alone, with no tools where it allows, keeping no
 /// session: with a small model at low effort where it can be told one.

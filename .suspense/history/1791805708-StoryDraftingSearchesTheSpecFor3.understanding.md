@@ -1,0 +1,6 @@
+- [The drafter searches the compiled spec for the requirements, behaviours, names, and sections each story touches](.claude/reference/scope/planning/index.md#spec-grounding)
+- [Each proposal's spec list cites links to existing reference headings, checked on arrival, bad ones dropped](.claude/reference/scope/planning/index.md#spec-grounding)
+- [Where nothing matches, the story says No match instead of inventing one](.claude/reference/scope/planning/index.md#spec-grounding)
+- [A proposal citing nothing and saying no No match is flagged with Draft again](.claude/reference/scope/planning/index.md#spec-grounding)
+- [Research may end with proposals, and Ask answers' suspense-story blocks are proposal cards too](.claude/reference/scope/planning/index.md#proposal-cards)
+- [Each citation is labelled Requirement, Behaviour, Name, or Section with a short quote; grounding applies to every proposal source](.claude/reference/scope/planning/index.md#spec-grounding)

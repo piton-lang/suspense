@@ -24,10 +24,12 @@ pub const SOCKET_ENV: &str = "SUSPENSE_PITON_CHANNEL";
 /// The argument the application is run with to be the shim.
 pub const SHIM_ARG: &str = "--piton-shim";
 
-/// Whether a run under `kind` may run piton with `args`: a Spec run may
-/// build, check, format, and slice; a Code or Question run may only slice
-/// with an adapter, which prints compiled output, never the source.
-pub fn allowed(kind: ProfileKind, args: &[String]) -> Result<(), String> {
+/// Whether a run under `kind` in the project at `project_dir` may run piton
+/// with `args`: a Spec run may build, check, format, and slice; a Code or
+/// Question run may slice with an adapter, which prints compiled output,
+/// never the source; and a Code run may also compile files of its own code,
+/// as a build that bakes in Piton does.
+pub fn allowed(kind: ProfileKind, args: &[String], project_dir: &Path) -> Result<(), String> {
     let command = args
         .iter()
         .find(|arg| !arg.starts_with('-'))
@@ -42,7 +44,12 @@ pub fn allowed(kind: ProfileKind, args: &[String]) -> Result<(), String> {
                 Some("build" | "check" | "fmt" | "format" | "slice")
             ) || args.iter().any(|arg| arg == "--version" || arg == "--help")
         }
-        ProfileKind::Code | ProfileKind::Question => {
+        ProfileKind::Code => {
+            (command == Some("slice") && adapter)
+                || (command == Some("compile") && compiles_own_code(args, project_dir))
+                || args.iter().any(|arg| arg == "--version" || arg == "--help")
+        }
+        ProfileKind::Question => {
             (command == Some("slice") && adapter)
                 || args.iter().any(|arg| arg == "--version" || arg == "--help")
         }
@@ -56,12 +63,45 @@ pub fn allowed(kind: ProfileKind, args: &[String]) -> Result<(), String> {
             args.join(" "),
             kind.label(),
             match kind {
-                ProfileKind::Code | ProfileKind::Question =>
+                ProfileKind::Code =>
+                    "only `piton slice --adapter <adapter> <target>` is, which prints compiled output, and `piton compile <file>…` of files under the project's code locations",
+                ProfileKind::Question =>
                     "only `piton slice --adapter <adapter> <target>` is, which prints compiled output",
                 _ => "only build, check, fmt, and slice are",
             }
         ))
     }
+}
+
+/// Whether `args`, `compile` and then files alone, no flags, name only
+/// files under the project's code locations and none of its spec, each
+/// resolved, links and all, against `project_dir`, where piton runs.
+fn compiles_own_code(args: &[String], project_dir: &Path) -> bool {
+    let files = &args[1..];
+    if args.first().map(String::as_str) != Some("compile") || files.is_empty() {
+        return false;
+    }
+    let Ok((code, spec)) = super::Classification::load(project_dir).resolve(project_dir) else {
+        return false;
+    };
+    let real = |paths: Vec<PathBuf>| -> Vec<PathBuf> {
+        paths
+            .into_iter()
+            .filter_map(|path| dunce::canonicalize(path).ok())
+            .collect()
+    };
+    let (code, spec) = (real(code), real(spec));
+    files.iter().all(|file| {
+        if file.starts_with('-') {
+            return false;
+        }
+        let Ok(file) = dunce::canonicalize(project_dir.join(file)) else {
+            return false;
+        };
+        file.is_file()
+            && code.iter().any(|root| file.starts_with(root))
+            && !spec.iter().any(|root| file.starts_with(root))
+    })
 }
 
 /// A run's piton channel, listening until it is dropped.
@@ -212,7 +252,7 @@ fn serve(
         return;
     }
     let args: Vec<String> = serde_json::from_str(line.trim()).unwrap_or_default();
-    if let Err(why) = allowed(kind, &args) {
+    if let Err(why) = allowed(kind, &args, project_dir) {
         frame(&mut writer, b'e', why.as_bytes()).ok();
         frame(&mut writer, b'x', &2i32.to_be_bytes()[..]).ok();
         return;

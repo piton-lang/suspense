@@ -1,5 +1,6 @@
 use /lib
 use /ui
+from /scope/planning import Planning
 from /ui/components/right-sidebar import TasksTab
 from ../editor import Editor
 from ../no-project import NoProjectState
@@ -13,6 +14,7 @@ from /ui/components/file-tree import FileTree
 from /ui/components/inset-panel import InsetPanel
 from /ui/components/left-sidebar import LeftSidebar
 from /ui/components/ribbon import Ribbon
+from /ui/components/ribbon/planning-tab import RibbonPlanningTab
 from /ui/components/right-sidebar import RightSidebar
 
 export ui-component Body:
@@ -34,6 +36,22 @@ export ui-component Body:
         tab's contents, and the chat input, and the chat input's right edge is against it: the chat input
         never runs beneath the right sidebar. While that sidebar isn't there,
         the chat input reaches the window's right edge.
+
+        While Planning's tab is selected, neither sidebar shows, and the body
+        runs the whole width of the window beneath the ribbon, from the
+        window's left edge to its right: the @{LeftSidebar} is hidden whole,
+        its view bar and all, and the @{RightSidebar} isn't there either, even
+        while a task runs, the queue holds a prompt, or it was opened by hand.
+        This is the exception to the left sidebar always being there and to
+        when the right sidebar shows. Both go at once, with nothing sliding,
+        as the chat input does, as the tabs say, and come back at once when
+        Chat, a file, or a task tab is selected, as they were left: the left
+        sidebar's view, whether it is collapsed, its width, its scroll, and
+        its selection, and the right sidebar's width and whether it was
+        opened by hand. If a task started or ended while Planning was
+        showing, the right sidebar comes back in whatever state that leaves
+        it: there if a task still runs, a prompt is queued, or it was opened
+        by hand, and not there otherwise.
 
         The body is flat and quiet: the selected tab's contents, the message
         list or an open file, sit on the theme's base surface, #444444 in dark
@@ -58,13 +76,14 @@ export ui-component Body:
     contents:
         Everything that can be in the body:
 
-        - a tab bar along its top, holding a Chat tab and a tab for each file open
+        - a tab bar along its top, holding a Chat tab, a tab for each file open, and the Planning tab, right after Chat, once it has been opened, since nothing closes it
+        - the @{Planning}, beneath the tab bar while its tab is selected
         - the @{MessageList}, the chat history, shown beneath the tab bar while the Chat tab is selected
         - the hint shown in the message list's place before any task has been sent, or while no project is open, as the @{PromptEditor} and the @{NoProjectState} say
         - an @{Editor} for each open file, shown beneath the tab bar while its tab is selected
         - a task view for each task opened in a tab of its own, as its task tabs say, shown beneath the tab bar while its tab is selected
         - the @{AskConversation}, in the Chat tab's place beneath the tab bar, while the chat input's Ask tab is selected
-        - the @{ChatInput}, along the bottom beneath whichever tab is selected, and beneath the Ask conversation too
+        - the @{ChatInput}, along the bottom beneath whichever tab is selected but Planning, which is the one tab without it, and beneath the Ask conversation too
         - the @{RightSidebar}, at the right of all of these, the tab bar and the chat input included, while a task runs or is queued, or it is opened by hand
 
         An @{InsetPanel} floats over the whole window, the body included,
@@ -88,18 +107,42 @@ export ui-component Body:
         Along the top of the body runs a tab bar, in gpui-kit's default tab
         styling, across the width the message list takes: from the project
         sidebar to the right sidebar while a task runs, and to the
-        window's right edge otherwise. Its first tab, Chat, shows the message
-        list, and is always there: it can't be closed or moved. After it comes
-        a tab for each open file and each task opened in a tab of its own,
-        files and tasks together, in the order they were opened unless they
-        have been dragged since, scrolling sideways once there are more than
-        fit.
+        window's right edge otherwise, and from the window's left edge to its
+        right while Planning's tab is selected. Its first tab, Chat, shows the message
+        list, and is always there: it can't be closed or moved. Once Planning
+        has been opened, its tab, "Planning" with a checklist icon, comes
+        right after Chat, and is pinned there as Chat is: it has no close
+        button, nothing else closes it either, and it can't be dragged, so
+        once there it stays in the bar. After them comes a tab
+        for each open file and each task opened in a tab of its own, files
+        and tasks together, in the order they were opened unless they have
+        been dragged since, scrolling sideways once there are more than fit.
+
+        Planning's tab is opened from the ribbon: opening the ribbon's
+        Planning tab, by clicking it, with Alt+2, or by Ctrl+clicking it to
+        open it alongside other ribbon tabs, opens Planning's tab here and
+        selects it, or selects it if it is already open, as the
+        @{RibbonPlanningTab} says. Opening another ribbon tab, or closing the
+        ribbon's Planning tab with Ctrl+click, changes nothing here: Planning's
+        tab stays in the bar and the selected tab stays selected.
 
         Just one tab's contents show at a time, filling the space between the
         tab bar and the chat input. The chat input stays along the bottom
-        whichever tab is selected, so a prompt can be written while a file
-        shows. The body starts with Chat selected, and clicking a tab selects
-        it.
+        whichever tab is selected but Planning, so a prompt can be written
+        while a file or a task shows. The body starts with Chat selected, and
+        clicking a tab selects it.
+
+        Planning is the one tab without the chat input: while its tab is
+        selected, the chat input isn't shown, nor is either sidebar, as the
+        description says, and Planning fills the body from the tab bar to the
+        body's bottom, across the whole width of the window. Selecting Chat, a file, or a
+        task tab brings the chat input back straight away, along the bottom
+        as before. Nothing slides: it goes and comes back at once, and the
+        selected tab's contents take or give up its room at once too. Hiding
+        it keeps all it holds: its draft text, its attachments, and its
+        selected mode tab are there again, as they were, when it shows. If
+        it had keyboard focus when Planning was selected, it has keyboard
+        focus again when it shows.
 
         Every tab in the bar, Chat and each file's alike, is laid out the
         same plain way, with nothing extra around it: the bar's full height,
@@ -125,14 +168,17 @@ export ui-component Body:
         A file's tab can be dragged along the tab bar to reorder the files, as
         the @{DragReorderBehaviour} says, a vertical line showing the gap
         between two tabs it will land in, and the tab dragged following the
-        pointer as the file's name. Chat stays first: no gap before a file's
-        first tab, between Chat and it, shows the indicator, and Chat itself
-        can't be dragged.
+        pointer as the file's name. Chat stays first, and Planning, while its
+        tab is there, right after it: no gap before a file's or task's first
+        tab, between Chat or Planning and it, shows the indicator, so no file
+        or task tab is ever dropped in front of either, and neither Chat nor
+        Planning can be dragged.
         Dragging a tab selects it, as clicking it does, and the selection
         follows the tab to its new place; nothing else about its editor
         changes. A press on a tab's close button closes it rather than
         starting a drag. A file opened afterwards still gets its new tab just
-        after the one selected.
+        after the one selected, or, while Chat is selected and Planning's tab
+        is there, just after Planning's, never between the two.
 
     taskTabs:
         The Chat tab shows only the task the harness is working on now, and
@@ -186,7 +232,7 @@ export ui-component Body:
         Closing a file's tab, with its close button or the editor's, closes
         the file, the editor first asking to discard any unsaved changes.
         Closing the selected tab selects the tab to its right, or, with none
-        to its right, the one to its left, which is Chat once no file is
-        left. Closing a tab that isn't selected leaves the selection as it
+        to its right, the one to its left, which is Planning, while its tab
+        is there, or else Chat, once no file is left. Closing a tab that isn't selected leaves the selection as it
         is.
 

@@ -1,0 +1,33 @@
+
+export anchor Story_38491dd3c805ec7f:
+    userPrompt:
+        \\\
+        While the body's Planning tab is selected, neither sidebar shows. Planning then
+        fills the whole width of the window beneath the ribbon, from the window's left edge
+        to its right, and from the tab bar down to the bottom.
+
+        The left sidebar is hidden whole, view bar and all. This is an exception to
+        spec/ui/components/left-sidebar/index.pi#LeftSidebar.description and
+        spec/ui/components/left-sidebar/index.pi#LeftSidebar.viewBar ("The bar is always
+        there"). The right sidebar doesn't show either, even while a task runs, the queue
+        holds a prompt, or it was opened by hand. This is an exception to
+        spec/ui/components/right-sidebar/index.pi#RightSidebar.showing, and the body's
+        right-sidebar button and Ctrl+Alt+B (Cmd+Alt+B on macOS) do nothing while Planning
+        is selected.
+
+        This works like the chat input, which already hides while Planning is selected, as
+        spec/scope/application/Body.pi#Body.tabs says: both sidebars go at once with nothing
+        sliding, and come back at once when Chat, a file or a task tab is selected. They
+        come back as they were left: the left sidebar's view, collapsed state, width,
+        scroll and selection, and the right sidebar's width and whether it was opened by
+        hand. If a task started or ended while Planning was showing, the right sidebar comes
+        back in whatever state that leaves it.
+
+        Update spec/scope/application/Body.pi#Body.description and
+        spec/scope/planning/index.pi#Planning.description so Planning is placed across the
+        full window width.
+        \\\
+
+    mode: combined
+
+    model: opus

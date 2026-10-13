@@ -1,5 +1,6 @@
 use /lib
 
+from /scope/planning import Planning
 from /scope/prompt-mode/chat-input import ChatInput
 from /scope/sandbox import Sandbox
 from /scope/harness-integration import HarnessIntegration
@@ -25,6 +26,7 @@ export feature ProjectData:
         - `attachments/`: every file other than an image attached to a task or question, saved when it is sent or queued, under its own name, in a folder named by the second it was saved and a short hash of its content, so the same file attached twice is saved once, as the @{ChatInput} says
         - `asks/`: every question asked from the Ask tab, saved the same way as a task but apart from them
         - `queue/`: each queued prompt, as its hidden anchor's source, imports included, named so they list in the order they were queued, marked when each was queued rather than when it was saved, so prompts queued one straight after another keep their order however long each takes to save, and a chain's step marked when its chain was sent, so it lists in the place the chain's steps take in its lane's queue
+        - `planning/`: the project's stories, a file per story holding its hidden anchor, and `order.json` listing the Draft, Backlog, Next sprint, Current sprint, and Done sections and their stories in order, a plan saved before Draft existed loading with Draft empty, as the @{Planning} says
         - `divergence/`: each divergence report, a JSON file named by when it was made
         - `system-prompts/`: each mode's system prompt template, a Markdown file named after its mode, code.md, combined.md for Chain, spec.md, and ask.md, and the spec-reading prompt injected into them, spec-reading.md, and the resume prompt given to a resumed task, resume.md
         - `commit-notes.json`: the Git panel's commit notes

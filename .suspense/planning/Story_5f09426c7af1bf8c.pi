@@ -1,0 +1,16 @@
+
+export anchor Story_5f09426c7af1bf8c:
+    userPrompt:
+        \\\
+        The Planning tab in the body shows the plan as a kanban board instead of one centred column. Today it is a single column at most 760 pixels wide, as [Planning](.claude/reference/scope/planning/index.md#description) and its [Layout](.claude/reference/scope/planning/index.md#layout) describe. Once this is done, Planning fills the body beneath the tab bar, as the [Body](.claude/reference/scope/application/Body.md#contents) places it. Its sections sit side by side as columns of equal fixed width, in the order work moves: Backlog, Next sprint, Current sprint, Done. Each column keeps its section's heading row, with its name, its count and its actions ("Send sprint" and "Start automatically" on Next sprint, "Draft stories" and "Research" on the Backlog, "Close sprint" on Current sprint). Each column scrolls on its own, and the board scrolls sideways when it is wider than the tab. Both use the [Scrollbar](.claude/reference/ui/components/scrollbar/index.md#scrollbar).
+
+        Each story is a card in its column instead of a 36 pixel row. It is a new kind of part beside the row, panel and card in [Parts](.claude/reference/scope/planning/index.md#parts). The card still shows everything the [Stories](.claude/reference/scope/planning/index.md#stories) row shows: the mode pill in its mode's colour, the title (wrapping to two lines before it is cut off), the step count, the attachment icon, and the status label once the story has been sent.
+
+        On the board, Current sprint and Done are always there as columns. They no longer appear and disappear, or collapse beneath the Backlog, as the [Sprint](.claude/reference/scope/planning/index.md#sprint) says today. When either is empty it shows its empty state, as the [States](.claude/reference/scope/planning/index.md#states) say. A story with steps in Current sprint lists its steps on its card, each with its own status. The pause bar from [Paused](.claude/reference/scope/planning/index.md#paused) runs across the top of the whole board. Findings, from [Research](.claude/reference/scope/planning/index.md#research), become the last column, after Done.
+
+        The sprint's behaviour doesn't change: what is sent, closing, auto start and saving to `order.json` all stay as they are. The spec has nothing on a board, columns or story cards yet, so the layout is new.
+        \\\
+
+    mode: combined
+
+    model: opus

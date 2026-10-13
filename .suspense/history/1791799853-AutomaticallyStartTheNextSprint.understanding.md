@@ -1,0 +1,7 @@
+- [Send sprint sends Next sprint's stories in order as one block in the queue](.claude/reference/scope/planning/index.md#sprint)
+- [No single story can be sent; the only route to work is the sprint](.claude/reference/scope/planning/index.md#sprint)
+- [Once every story of the sprint has ended, Close sprint moves the done ones to Done and leaves failed ones](.claude/reference/scope/planning/index.md#sprint)
+- [Every added story goes to the end of Next sprint](.claude/reference/scope/planning/index.md#creating)
+- [While paused, sending the sprint is disabled until Resume or Approve; nothing ends the pause by itself](.claude/reference/scope/planning/index.md#paused)
+- [The plan, its sections, and its pause are saved in .suspense/planning/order.json](.claude/reference/scope/planning/index.md#saving)
+- [A Start automatically switch sends Next sprint once the current sprint ends all Done, never after a failure or while paused](.claude/reference/scope/planning/index.md#auto-start)

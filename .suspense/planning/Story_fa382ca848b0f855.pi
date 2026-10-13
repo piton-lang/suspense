@@ -1,0 +1,74 @@
+
+export anchor Story_fa382ca848b0f855:
+    userPrompt:
+        \\\
+        A task whose run ends without a harness error, but whose reply says it
+        couldn't do the work, is recorded and shown as Failed, never as Done.
+        That covers a reply saying it failed, that it couldn't write or change
+        the code, that it was blocked by the sandbox or by a missing file, or
+        that it gave up. Today a task finishes in the state of its last
+        result, as spec/scope/harness-integration/index.pi#HarnessIntegration.feeding
+        says, so any such reply reads Done. The spec has nothing yet on judging
+        a run by what its reply says, so this is new.
+
+        Have the run report whether it did the work in a form the application
+        can read reliably. For example, the mode system prompts could ask every
+        task to end its reply with a fixed verdict line, and the application
+        would read that line, rather than guessing from the wording of free
+        text. A reply that gives no verdict keeps today's behaviour. Where the
+        verdict says it failed, the task takes the "Failed" label from
+        spec/scope/prompt-mode/message-list/Status.pi#MessageListStatus.description.
+        Its output says why, in the run's own words, as
+        spec/scope/harness-integration/index.pi#HarnessIntegration.failures
+        asks of every failed run, and it is saved as Failed in its history
+        record, so it reads the same after a restart.
+
+        Since it is Failed, everything that already follows a failed task
+        follows it. In a chain, the next step is never sent and the chain reads
+        Failed, as spec/scope/prompt-mode/index.pi#PromptEditor.chainedTasks
+        says. In Planning, the story's card shows Failed, as
+        spec/scope/planning/index.pi#Planning.states says. The story never
+        counts as Done, and Close sprint sends it back to the start of Next
+        sprint rather than into Done, as spec/scope/planning/index.pi#Planning.sprint
+        says. Start automatically doesn't start the next sprint because of it,
+        as spec/scope/planning/index.pi#Planning.autoStart says.
+
+        Write this into the spec first, in HarnessIntegration's feeding or
+        failures and wherever the verdict is asked for, then make the code
+        match it.
+        \\\
+
+    mode: combined
+
+    model: opus
+
+    addedSteps:
+        step1:
+            \\\
+            mode: code
+            model: opus
+
+            When a reply was misread, someone can overrule that verdict. The spec has
+            nothing yet on changing a task's outcome after it ends, so this is new.
+
+            When this is done:
+            - A task judged failed from its reply shows "Mark as done" beside its reason. A task judged done shows "Mark as failed" in the menu of its output.
+            - Either choice sets the status (spec/scope/prompt-mode/message-list/index.pi#MessageList.status) and saves it with the task's record, so it survives a restart.
+            - Its tooltip says the outcome was set by hand.
+            - A chain stopped by the overruled step offers to send the steps it didn't run.
+            - A story whose task is overruled to Done goes to Done when the sprint is closed (spec/scope/planning/index.pi#Planning.sprint). One overruled to Failed goes back to Next sprint.
+            - Only a task that has ended can be overruled. A task that failed to compile or run, or that the harness reported as an error, offers neither choice.
+            \\\
+        step2:
+            \\\
+            mode: spec
+            model: opus
+
+            Settle spec/scope/harness-integration/index.pi#HarnessIntegration.feeding
+            and spec/scope/harness-integration/index.pi#HarnessIntegration.failures
+            so they say what the code now does. Cover how a run reports whether it
+            did its work, what the application reads from the reply, what happens
+            to a reply with no verdict, and what a task marked Failed this way
+            shows as its reason. Where the verdict is asked for in a mode system
+            prompt, the spec should say so there too.
+            \\\

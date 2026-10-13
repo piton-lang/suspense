@@ -1,0 +1,88 @@
+{
+  "proposals": [
+    {
+      "id": "Proposal_a846b39a513a1cff",
+      "title": "Open a running story in the side panel, its steps opening their tasks",
+      "prompt": "Clicking a story card in Current sprint, including one that is running, opens\nthe story in Planning's side panel, the way any other card opens, as\nspec/scope/planning/index.pi#Planning.stories says. Clicking it no longer jumps\nto its task in the Tasks tab. This replaces \"clicking it opens its task in the\nTasks tab\" in spec/scope/planning/index.pi#Planning.sprint. The card stays\nhighlighted with the accent line while it is open. Clicking it again, Escape,\nor the panel's close button closes it. Enter on the focused card does the same,\nas spec/scope/planning/index.pi#Planning.keyboard says.\n\nThe story is still read-only once it has been sent. Its title, prompt,\nparameters, and citations are shown but can't be edited. It has no Add step and\nno step reordering, since \"its steps, sent or still to come, read as they were\nsent\" (spec/scope/planning/index.pi#Planning.steps). The panel lists all its\nsteps, step 1 (its own prompt) first, as rows drawn as\nspec/scope/planning/index.pi#Planning.parts draws them. Each row shows its\nnumber, its mode pill, the first line of its prompt, and its own live status,\nthe way the card's step lines and a running chain's rows in the Tasks tab show\nit (Queued, Running with its time, Done, Failed, Cancelled, Held for review,\nNext, Waiting). The rows update as the chain runs.\n\nClicking a step row opens that step's task in the Tasks tab, as\nspec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows opens a chain's\nstep. A story with no further steps has one row, step 1, which opens its task\nthe same way. A step not yet sent has no task to open, so its row isn't\nclickable, and its tooltip says it hasn't been sent yet.\n\nThe spec has nothing yet on a sent story's panel showing live step statuses or\non step rows opening their tasks, so that part is new. Write it into\nspec/scope/planning/index.pi#Planning.sprint and\nspec/scope/planning/index.pi#Planning.steps first, then change the code to match.",
+      "mode": "chain",
+      "target": "Story_605609d0d61a0ae3",
+      "rewrite": true,
+      "about": "Story_605609d0d61a0ae3",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.sprint",
+          "note": "what clicking a Current sprint card does now, which this replaces",
+          "kind": "Behaviour",
+          "quote": "clicking it opens its task in the Tasks tab; it can't be moved or edited there"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.stories",
+          "note": "clicking a card opens the story in the side panel, and the open card stays highlighted",
+          "kind": "Behaviour",
+          "quote": "it opens the story in the side panel, docked at the board's right"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.steps",
+          "note": "how an open story lists its steps, and how a sent story's steps read",
+          "kind": "Behaviour",
+          "quote": "A story sent can't be given more steps; its steps, sent or still to come, read as they were sent"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.layout",
+          "note": "the side panel is where everything opens",
+          "kind": "Section",
+          "quote": "The side panel is the one place anything opens"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.parts",
+          "note": "the row part used for steps in an open story",
+          "kind": "Behaviour",
+          "quote": "A row: 36 pixels tall, for steps in an open story and for findings"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.keyboard",
+          "note": "Enter on a focused card, which should do the same as a click",
+          "kind": "Behaviour",
+          "quote": "Enter opens or closes the focused story"
+        },
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows",
+          "note": "what opening a chain or one of its steps shows in the Tasks tab",
+          "kind": "Behaviour",
+          "quote": "Clicking the chain's row, or any of its steps, opens the chain"
+        },
+        {
+          "note": "an open story in the side panel showing each sent step's live status and opening that step's task when clicked"
+        }
+      ]
+    },
+    {
+      "id": "Proposal_2e3b9e45aa00216d",
+      "title": "Settle how a sent story's panel reads",
+      "prompt": "Update spec/scope/planning/index.pi#Planning.sprint and\nspec/scope/planning/index.pi#Planning.steps to match what the code now does\nwhen a Current sprint story is opened in the side panel. Cover which of its\nfields show read-only, what each step row's status reads and how it updates,\nwhat clicking a sent step does versus one not yet sent, and where focus and\nthe Tasks tab end up. If the code changed how the Tasks tab opens a step, make\nspec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows agree with it.",
+      "mode": "spec",
+      "target": "Story_605609d0d61a0ae3",
+      "about": "Story_605609d0d61a0ae3",
+      "spec": [
+        {
+          "link": "spec/scope/planning/index.pi#Planning.sprint",
+          "note": "what clicking a Current sprint card does",
+          "kind": "Behaviour",
+          "quote": "A story in Current sprint keeps its place"
+        },
+        {
+          "link": "spec/scope/planning/index.pi#Planning.steps",
+          "note": "how a sent story's steps are listed in the open story",
+          "kind": "Behaviour",
+          "quote": "An open story lists all its steps this way"
+        },
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows",
+          "note": "opening a step's task from Planning",
+          "kind": "Behaviour",
+          "quote": "Clicking the chain's row, or any of its steps, opens the chain"
+        }
+      ]
+    }
+  ]
+}

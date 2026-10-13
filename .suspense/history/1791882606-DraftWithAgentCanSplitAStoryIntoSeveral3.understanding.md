@@ -1,0 +1,7 @@
+- [The planning prompt asks a story's draft run to split a story holding more than one piece of work](.claude/reference/scope/planning/index.md#drafting-with-agent)
+- [In a split, the story's rewrite comes first, with its steps, each step's target being the story's id](.claude/reference/scope/planning/index.md#drafting)
+- [Each other piece is a target new block with its own title, mode, spec citations, and prompt](.claude/reference/scope/planning/index.md#drafting)
+- [A story that is one piece of work gets only its rewrite and its steps, and no new story](.claude/reference/scope/planning/index.md#drafting)
+- [Each block is a suspense-story fenced block holding title, mode, target, spec list, and prompt](.claude/reference/scope/planning/index.md#proposals)
+- [New stories' citations are grounded as the spec grounding says](.claude/reference/scope/planning/index.md#spec-grounding)
+- [planning.pi is a baked prompt, compiled into the application and explained with an example](.claude/reference/scope/harness-integration/baked-prompts/index.md)

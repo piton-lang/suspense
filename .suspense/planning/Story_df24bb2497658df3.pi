@@ -1,0 +1,14 @@
+
+export anchor Story_df24bb2497658df3:
+    userPrompt:
+        \\\
+        Drafted stories cite the spec's Piton source, not its compiled Markdown. In [Spec Grounding](.claude/reference/scope/planning/index.md#spec-grounding), each entry in a proposal's `spec` list becomes a link to the element in the Piton source under the spec location. That covers both the .pi file and the element it names. Today the entry is a heading under `.claude/reference`. The short line saying what in the element the story touches stays, and so does the "No match" entry.
+
+        When a proposal arrives, the application checks each link against the Piton source: the file has to exist and has to define the named element. Any link that fails the check is dropped, with the same muted note on the card saying why. On the proposal card and in an accepted story's "Spec" list, each citation opens that place in the Piton source. Citations added by hand are picked from the spec's elements, not from the compiled reference.
+
+        The drafter still learns what the spec says only from the compiled reference or from `piton slice`, never by reading the Piton source, as [Reading The Spec](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#reading-the-spec) says. Only where its citations point changes. The story's prompt names the cited elements and links to them in the same Piton source form. The `suspense-story` format described in [Proposals](.claude/reference/scope/planning/index.md#proposals), and the planning.pi prompt among the [Baked System Prompts](.claude/reference/scope/harness-integration/baked-prompts/index.md#prompts), are updated to ask for and explain this form, with an example.
+        \\\
+
+    mode: combined
+
+    model: opus

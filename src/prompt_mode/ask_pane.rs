@@ -288,11 +288,12 @@ pub(super) fn now_secs() -> u64 {
 /// How long a prompt card's Edit button reads "Edited" after it is pressed.
 const SENT_TO_PROMPT_FOR: Duration = Duration::from_secs(2);
 
-/// Which of a prompt card's buttons was pressed: Edit, or a send button, by
-/// the mode it sends in.
+/// Which of a prompt card's buttons was pressed: Edit, Add to sprint, or a
+/// send button, by the mode it sends in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum CardAction {
     Edit,
+    Sprint,
     Send(SendMode),
 }
 
@@ -301,6 +302,7 @@ impl CardAction {
     fn key(self, card: &str) -> String {
         match self {
             CardAction::Edit => format!("{card}/edit"),
+            CardAction::Sprint => format!("{card}/sprint"),
             CardAction::Send(mode) => format!("{card}/{}", mode_slug(mode)),
         }
     }
@@ -319,13 +321,18 @@ fn mode_slug(mode: SendMode) -> &'static str {
 
 impl PromptMode {
     /// Whether the prompt card `card` of the question `key` had its button
-    /// for `action` pressed: Edit just now, a send button ever.
+    /// for `action` pressed: Edit just now, Add to sprint since the
+    /// application started, a send button ever.
     pub(super) fn sent_to_prompt(&self, key: QuestionKey, card: &str, action: CardAction) -> bool {
         match action {
             CardAction::Edit => self
                 .sent_to_prompt
                 .get(&format!("{}/{}", key.id(), action.key(card)))
                 .is_some_and(|at| at.elapsed() < SENT_TO_PROMPT_FOR),
+            CardAction::Sprint => {
+                self.sent_to_prompt
+                    .contains_key(&format!("{}/{}", key.id(), action.key(card)))
+            }
             CardAction::Send(_) => self
                 .question(key)
                 .is_some_and(|task| task.sent_prompts.contains(&action.key(card))),
@@ -403,6 +410,14 @@ impl PromptMode {
                 })
                 .detach();
             }
+            CardAction::Sprint => {
+                // Added once, as a story in the card's mode, or Chain's for a
+                // card of no known mode.
+                let added = format!("{}/{}", key.id(), action.key(&card));
+                if self.sent_to_prompt.insert(added, Instant::now()).is_none() {
+                    self.add_to_sprint(text, mode.unwrap_or(SendMode::Both), cx);
+                }
+            }
             CardAction::Send(send) => {
                 // Sent once from each button, for good.
                 let sent = action.key(&card);
@@ -431,6 +446,68 @@ impl PromptMode {
             }
         }
         cx.notify();
+    }
+
+    /// Does what a story card's button does with the `proposal` it holds,
+    /// as the PlanningScope's proposals say: Accept records it in the plan,
+    /// Edit takes it into Planning to be edited there, and Reject lets it
+    /// go, with a short Undo.
+    pub(super) fn story_card_action(
+        &mut self,
+        key: QuestionKey,
+        card: String,
+        proposal: crate::planning::Proposal,
+        action: StoryAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let at = format!("{}/{card}", key.id());
+        match action {
+            StoryAction::Accept => {
+                let target = proposal
+                    .target
+                    .clone()
+                    .and_then(|name| self.story_title(&name, cx));
+                let state = match self.accept_proposal(proposal, cx) {
+                    Ok(story) => StoryCard::Accepted(
+                        match target {
+                            Some(title) => format!("Added to {title}"),
+                            None => "Added to Backlog".into(),
+                        },
+                        story,
+                    ),
+                    Err(why) => StoryCard::Refused(why),
+                };
+                self.story_cards.insert(at, state);
+            }
+            StoryAction::Edit => {
+                self.edit_proposal(proposal, window, cx);
+                self.story_cards.insert(at, StoryCard::Editing);
+            }
+            StoryAction::DraftAgain => {
+                self.draft_proposal_again(proposal, window, cx);
+                self.story_cards.insert(at, StoryCard::DraftedAgain);
+            }
+            StoryAction::Reject => {
+                self.story_cards
+                    .insert(at.clone(), StoryCard::Rejected(Instant::now()));
+                cx.spawn(async move |this, cx| {
+                    cx.background_executor().timer(STORY_UNDO_FOR).await;
+                    this.update(cx, |_, cx| cx.notify()).ok();
+                })
+                .detach();
+            }
+            StoryAction::Undo => {
+                self.story_cards.remove(&at);
+            }
+        }
+        cx.notify();
+    }
+
+    /// The title of the plan's story named so, if it has one.
+    fn story_title(&mut self, name: &str, cx: &mut Context<Self>) -> Option<String> {
+        let planning = self.planning(cx)?;
+        planning.read(cx).title_of(name)
     }
 
     /// Asks `answer`, picked on the card `card` asking `question` in the
@@ -618,7 +695,8 @@ impl PromptMode {
             self.resend(|this| &this.tasks, ix, window, cx);
             return;
         }
-        let Some(task) = self.question(key) else {
+        // A story's question goes again only with the next sprint.
+        let Some(task) = self.question(key).filter(|task| !self.is_story_task(task)) else {
             return;
         };
         let (text, sent) = (task.text.to_string(), task.sent.clone());
@@ -831,6 +909,8 @@ impl PromptMode {
         let bubble = gpui_kit::TestSupportExt::test_support(bubble);
         let asked = task.asked_at.and_then(|at| local_time(at, "%H:%M"));
         let done = !task.status.is_active();
+        // A story's question is sent again only with the next sprint.
+        let resendable = !self.is_story_task(task);
         let this = cx.entity().downgrade();
         let footer = h_flex()
             .justify_end()
@@ -839,7 +919,7 @@ impl PromptMode {
             .text_xs()
             .text_color(theme.muted_foreground)
             .children(asked)
-            .when(done, |footer| {
+            .when(done && resendable, |footer| {
                 footer.child(resend_button(("resend-question", id)).on_click(
                     move |_, window, cx| {
                         this.update(cx, |this, cx| this.resend_question(key, window, cx))
@@ -1154,6 +1234,10 @@ impl PromptMode {
                     // Usable once its block has closed, or the answer is over.
                     let ready = closed || done;
                     prompt_card(&this, key, &card, mode, text, ready, cx)
+                }
+                AnswerPart::Story { proposal, closed } => {
+                    let ready = closed || done;
+                    story_card(&this, key, &card, proposal, ready, cx)
                 }
                 AnswerPart::Question {
                     question,
@@ -1540,6 +1624,277 @@ impl PromptMode {
     }
 }
 
+/// Which of a story card's buttons was pressed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum StoryAction {
+    Accept,
+    Edit,
+    Reject,
+    Undo,
+    /// Draft it again in Planning, as a card citing no spec offers.
+    DraftAgain,
+}
+
+/// Where a story card in an answer stands, once a button was pressed.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum StoryCard {
+    /// Recorded in the plan: its note, as "Added to Backlog", and the story
+    /// it went to, which the note links to.
+    Accepted(String, String),
+    /// Taken into Planning to be edited there.
+    Editing,
+    /// Let go, when, for its Undo.
+    Rejected(Instant),
+    /// Couldn't be recorded, and why.
+    Refused(String),
+    /// Citing no spec, drafted again in Planning.
+    DraftedAgain,
+}
+
+/// How long a story card's rejection can be undone.
+const STORY_UNDO_FOR: Duration = Duration::from_secs(5);
+
+/// A story an answer proposes, as a card, as the PlanningScope's proposals
+/// say: where it goes, its title, mode, and prompt, and Accept, Edit, and
+/// Reject, usable once `ready`.
+fn story_card(
+    this: &WeakEntity<PromptMode>,
+    key: QuestionKey,
+    card: &str,
+    proposal: Option<crate::planning::Proposal>,
+    ready: bool,
+    cx: &mut App,
+) -> AnyElement {
+    let theme = cx.theme().clone();
+    let muted = theme.muted_foreground;
+    // Checked against the spec's Piton source as it arrives, as a
+    // drafted proposal is.
+    let project_dir = this
+        .upgrade()
+        .and_then(|this| this.read(cx).project_dir.clone());
+    let proposal = proposal.map(|mut proposal| {
+        if let Some(dir) = &project_dir {
+            crate::planning::check_citations(&mut proposal, dir);
+        }
+        proposal
+    });
+    let ungrounded = proposal
+        .as_ref()
+        .is_some_and(|proposal| proposal.spec.is_empty());
+    let mode = proposal
+        .as_ref()
+        .map_or(SendMode::Both, |proposal| proposal.mode());
+    let color = chat_input::mode_color(mode, cx);
+    let state = this.upgrade().and_then(|this| {
+        this.read(cx)
+            .story_cards
+            .get(&format!("{}/{card}", key.id()))
+            .cloned()
+    });
+    let label = match proposal
+        .as_ref()
+        .and_then(|proposal| proposal.target.as_ref())
+    {
+        Some(name) => this
+            .upgrade()
+            .and_then(|this| this.read(cx).planning.clone())
+            .and_then(|planning| planning.read(cx).title_of(name))
+            .map_or("Add to a story".to_string(), |title| {
+                format!("Add to {title}")
+            }),
+        None => "New story".to_string(),
+    };
+    let header = h_flex()
+        .gap_1p5()
+        .text_xs()
+        .font_medium()
+        .text_color(color)
+        .child(Icon::new(IconName::ListChecks).xsmall())
+        .child(label);
+    let (title, prompt) = proposal
+        .as_ref()
+        .map(|proposal| (proposal.title.clone(), proposal.prompt.clone()))
+        .unwrap_or_default();
+    let citations: Vec<String> = proposal
+        .iter()
+        .flat_map(|proposal| &proposal.spec)
+        .map(|citation| {
+            let mut line = citation
+                .kind
+                .map(|kind| format!("{} ", kind.label()))
+                .unwrap_or_default();
+            line.push_str(&citation.label());
+            if let Some(file) = citation.file() {
+                line.push_str(&format!(" · {file}"));
+            }
+            if !citation.note.is_empty() {
+                line.push_str(&format!(" — {}", citation.note));
+            }
+            if !citation.quote.is_empty() {
+                line.push_str(&format!(" “{}”", citation.quote));
+            }
+            line
+        })
+        .collect();
+    let dropped: Vec<String> = proposal
+        .iter()
+        .flat_map(|proposal| proposal.dropped.clone())
+        .collect();
+    let button = |id: &str, action: StoryAction| {
+        let (this, card, proposal) = (this.clone(), card.to_string(), proposal.clone());
+        Button::new(SharedString::from(format!("story-card-{id}-{card}")))
+            .xsmall()
+            .disabled(!ready || proposal.is_none())
+            .on_click(move |_, window, cx| {
+                let Some(proposal) = proposal.clone() else {
+                    return;
+                };
+                this.update(cx, |this, cx| {
+                    this.story_card_action(key, card.clone(), proposal, action, window, cx)
+                })
+                .ok();
+            })
+    };
+    let foot: AnyElement = match &state {
+        // Its note links to the story, opening it where it is.
+        Some(StoryCard::Accepted(note, story)) => {
+            let (this, story) = (this.clone(), story.clone());
+            div()
+                .id(SharedString::from(format!("story-card-added-{card}")))
+                .text_xs()
+                .text_color(muted)
+                .cursor_pointer()
+                .underline()
+                .child(note.clone())
+                .on_click(move |_, window, cx| {
+                    this.update(cx, |this, cx| this.reveal_story(&story, window, cx))
+                        .ok();
+                })
+                .into_any_element()
+        }
+        Some(StoryCard::Editing) => div()
+            .text_xs()
+            .text_color(muted)
+            .child("Opened in Planning, to be edited there")
+            .into_any_element(),
+        Some(StoryCard::DraftedAgain) => div()
+            .text_xs()
+            .text_color(muted)
+            .child("Drafted again in Planning")
+            .into_any_element(),
+        Some(StoryCard::Rejected(when)) if when.elapsed() < STORY_UNDO_FOR => h_flex()
+            .gap_2()
+            .items_center()
+            .text_xs()
+            .text_color(muted)
+            .child("Rejected.")
+            .child(
+                button("undo", StoryAction::Undo)
+                    .ghost()
+                    .label("Undo")
+                    .tooltip("Bring it back"),
+            )
+            .into_any_element(),
+        Some(StoryCard::Rejected(_)) => div()
+            .text_xs()
+            .text_color(muted)
+            .child("Rejected")
+            .into_any_element(),
+        // Citing no spec, it isn't offered as a story: only drafted again.
+        Some(StoryCard::Refused(_)) | None if ungrounded => h_flex()
+            .w_full()
+            .justify_end()
+            .gap_1()
+            .child(
+                button("draft-again", StoryAction::DraftAgain)
+                    .primary()
+                    .icon(IconName::Sparkles)
+                    .label("Draft again")
+                    .tooltip("Run the draft for this story once more, grounded in the spec"),
+            )
+            .child(
+                button("reject", StoryAction::Reject)
+                    .ghost()
+                    .icon(IconName::X)
+                    .label("Reject")
+                    .tooltip("Let it go"),
+            )
+            .into_any_element(),
+        Some(StoryCard::Refused(_)) | None => h_flex()
+            .w_full()
+            .justify_end()
+            .gap_1()
+            .child(
+                button("accept", StoryAction::Accept)
+                    .primary()
+                    .icon(IconName::Check)
+                    .label("Accept")
+                    .tooltip("Record this story in the plan"),
+            )
+            .child(
+                button("edit", StoryAction::Edit)
+                    .ghost()
+                    .icon(IconName::Pencil)
+                    .label("Edit")
+                    .tooltip("Open it in Planning to change before accepting"),
+            )
+            .child(
+                button("reject", StoryAction::Reject)
+                    .ghost()
+                    .icon(IconName::X)
+                    .label("Reject")
+                    .tooltip("Let it go"),
+            )
+            .into_any_element(),
+    };
+    let refused = match &state {
+        Some(StoryCard::Refused(why)) => Some(why.clone()),
+        _ => None,
+    };
+    let card_box = card_box(SharedString::from(format!("story-card-{card}")), color, cx)
+        .child(header)
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .text_sm()
+                .font_medium()
+                .text_color(theme.foreground)
+                .child(crate::planning::mode_label(mode))
+                .child(div().flex_1().min_w_0().truncate().child(title)),
+        )
+        .child(
+            div()
+                .text_sm()
+                .text_color(theme.foreground)
+                .whitespace_normal()
+                .child(prompt),
+        )
+        // Its citations, each its kind, element, file, what it touches, and
+        // the words it rests on; then what was dropped, and why.
+        .children(
+            citations
+                .into_iter()
+                .map(|line| div().text_xs().text_color(muted).truncate().child(line)),
+        )
+        .children(
+            dropped
+                .into_iter()
+                .map(|why| div().text_xs().text_color(muted).child(why)),
+        )
+        .when(ungrounded, |card| {
+            card.child(
+                div()
+                    .text_xs()
+                    .text_color(theme.warning)
+                    .child("The drafter cited no spec, so this isn't offered as a story."),
+            )
+        })
+        .children(refused.map(|why| div().text_xs().text_color(theme.danger).child(why)))
+        .child(foot);
+    gpui_kit::TestSupportExt::test_support(card_box).into_any_element()
+}
+
 /// How many parts a row's text can be split into, each kept apart by its
 /// markdown's key.
 const CARD_PARTS: usize = 1024;
@@ -1634,7 +1989,7 @@ fn prompt_card(
         let pressed = done(action, cx);
         let (this, card, text) = (this.clone(), card.to_string(), text.clone());
         // A send button pressed is disabled for good.
-        let spent = pressed && matches!(action, CardAction::Send(_));
+        let spent = pressed && matches!(action, CardAction::Send(_) | CardAction::Sprint);
         let button = Button::new(SharedString::from(id))
             .small()
             .disabled(!ready || spent)
@@ -1656,6 +2011,18 @@ fn prompt_card(
         })
         .label(if edited { "Edited" } else { "Edit" })
         .tooltip("Put this prompt in the chat input to edit before sending")
+        .into_any_element();
+    let (sprint, added) =
+        action_button(format!("prompt-card-sprint-{card}"), CardAction::Sprint, cx);
+    let sprint = sprint
+        .ghost()
+        .icon(if added {
+            IconName::Check
+        } else {
+            IconName::List
+        })
+        .label(if added { "Added" } else { "Add to sprint" })
+        .tooltip("Add this prompt to the plan's Next sprint as a story")
         .into_any_element();
     // Ask's or Freeform's own first, then each task mode, the card's own
     // filled in its colour and the rest ghosts.
@@ -1767,6 +2134,7 @@ fn prompt_card(
                 .gap_1()
                 .child(copy)
                 .child(edit)
+                .child(sprint)
                 .children(sends),
         );
     gpui_kit::TestSupportExt::test_support(card_box).into_any_element()

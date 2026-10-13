@@ -1,0 +1,17 @@
+
+export anchor Story_93df3665ec69461a:
+    userPrompt:
+        \\\
+        On the Code tab of the [ChatInput](.claude/reference/scope/prompt-mode/chat-input/index.md#description), Ctrl+Enter (Cmd+Enter on macOS) and the send button should send to the running task, not queue, when all of these are true: a Code task is running in the code lane, its harness can be fed more, and its output is shown as the latest task. These are the same conditions under which the send menu offers "Send to task" ([Options](.claude/reference/scope/prompt-mode/chat-input/index.md#options)). The sending itself works exactly as [Sending To A Task](.claude/reference/scope/prompt-mode/sending/index.md#sending-to-atask) describes. In that state the send half of the [split button](.claude/reference/scope/prompt-mode/chat-input/index.md#split-button) reads "Send to task" (or similar), not "Queue", and its tooltip says so. The Queue button in the column and the menu's "Queue" option still queue the prompt, so queueing stays one click away. Remove the line under "Send to task" that says "<Ctrl+Enter> still queues, as the send button does", and replace it with the new default.
+
+        Everything else stays as it is now:
+        - When the code lane is busy for another reason, Ctrl+Enter queues as [Tasks](.claude/reference/scope/prompt-mode/sending/index.md#tasks) says. That covers a Freeform task running, a Code task whose harness can't be fed more, a task still building or compiling, and the previous tasks being expanded over its output.
+        - The Chain, Spec, Freeform and Ask tabs don't change.
+        - While a queued prompt is being edited, Ctrl+Enter still saves the edit ([Editing Queued](.claude/reference/scope/prompt-mode/chat-input/index.md#editing-queued)).
+
+        The spec has nothing called "send now" yet, so this story treats "send now" as "Send to task" and doesn't add a new option.
+        \\\
+
+    mode: combined
+
+    model: opus

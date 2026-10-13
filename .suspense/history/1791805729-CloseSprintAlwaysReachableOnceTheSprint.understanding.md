@@ -1,0 +1,8 @@
+- [Send sprint moves Next sprint's stories into Current sprint and sends them in order](.claude/reference/scope/planning/index.md#sprint)
+- [Once every story of Current sprint has ended, it offers Close sprint](.claude/reference/scope/planning/index.md#sprint)
+- [Close sprint moves Done stories to Done and failed, cancelled, or stopped ones to the start of Next sprint](.claude/reference/scope/planning/index.md#sprint)
+- [A title with no prompt sends its title as its prompt](.claude/reference/scope/planning/index.md#creating)
+- [A sprint ending with a story failed, cancelled, or stopped never starts the next by itself, and the switch's row says why](.claude/reference/scope/planning/index.md#auto-start)
+- [A story's status is the same coloured label a task has; a story not yet sent shows nothing](.claude/reference/scope/planning/index.md#states)
+- [order.json lists the sections and their stories in order](.claude/reference/scope/project-data/index.md#contents)
+- [Missing tasks count as ended and not Done, read Task missing, and go back to Next sprint on Close; empty stories are never moved to Current sprint](.claude/reference/scope/planning/index.md#sprint)

@@ -1,0 +1,8 @@
+- [Enter in the request box starts the draft, whichever label the box reads](.claude/reference/scope/planning/index.md#drafting)
+- [Ctrl+Enter in the request box also starts the draft](.claude/reference/scope/planning/index.md#drafting)
+- [The Draft button's tooltip gives Enter as its shortcut](.claude/reference/scope/planning/index.md#drafting)
+- [Shift+Enter adds a new line in the request box and sends nothing](.claude/reference/scope/planning/index.md#drafting)
+- [An empty or whitespace-only request starts nothing and the button is disabled](.claude/reference/scope/planning/index.md#drafting)
+- [While a run is going, Enter starts no second one and the button is disabled](.claude/reference/scope/planning/index.md#drafting)
+- [The list's Enter (open/close focused story) never fires while focus is in the request box](.claude/reference/scope/planning/index.md#drafting)
+- [Keyboard says Enter starts the draft from the Ctrl+Shift+D request box, Ctrl+Enter too, Shift+Enter a new line](.claude/reference/scope/planning/index.md#keyboard)

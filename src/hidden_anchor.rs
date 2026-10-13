@@ -1050,10 +1050,34 @@ fn blank_for_lsp(line: &str) -> String {
 /// [`crate::piton_fluency`]), and every mode with instructions has the
 /// Suspense fluency file written where it is missing or out of date (see
 /// [`crate::suspense_fluency`]). A question's end with the card format (see
-/// [`system_prompts::ask_cards`]). `${UNDERSTANDING_FILE}` is left as written,
-/// filled in as the prompt is sent. None for a mode with none, as Freeform,
-/// or a template left empty.
+/// [`system_prompts::ask_cards`]), and a task's with the verdict (see
+/// [`with_verdict`]). `${UNDERSTANDING_FILE}` is left as written, filled in
+/// as the prompt is sent. None for a mode with none, as Freeform, or a
+/// question's template left empty.
 pub fn instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>> {
+    with_verdict(mode, mode_instructions(mode, project_dir)?)
+}
+
+/// `instructions`, a task's in `mode`, ending with the verdict it is asked to
+/// end its reply with, last, on a paragraph of its own, whatever they say:
+/// every Code, Chain, and Spec task is given it, a question never, and
+/// Freeform sends nothing.
+fn with_verdict(mode: SendMode, instructions: Option<String>) -> Result<Option<String>> {
+    if !gives_verdict(mode) {
+        return Ok(instructions);
+    }
+    joined(instructions, Some(system_prompts::task_verdict().to_string()))
+}
+
+/// Whether a task sent in `mode` is asked for a verdict: Code, Chain, and
+/// Spec tasks are; questions and Freeform tasks aren't.
+pub fn gives_verdict(mode: SendMode) -> bool {
+    matches!(mode, SendMode::Code | SendMode::Both | SendMode::Spec)
+}
+
+/// [`instructions`], without the verdict, so what is added after them goes
+/// before it.
+fn mode_instructions(mode: SendMode, project_dir: &Path) -> Result<Option<String>> {
     if matches!(mode, SendMode::Spec | SendMode::Both) {
         crate::piton_fluency::ensure(project_dir);
     }
@@ -1128,36 +1152,38 @@ fn locations_for(mode: Option<SendMode>, project_dir: &Path) -> Result<(String, 
 
 /// The instructions a Code task sent to Spec is given: Spec's, as
 /// [`instructions`] gives them, then, on a paragraph of its own, the project's
-/// code-to-spec prompt, filled in as a template is. Its `${CODE_PROMPT}` and
-/// `${CODE_RESULT}` are left as written, to be filled in with the code task
-/// as it is sent (see [`CompiledPrompt::instructions_as_sent`]), so nothing
+/// code-to-spec prompt, filled in as a template is, then the verdict. Its
+/// `${CODE_PROMPT}` and `${CODE_RESULT}` are left as written, to be filled
+/// in with the code task as it is sent (see [`CompiledPrompt::instructions_as_sent`]), so nothing
 /// the code task said is compiled. Either left empty once filled in leaves
 /// the other alone.
 pub fn code_to_spec_instructions(project_dir: &Path) -> Result<Option<String>> {
-    joined(
-        instructions(SendMode::Spec, project_dir)?,
+    let instructions = joined(
+        mode_instructions(SendMode::Spec, project_dir)?,
         filled_instructions(
             system_prompts::Prompt::CodeToSpec,
             Some(SendMode::Spec),
             project_dir,
         )?,
-    )
+    )?;
+    with_verdict(SendMode::Spec, instructions)
 }
 
 /// The instructions a chain's code step is given: Code's, as
 /// [`instructions`] gives them, then, on a paragraph of its own, the project's
-/// spec-to-code prompt, filled in as a template is. Its `${SPEC_PROMPT}` and
-/// `${SPEC_RESULT}` are left as written, to be filled in with the spec step
-/// as it is sent, as a code task sent to Spec fills in its own.
+/// spec-to-code prompt, filled in as a template is, then the verdict. Its
+/// `${SPEC_PROMPT}` and `${SPEC_RESULT}` are left as written, to be filled
+/// in with the spec step as it is sent, as a code task sent to Spec fills in its own.
 pub fn spec_to_code_instructions(project_dir: &Path) -> Result<Option<String>> {
-    joined(
-        instructions(SendMode::Code, project_dir)?,
+    let instructions = joined(
+        mode_instructions(SendMode::Code, project_dir)?,
         filled_instructions(
             system_prompts::Prompt::SpecToCode,
             Some(SendMode::Code),
             project_dir,
         )?,
-    )
+    )?;
+    with_verdict(SendMode::Code, instructions)
 }
 
 /// The instructions a prompt in `mode` is given, handed on from another task
@@ -1881,16 +1907,22 @@ mod tests {
                 },
             );
             // A question ends with the card format, on a paragraph of its
-            // own; no task is given it.
+            // own; no task is given it. Every task ends with the verdict
+            // instead, which no question is given.
             let expected = if mode == SendMode::Ask {
                 format!("{template}\n\n{}", system_prompts::ask_cards())
             } else {
-                template
+                format!("{template}\n\n{}", system_prompts::task_verdict())
             };
             assert_eq!(given, expected);
             assert_eq!(
                 given.contains("suspense-prompt"),
                 mode == SendMode::Ask,
+                "{mode:?}: {given}"
+            );
+            assert_eq!(
+                given.contains("SUSPENSE-VERDICT: failed"),
+                mode != SendMode::Ask,
                 "{mode:?}: {given}"
             );
             // Every mode with instructions points at the Suspense fluency.
@@ -1931,7 +1963,7 @@ mod tests {
             instructions(SendMode::Code, &project_dir)
                 .unwrap()
                 .as_deref(),
-            Some("Code in ./src only.")
+            Some(format!("Code in ./src only.\n\n{}", system_prompts::task_verdict()).as_str())
         );
         // A question left with no Ask instructions of its own is still told
         // the card format.
@@ -1953,10 +1985,21 @@ mod tests {
             instructions(SendMode::Spec, &project_dir)
                 .unwrap()
                 .as_deref(),
-            Some("Spec only.\n\nWrite ${UNDERSTANDING_FILE}.")
+            Some(
+                format!(
+                    "Spec only.\n\nWrite ${{UNDERSTANDING_FILE}}.\n\n{}",
+                    system_prompts::task_verdict()
+                )
+                .as_str()
+            )
         );
+        // A task whose template is left empty is still asked for the
+        // verdict.
         system_prompts::save(SendMode::Spec, "${PITON_FLUENCY}", &project_dir).unwrap();
-        assert_eq!(instructions(SendMode::Spec, &project_dir).unwrap(), None);
+        assert_eq!(
+            instructions(SendMode::Spec, &project_dir).unwrap().as_deref(),
+            Some(system_prompts::task_verdict())
+        );
         fs::remove_dir_all(&project_dir).ok();
     }
 
@@ -2042,7 +2085,7 @@ mod tests {
         )
         .unwrap();
         system_prompts::save(SendMode::Spec, "Spec of ${SPEC_LOCATION}.\n\nCode at ${CODE_LOCATION}.", &project_dir).unwrap();
-        let spec = instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
+        let spec = super::mode_instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
         assert_eq!(spec, "Spec of ./spec.");
         let system = super::project_system_prompt_for(Some(SendMode::Spec), &project_dir).unwrap().unwrap();
         assert!(!system.contains("./src"), "{system}");
@@ -2051,7 +2094,7 @@ mod tests {
             .save(&project_dir)
             .unwrap();
         assert_eq!(super::seen_locations(Some(SendMode::Spec), &project_dir), (true, true));
-        let spec = instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
+        let spec = super::mode_instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
         assert_eq!(
             spec,
             format!("Spec of ./spec.\n\nCode at ./src.\n\n{}", super::code_read_only("./src", false))
@@ -2061,14 +2104,14 @@ mod tests {
         crate::project_settings::ProjectSettings { spec_reads_code: true, spec_reads_project: true, ..Default::default() }
             .save(&project_dir)
             .unwrap();
-        let spec = instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
+        let spec = super::mode_instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
         assert!(
             spec.ends_with(&super::code_read_only("./src", true))
                 && spec.contains("Everything else in the project directory is there to read"),
             "{spec}"
         );
         // Code tasks are as ever, told nothing of it.
-        let code = instructions(SendMode::Code, &project_dir).unwrap().unwrap();
+        let code = super::mode_instructions(SendMode::Code, &project_dir).unwrap().unwrap();
         assert!(!code.contains(&super::code_read_only("./src", false)), "{code}");
         fs::remove_dir_all(&project_dir).ok();
     }
@@ -2088,7 +2131,10 @@ mod tests {
         )
         .unwrap();
 
+        let verdict = system_prompts::task_verdict();
         let spec = instructions(SendMode::Spec, &project_dir).unwrap().unwrap();
+        // The verdict comes last, after the handoff.
+        let spec = spec.strip_suffix(&format!("\n\n{verdict}")).unwrap().to_string();
         // Given to a spec run, whose sandbox keeps it off the code.
         let handoff = system_prompts::fill_instructions(
             system_prompts::default_prompt(system_prompts::Prompt::CodeToSpec),
@@ -2105,12 +2151,15 @@ mod tests {
             system_prompts::CODE_RESULT
         )));
         let given = code_to_spec_instructions(&project_dir).unwrap().unwrap();
-        assert_eq!(given, format!("{spec}\n\n{handoff}"));
+        assert_eq!(given, format!("{spec}\n\n{handoff}\n\n{verdict}"));
         // A Spec task sent from Spec alone is given Spec's alone.
         assert!(!spec.contains("first sent to change the code"));
 
         system_prompts::save(system_prompts::Prompt::CodeToSpec, "  \n", &project_dir).unwrap();
-        assert_eq!(code_to_spec_instructions(&project_dir).unwrap(), Some(spec));
+        assert_eq!(
+            code_to_spec_instructions(&project_dir).unwrap(),
+            Some(format!("{spec}\n\n{verdict}"))
+        );
         system_prompts::save(
             system_prompts::Prompt::CodeToSpec,
             "Built: ${CODE_RESULT}",
@@ -2119,8 +2168,8 @@ mod tests {
         .unwrap();
         system_prompts::save(SendMode::Spec, "", &project_dir).unwrap();
         assert_eq!(
-            code_to_spec_instructions(&project_dir).unwrap().as_deref(),
-            Some("Built: ${CODE_RESULT}")
+            code_to_spec_instructions(&project_dir).unwrap(),
+            Some(format!("Built: ${{CODE_RESULT}}\n\n{verdict}"))
         );
         fs::remove_dir_all(&project_dir).ok();
     }

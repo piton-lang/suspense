@@ -1,0 +1,7 @@
+- [Draft stories asks the harness, with the planning prompt, to break a request into stories with a title, prompt, and mode](.claude/reference/scope/planning/index.md#creating)
+- [Each proposal is a suspense-story block with title, mode, target, and prompt](.claude/reference/scope/planning/index.md#proposals)
+- [A proposal card shows its label, title, mode pill, prompt clipped at four lines, and Accept, Edit, Reject](.claude/reference/scope/planning/index.md#proposals)
+- [The drafting run is a Question run: it reads the project and changes nothing](.claude/reference/scope/sandbox/index.md#profiles)
+- [The spec is read from its compiled reference or what piton slice prints, never the .pi source](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#reading-the-spec)
+- [A prompt that names part of the spec links to its compiled reference](.claude/reference/scope/prompt-mode/mode-system-prompts/index.md#suspense-fluency)
+- [Drafted stories cite the spec elements they touch as checked links, or say No match; a story citing nothing is flagged for redrafting](.claude/reference/scope/planning/index.md#spec-grounding)

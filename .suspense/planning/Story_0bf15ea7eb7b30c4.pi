@@ -1,0 +1,39 @@
+
+export anchor Story_0bf15ea7eb7b30c4:
+    userPrompt:
+        \\\
+        When a story is drafted, with "Draft with agent" or "Ask agent", accepting
+        its suggestions never changes the story that was drafted. Instead, every
+        suggestion becomes a new story of its own.
+
+        Once this is done:
+        - Accepting what was the story's rewrite, its first piece, adds a new
+          story at the end of the Backlog, marked "From agent". The new story has
+          the proposed title, prompt, mode, and spec citations, and carries the
+          proposed Spec follow-up step as its own step.
+        - Each other piece the draft split off is still a new story at the end of
+          the Backlog, as now.
+        - On a draft about a story, no proposal card reads "Rewrite this story" or
+          "Add to this story". Each reads "New story", and the follow-up step shows
+          as part of the story it follows, not as a card that adds to the drafted
+          story.
+        - "Accept all" creates all of them together, in the order given.
+        - The drafted story keeps its title, prompt, mode, steps, and citations,
+          and stays in its column: a Draft story is no longer moved to the Backlog
+          when its draft is accepted.
+        - Accepting never marks it "Updated by agent".
+
+        Change spec/scope/planning/index.pi#Planning.drafting,
+        spec/scope/planning/index.pi#Planning.draftingWithAgent,
+        spec/scope/planning/index.pi#Planning.proposals and
+        spec/scope/planning/index.pi#Planning.proposalCards to say this. Keep where
+        new stories go as spec/scope/planning/index.pi#Planning.creating says. Then
+        change the code to match.
+
+        Proposals from "Draft stories", from research, and from Ask answers that
+        add to a named story are not part of this, and work as they do now.
+        \\\
+
+    mode: combined
+
+    model: opus

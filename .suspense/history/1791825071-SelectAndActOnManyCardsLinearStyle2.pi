@@ -1,0 +1,92 @@
+
+export anchor SelectAndActOnManyCardsLinearStyle2:
+    userPrompt:
+        \\\
+        Planning's board can be worked from the keyboard and in bulk, as Linear's board can. The spec has nothing yet on multi-select, a bulk bar, or a context menu, so these are new; add them to spec/scope/planning/index.pi#Planning.keyboard and spec/scope/planning/index.pi#Planning.parts.
+        - J and K move focus down and up, alongside the arrow keys.
+        - X toggles the focused card's selection. Shift+click selects a range within a column, and Ctrl/Cmd+click toggles one card.
+        - Single-card shortcuts act on the card under the pointer when no card has focus, as Linear's do.
+        - Selected cards show the theme's selected surface, which is distinct from focus and from the open story.
+        - While any card is selected, a bar along the board's foot names how many are selected and offers labelled "Move to next sprint", "Move to backlog", "Change mode", "Duplicate", "Delete", and "Clear".
+        - Dragging a selected card carries the whole selection, in its order.
+        - Right-clicking a card opens its menu, the same one as its hover button, at the pointer.
+        Every rule in spec/scope/planning/index.pi#Planning.sprint still holds. Only the Backlog and Next sprint take moves, and nothing here sends a story. Escape clears the selection before it closes the side panel.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            Planning's board can be worked from the keyboard and in bulk, as Linear's board can. The spec has nothing yet on multi-select, a bulk bar, or a context menu, so these are new; add them to spec/scope/planning/index.pi#Planning.keyboard and spec/scope/planning/index.pi#Planning.parts.
+            - J and K move focus down and up, alongside the arrow keys.
+            - X toggles the focused card's selection. Shift+click selects a range within a column, and Ctrl/Cmd+click toggles one card.
+            - Single-card shortcuts act on the card under the pointer when no card has focus, as Linear's do.
+            - Selected cards show the theme's selected surface, which is distinct from focus and from the open story.
+            - While any card is selected, a bar along the board's foot names how many are selected and offers labelled "Move to next sprint", "Move to backlog", "Change mode", "Duplicate", "Delete", and "Clear".
+            - Dragging a selected card carries the whole selection, in its order.
+            - Right-clicking a card opens its menu, the same one as its hover button, at the pointer.
+            Every rule in spec/scope/planning/index.pi#Planning.sprint still holds. Only the Backlog and Next sprint take moves, and nothing here sends a story. Escape clears the selection before it closes the side panel.
+            \\\
+        result:
+            \\\
+            I've added multi-select, the bulk bar, multi-card drag and the right-click menu to `spec/scope/planning/index.pi`. `piton check` and `piton build` both pass, and the rebuilt reference has the new text.
+
+            **In `Planning.parts`:**
+            - **Selected state:** a selected card shows the theme's selected surface instead of its raised one, even when hovered. Hover is quieter than selection, and selection quieter than focus. The open story's accent edge stays separate from both, so a card can be open, selected and focused at once.
+            - **Selection:** only stories in the Backlog and Next sprint can be selected. Ctrl/Cmd+click toggles one card. Shift+click selects a range within a column, starting from the card last clicked or toggled there. A plain click still opens the story and leaves the selection alone. The selection isn't saved with the plan, and a story leaves it when it's deleted or sent.
+            - **Bulk bar:** a 40px row along the board's foot that shows "N selected". Its buttons:
+              - "Move to next sprint" and "Move to backlog" move stories in board order, the Backlog's first. Each is disabled while no selected story is in the list it moves from.
+              - "Change mode" sets the mode on every selected story; their steps keep their own modes.
+              - "Duplicate" puts each copy just beneath its original.
+              - "Delete" asks once for all of them ("Delete 3 stories?").
+              - "Clear" empties the selection.
+              
+              The bar has no Send and sends nothing.
+            - **Dragging:** dragging a selected card carries the whole selection in its order, shown as a stack with a count. Dragging an unselected card moves only that card.
+            - **Right-click:** opens the card's own menu at the pointer, acting on that card only.
+
+            **In `Planning.keyboard`:**
+            - J and K work as Down and Up.
+            - X toggles the focused card's selection.
+            - When no card has focus, the single-card shortcuts act on the card under the pointer: Enter, X, M, Ctrl+Enter, Delete and the Alt+arrows.
+            - Escape now clears the selection before it closes the side panel.
+            - F6 and Tab reach the bulk bar.
+
+            Some details are my own calls rather than from your prompt: which cards can be selected, the Shift+click range anchor, the move order, the disabled move buttons, what stays selected after an action (moved stories and originals do, copies don't), and that shortcuts act on one card even when several are selected. Each one is easy to change.
+
+            The code should follow the `#parts` (story-card states and the new selection, bulk bar, drag and right-click paragraphs) and `#keyboard` anchors in `.claude/reference/scope/planning/index.md`. It should keep `#sprint` and `#motion` intact.
+            \\\
+
+    sentFrom: SelectAndActOnManyCardsLinearStyle
+
+    model: opus

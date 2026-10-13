@@ -1,0 +1,78 @@
+
+export anchor LayPlanningOutAsABoardOfColumns2:
+    userPrompt:
+        \\\
+        The Planning tab in the body shows the plan as a kanban board instead of one centred column. Today it is a single column at most 760 pixels wide, as [Planning](.claude/reference/scope/planning/index.md#description) and its [Layout](.claude/reference/scope/planning/index.md#layout) describe. Once this is done, Planning fills the body beneath the tab bar, as the [Body](.claude/reference/scope/application/Body.md#contents) places it. Its sections sit side by side as columns of equal fixed width, in the order work moves: Backlog, Next sprint, Current sprint, Done. Each column keeps its section's heading row, with its name, its count and its actions ("Send sprint" and "Start automatically" on Next sprint, "Draft stories" and "Research" on the Backlog, "Close sprint" on Current sprint). Each column scrolls on its own, and the board scrolls sideways when it is wider than the tab. Both use the [Scrollbar](.claude/reference/ui/components/scrollbar/index.md#scrollbar).
+
+        Each story is a card in its column instead of a 36 pixel row. It is a new kind of part beside the row, panel and card in [Parts](.claude/reference/scope/planning/index.md#parts). The card still shows everything the [Stories](.claude/reference/scope/planning/index.md#stories) row shows: the mode pill in its mode's colour, the title (wrapping to two lines before it is cut off), the step count, the attachment icon, and the status label once the story has been sent.
+
+        On the board, Current sprint and Done are always there as columns. They no longer appear and disappear, or collapse beneath the Backlog, as the [Sprint](.claude/reference/scope/planning/index.md#sprint) says today. When either is empty it shows its empty state, as the [States](.claude/reference/scope/planning/index.md#states) say. A story with steps in Current sprint lists its steps on its card, each with its own status. The pause bar from [Paused](.claude/reference/scope/planning/index.md#paused) runs across the top of the whole board. Findings, from [Research](.claude/reference/scope/planning/index.md#research), become the last column, after Done.
+
+        The sprint's behaviour doesn't change: what is sent, closing, auto start and saving to `order.json` all stay as they are. The spec has nothing on a board, columns or story cards yet, so the layout is new.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The Planning tab in the body shows the plan as a kanban board instead of one centred column. Today it is a single column at most 760 pixels wide, as [Planning](.claude/reference/scope/planning/index.md#description) and its [Layout](.claude/reference/scope/planning/index.md#layout) describe. Once this is done, Planning fills the body beneath the tab bar, as the [Body](.claude/reference/scope/application/Body.md#contents) places it. Its sections sit side by side as columns of equal fixed width, in the order work moves: Backlog, Next sprint, Current sprint, Done. Each column keeps its section's heading row, with its name, its count and its actions ("Send sprint" and "Start automatically" on Next sprint, "Draft stories" and "Research" on the Backlog, "Close sprint" on Current sprint). Each column scrolls on its own, and the board scrolls sideways when it is wider than the tab. Both use the [Scrollbar](.claude/reference/ui/components/scrollbar/index.md#scrollbar).
+
+            Each story is a card in its column instead of a 36 pixel row. It is a new kind of part beside the row, panel and card in [Parts](.claude/reference/scope/planning/index.md#parts). The card still shows everything the [Stories](.claude/reference/scope/planning/index.md#stories) row shows: the mode pill in its mode's colour, the title (wrapping to two lines before it is cut off), the step count, the attachment icon, and the status label once the story has been sent.
+
+            On the board, Current sprint and Done are always there as columns. They no longer appear and disappear, or collapse beneath the Backlog, as the [Sprint](.claude/reference/scope/planning/index.md#sprint) says today. When either is empty it shows its empty state, as the [States](.claude/reference/scope/planning/index.md#states) say. A story with steps in Current sprint lists its steps on its card, each with its own status. The pause bar from [Paused](.claude/reference/scope/planning/index.md#paused) runs across the top of the whole board. Findings, from [Research](.claude/reference/scope/planning/index.md#research), become the last column, after Done.
+
+            The sprint's behaviour doesn't change: what is sent, closing, auto start and saving to `order.json` all stay as they are. The spec has nothing on a board, columns or story cards yet, so the layout is new.
+            \\\
+        result:
+            \\\
+            I've rewritten the Planning spec so it describes a kanban board. `piton check` and `piton build` both pass with no problems. All the edits are in `spec/scope/planning/index.pi`, which now imports Scrollbar.
+
+            `git status` also lists changes to Body, the ribbon's Planning tab, chat input, sandbox and a few other spec files. I didn't touch those, and `spec/scope/planning` itself doesn't show in git status at all, so it's worth checking where those changes came from.
+
+            **What changed in the spec**
+            - **Board:** Planning now fills the body beneath the tab bar. Its columns sit left to right in this order: Backlog, Next sprint, Current sprint, Done, then Findings last. Every column is always there, and Current sprint and Done no longer appear, disappear or collapse.
+            - **Sizes I chose, since the prompt gave none:** columns are 320 pixels wide and 16 pixels apart, the board has 24 pixels of padding, and cards are 8 pixels apart.
+            - **Columns:** each has a 32 pixel heading with its name, count and labelled actions. Actions that don't fit wrap onto a second line instead of being cut off. Each column scrolls on its own with its heading fixed at the top, and the board scrolls sideways when it's wider than the tab. Both use the Scrollbar.
+            - **Story card:** a new fourth part beside the row, panel and card. Its top line has the grip, the mode pill, and the status and time at the right (plus the menu button on hover). The title wraps to two lines before it's cut off, and the step count and attachment icon sit beneath it, muted. In Current sprint a card lists its steps, each with its own status, and Done cards are muted. Rows are now used only for steps in an open story and for findings.
+            - **Empty states:** I added two new ones: "No sprint under way. Send sprint to start one." for Current sprint and "Nothing done yet." for Done. While the plan loads, each column shows skeleton cards.
+            - **Pause bar:** it runs across the top of the whole board.
+            - **Keyboard:** I added Left and Right to move between columns. Wording about rows elsewhere now says cards.
+
+            Sending, closing, auto start and saving to `order.json` are unchanged.
+
+            **Anchors the code should follow:** `Planning.description`, `Planning.layout`, `Planning.parts`, `Planning.stories`, `Planning.sprint`, `Planning.steps`, `Planning.states`, `Planning.research`, `Planning.paused` and `Planning.keyboard`, all in `.claude/reference/scope/planning/index.md`, plus `Scrollbar`.
+            \\\
+
+    sentFrom: LayPlanningOutAsABoardOfColumns
+
+    model: opus

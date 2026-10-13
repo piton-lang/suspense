@@ -1110,6 +1110,9 @@ pub fn prepare(
         .into_iter()
         .map(|name| (name.to_string(), scratch.clone().into_os_string()))
         .collect();
+    // zsh makes its heredocs' files at TMPPREFIX, a prefix rather than a
+    // folder, never at TMPDIR.
+    env.push(("TMPPREFIX".into(), scratch.join("zsh").into_os_string()));
     // Git, filtered to what it may read, never the project's own.
     if kind.filtered_git() {
         match git::filtered(project_dir, &compiled, &temp.join("git")) {

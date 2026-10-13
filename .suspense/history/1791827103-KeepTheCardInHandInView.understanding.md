@@ -1,0 +1,8 @@
+- [The board scrolls sideways and a column up or down to keep a moved, focused card in view](.claude/reference/scope/planning/index.md#motion)
+- [Every motion takes about 150 milliseconds, eased out, never longer; a move under way restarts from where it is](.claude/reference/scope/planning/index.md#motion)
+- [The side panel slides in at the right as it opens and the board narrows alongside it, in the same quick motion](.claude/reference/scope/planning/index.md#motion)
+- [While the side panel is open the board narrows to the space left of it, its columns keeping their 320 pixel width and scrolling sideways when they don't fit](.claude/reference/scope/planning/index.md#layout)
+- [The side panel is the one place an opened story shows](.claude/reference/scope/planning/index.md#layout)
+- [Each column scrolls up and down on its own beneath its heading; the board scrolls sideways when its columns are wider than the tab](.claude/reference/scope/planning/index.md#layout)
+- [Left and Right focus the column beside, scrolling the board sideways to show it](.claude/reference/scope/planning/index.md#keyboard)
+- [The scrollbar thumb never jumps; rows changing out of view count at their height as soon as they change](.claude/reference/ui/components/scrollbar/index.md#steadiness)

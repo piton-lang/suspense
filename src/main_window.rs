@@ -33,6 +33,7 @@ use crate::palette::{Palette, Picked, SystemCommand, SystemState};
 use crate::project::open_project::{self, OpenProject};
 use crate::project_directory::ProjectDirectory;
 use crate::project_tree::{EntryMoved, OpenDiff, OpenFile, ProjectTree};
+use crate::redrawing::Part;
 use crate::prompt_mode::PromptMode;
 use crate::rescope_view::{CloseRescope, MinimizeRescope, RefactorConcepts, Rescope, RescopeView};
 use crate::ribbon::RunCommand;
@@ -95,6 +96,7 @@ pub fn bind_keys(cx: &mut App) {
     ribbon::bind_keys(cx);
     crate::diff_view::bind_keys(cx);
     crate::chat_input::bind_keys(cx);
+    crate::planning::bind_keys(cx);
     crate::prompt_mode::bind_keys(cx);
     crate::fs_browser::bind_keys(cx);
     crate::project_indicator::bind_keys(cx);
@@ -178,6 +180,11 @@ pub struct MainWindow {
     parked: HashMap<PathBuf, ParkedPanels>,
     /// What the inset panel shows, to know when it comes in and goes away.
     panel_motion: Leaving<AnyView>,
+    /// The views it is drawn in, as the Application's Redrawing says: the
+    /// window around the others, drawn every frame anyway, and the left
+    /// sidebar's view, drawn again only when its own state changes.
+    shell: Entity<Part<MainWindow>>,
+    left: Entity<Part<MainWindow>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -307,6 +314,15 @@ impl MainWindow {
                 window,
                 |this, _, command: &RunCommand, window, cx| this.run_command(*command, window, cx),
             ),
+            // Opening the ribbon's Planning tab opens Planning's tab in the
+            // body, as Open Planning does.
+            cx.subscribe_in(
+                &ribbon,
+                window,
+                |this, _, _: &crate::ribbon::OpenedPlanning, window, cx| {
+                    this.open_planning(window, cx)
+                },
+            ),
             // Switching projects closes what belongs to the screen.
             cx.observe_global_in::<ProjectDirectory>(window, |this, window, cx| {
                 this.project_changed(window, cx)
@@ -394,7 +410,15 @@ impl MainWindow {
             cx,
         );
 
+        let shell = Part::new(cx, |this, window, cx| this.render_window(window, cx).into_any_element());
+        let left = Part::new(cx, |this, window, cx| this.render_left_view(window, cx));
+        // "Not a Git repository" until the git panel is shown.
+        left.update(cx, |left, cx| {
+            left.follow(&git_panel, |this, _| this.left_view == LeftView::Git, cx)
+        });
         Self {
+            shell,
+            left,
             ribbon,
             sidebar,
             git_panel,
@@ -522,6 +546,15 @@ impl MainWindow {
 
     /// Opens the settings in the inset panel, in place of anything else
     /// there, reading the prompts afresh; already open, they stay as they are.
+    /// Opens the project's plan in a tab of the body, or selects it, the
+    /// panel making way for it as for a file.
+    pub fn open_planning(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_panel(window, cx);
+        self.prompt_mode.update(cx, |prompt_mode, cx| {
+            prompt_mode.open_planning(window, cx);
+        });
+    }
+
     pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.settings.is_some() {
             return;
@@ -2129,6 +2162,7 @@ impl MainWindow {
                 SystemCommand::ToggleDarkMode => {
                     ribbon::set_dark_mode(!cx.theme().is_dark(), window, cx)
                 }
+                SystemCommand::Planning => self.open_planning(window, cx),
                 SystemCommand::Settings => self.open_settings(window, cx),
                 SystemCommand::About => self.open_about(window, cx),
                 SystemCommand::CollectDebugInfo => self.collect_debug_info(window, cx),
@@ -2340,7 +2374,18 @@ impl MainWindow {
 }
 
 impl Render for MainWindow {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        // Drawn in a view of its own, so what is drawn every frame anyway,
+        // as the Run button's spinner, redraws that, never notifying
+        // whatever follows the main window.
+        self.shell.clone()
+    }
+}
+
+impl MainWindow {
+    /// The window around its views: the ribbon, the left sidebar, and the
+    /// body.
+    fn render_window(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         div()
             .relative()
             .size_full()
@@ -2487,6 +2532,39 @@ impl Render for MainWindow {
                     this.open_project_picker(window, cx)
                 }),
             )
+            // The plan, as the ribbon's Planning tab opens it.
+            .on_action(
+                cx.listener(|this, _: &crate::planning::OpenPlanning, window, cx| {
+                    this.open_planning(window, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::planning::NewStory, window, cx| {
+                    this.close_panel(window, cx);
+                    this.prompt_mode
+                        .update(cx, |prompt_mode, cx| prompt_mode.new_story(window, cx));
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::planning::OpenDraftStories, window, cx| {
+                    this.close_panel(window, cx);
+                    this.prompt_mode
+                        .update(cx, |prompt_mode, cx| prompt_mode.draft_stories(window, cx));
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::planning::OpenResearch, window, cx| {
+                    this.close_panel(window, cx);
+                    this.prompt_mode
+                        .update(cx, |prompt_mode, cx| prompt_mode.research(window, cx));
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &crate::planning::SendSprint, window, cx| {
+                    this.prompt_mode
+                        .update(cx, |prompt_mode, cx| prompt_mode.send_sprint(window, cx));
+                }),
+            )
             .on_action(cx.listener(|this, _: &AnalyzeDivergence, window, cx| {
                 this.open_divergence(Opening::Analyze, window, cx)
             }))
@@ -2514,26 +2592,33 @@ impl Render for MainWindow {
                     // One `children` call for every panel: the group's
                     // `children` replaces panels added before it.
                     // The view bar, always there, then the view picked
-                    // beside it, unless collapsed, the body the rest.
-                    h_flex().size_full().child(self.render_view_bar(cx)).child(
-                        div().flex_1().min_w_0().h_full().child(if self.left_collapsed {
-                            div().size_full().child(self.prompt_mode.clone()).into_any_element()
-                        } else {
-                            h_resizable("sidebar-split")
-                                .with_state(&self.sidebar_split)
-                                .with_handle_appearance(crate::hit_areas::resize_edges("sidebar-split"))
-                                .children([
-                                    resizable_panel()
-                                        .size(SIDEBAR_WIDTH)
-                                        .size_range(MIN_SIDEBAR_WIDTH..Pixels::MAX)
-                                        .child(self.render_left_view(window, cx)),
-                                    resizable_panel()
-                                        .size_range(MIN_SPLIT_WIDTH..Pixels::MAX)
-                                        .child(self.prompt_mode.clone()),
-                                ])
-                                .into_any_element()
-                        }),
-                    ),
+                    // beside it, unless collapsed, the body the rest; the
+                    // whole sidebar hidden while Planning's tab is selected,
+                    // as the Body says, the body then the window's width.
+                    if self.prompt_mode.read(cx).on_planning_tab() {
+                        div().size_full().child(self.prompt_mode.clone()).into_any_element()
+                    } else {
+                        h_flex().size_full().child(self.render_view_bar(cx)).child(
+                            div().flex_1().min_w_0().h_full().child(if self.left_collapsed {
+                                div().size_full().child(self.prompt_mode.clone()).into_any_element()
+                            } else {
+                                h_resizable("sidebar-split")
+                                    .with_state(&self.sidebar_split)
+                                    .with_handle_appearance(crate::hit_areas::resize_edges("sidebar-split"))
+                                    .children([
+                                        resizable_panel()
+                                            .size(SIDEBAR_WIDTH)
+                                            .size_range(MIN_SIDEBAR_WIDTH..Pixels::MAX)
+                                            .child(crate::redrawing::cached(&self.left, cx)),
+                                        resizable_panel()
+                                            .size_range(MIN_SPLIT_WIDTH..Pixels::MAX)
+                                            .child(self.prompt_mode.clone()),
+                                    ])
+                                    .into_any_element()
+                            }),
+                        )
+                        .into_any_element()
+                    },
                 ),
             )
             .children(self.render_panel(window, cx))
@@ -6416,8 +6501,8 @@ mod tests {
     /// The ribbon's tabs are Project, Planning, Code, Spec, and Application,
     /// each showing only its own controls: opening a project under Project,
     /// Build Spec under Spec, dark mode and settings under Application, and
-    /// none of those under Planning or Code; Planning, with no commands yet,
-    /// says so.
+    /// none of those under Planning or Code; Planning holds Planning, New
+    /// Story, and Send Sprint, as the RibbonPlanningTab says.
     #[gpui_kit::test]
     async fn ribbon_tabs_hold_their_controls(cx: &mut TestAppContext) {
         use crate::ribbon::RibbonTab;
@@ -6459,7 +6544,17 @@ mod tests {
                     );
                 }
                 if tab == RibbonTab::Planning {
-                    assert!(window.try_find("no-commands").is_some(), "Planning doesn't say it has no commands");
+                    for command in ["open-planning", "new-story", "send-sprint"] {
+                        assert!(
+                            window.try_find(command).is_some(),
+                            "Planning has no {command}"
+                        );
+                    }
+                    // In that order, Planning large, the rest stacked beside it.
+                    let open = window.find("open-planning").bounds();
+                    let new = window.find("new-story").bounds();
+                    let send = window.find("send-sprint").bounds();
+                    assert!(open.right() <= new.left() && new.bottom() <= send.top());
                 }
                 // Brightness is the Appearance group's one column.
                 if tab == RibbonTab::Application {
@@ -7656,5 +7751,154 @@ mod tests {
             .unwrap();
         }
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The window is drawn as views, each drawn again only when its own state
+    /// changes, as the Application's Redrawing says. While the right sidebar
+    /// slides out, the tab bar, the message list, and the chat input are laid
+    /// out at each width as it goes, as the Body's sliding says. Then, while a
+    /// task runs and nothing else changes, its time ticking, its spinners
+    /// turning, and its reply streaming in, the Tasks tab, the chat input,
+    /// and the sidebars are not drawn again from one frame to the next, and
+    /// the message list, which shows them, is.
+    #[gpui_kit::test]
+    async fn only_what_changes_is_drawn_again(cx: &mut TestAppContext) {
+        use gpui_kit::{Entity, Pixels, px};
+
+        use crate::prompt_mode::PromptMode;
+        use crate::redrawing::Part;
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::theme::init(cx);
+            piton_syntax::init();
+            ProjectDirectory::init(cx);
+            super::bind_keys(cx);
+        });
+        let mut main = None;
+        let window = cx.add_window(|window, cx| {
+            let view = cx.new(|cx| MainWindow::new(window, cx));
+            main = Some(view.clone());
+            Root::new(view, window, cx)
+        });
+        let main = main.unwrap();
+        let handle: gpui_kit::AnyWindowHandle = window.into();
+        let (prompt_mode, left) =
+            main.read_with(cx, |main, _| (main.prompt_mode.clone(), main.left.clone()));
+        let view = |name: &str, cx: &mut TestAppContext| {
+            prompt_mode.read_with(cx, |this, _| this.view_for_test(name))
+        };
+        let tabs = view("tabs", cx);
+        let history = view("history", cx);
+        let chat_input = view("chat-input", cx);
+        let sidebar = view("sidebar", cx);
+        let tasks_tab = view("tasks-tab", cx);
+        let widths = |part: &Entity<Part<PromptMode>>, cx: &mut TestAppContext| {
+            part.read_with(cx, |part, _| part.widths())
+        };
+        let draws = |part: &Entity<Part<PromptMode>>, cx: &mut TestAppContext| {
+            part.read_with(cx, |part, _| part.draws())
+        };
+        // A frame as the platform draws one: the animation frames asked for
+        // delivered, then only what changed drawn again, never everything
+        // afresh. The body's width as it was drawn.
+        let frame = |cx: &mut TestAppContext| -> Pixels {
+            cx.update_window(handle, |_, window, cx| {
+                window.simulate_next_frame(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| {
+                window.draw(cx).clear(cx);
+                window.find("prompt-body").bounds().size.width
+            })
+            .unwrap()
+        };
+        frame(cx);
+        let wide = frame(cx);
+
+        // A task starts, and the right sidebar slides out beside the body:
+        // in every frame, the tab bar, the message list, and the chat input
+        // were last laid out at the body's width in that frame.
+        let ix = prompt_mode.update(cx, |this, cx| this.run_task_for_test("Change a", cx));
+        let laid_out = [&tabs, &history, &chat_input].map(|part| widths(part, cx).len());
+        let mut bodies = Vec::new();
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_millis(600) {
+            let body = frame(cx);
+            bodies.push(body);
+            for (name, part) in [
+                ("tab bar", &tabs),
+                ("message list", &history),
+                ("chat input", &chat_input),
+            ] {
+                let last = *widths(part, cx).last().unwrap();
+                assert!(
+                    (last - body).abs() <= px(1.),
+                    "the {name} was last laid out {last:?} wide, the body {body:?}"
+                );
+            }
+            std::thread::sleep(Duration::from_millis(8));
+        }
+        let narrow = *bodies.last().unwrap();
+        assert!(
+            narrow < wide - px(100.),
+            "the sidebar didn't slide out: the body is {narrow:?} wide, from {wide:?}"
+        );
+        let between: Vec<Pixels> = bodies
+            .iter()
+            .copied()
+            .filter(|body| *body < wide - px(1.) && *body > narrow + px(1.))
+            .collect();
+        assert!(
+            !between.is_empty(),
+            "the body {bodies:?} didn't narrow through widths in between"
+        );
+        for ((name, part), from) in [
+            ("tab bar", &tabs),
+            ("message list", &history),
+            ("chat input", &chat_input),
+        ]
+        .into_iter()
+        .zip(laid_out)
+        {
+            let drawn = widths(part, cx)[from..].to_vec();
+            for body in &between {
+                assert!(
+                    drawn.iter().any(|width| (*width - *body).abs() <= px(1.)),
+                    "the {name} was never laid out at {body:?} as the sidebar slid: {drawn:?}"
+                );
+            }
+        }
+
+        // Settled, the task runs on, and nothing else changes: its time
+        // ticks every second, its spinners turn, and its reply streams in.
+        for _ in 0..3 {
+            frame(cx);
+        }
+        let others = |cx: &mut TestAppContext| {
+            [
+                ("Tasks tab", draws(&tasks_tab, cx)),
+                ("chat input", draws(&chat_input, cx)),
+                ("right sidebar", draws(&sidebar, cx)),
+                ("left sidebar", left.read_with(cx, |left, _| left.draws())),
+            ]
+        };
+        let before = others(cx);
+        let shown = draws(&history, cx);
+        for _ in 0..3 {
+            cx.executor().advance_clock(Duration::from_secs(1));
+            frame(cx);
+            prompt_mode.update(cx, |this, cx| this.stream_for_test(ix, "More of the reply. ", cx));
+            frame(cx);
+            frame(cx);
+        }
+        for ((name, before), (_, after)) in before.into_iter().zip(others(cx)) {
+            assert_eq!(after, before, "the {name} was drawn again while only the task ran");
+        }
+        assert!(
+            draws(&history, cx) > shown,
+            "the message list, which shows the task's time and reply, wasn't drawn again"
+        );
     }
 }

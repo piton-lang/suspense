@@ -1,0 +1,142 @@
+{
+  "proposals": [
+    {
+      "id": "Proposal_05d6f079c0efc749",
+      "title": "Tighten the left of the task rows",
+      "prompt": "In the right sidebar's Tasks tab, the Queued group's rows have far too much\nspace before their text: the padding, the grip column, the place number,\nthe lane label, and the gaps between them push each prompt's first line\nabout 100 pixels in, which leaves little room for the text in a narrow\nsidebar. Once this is done, a row's text starts much closer to its left\nedge, while the bar still stands clear of the grip.\n\nRead spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows,\nspec/scope/prompt-mode/queue-list/index.pi#QueueList.lanes and\nspec/scope/prompt-mode/queue-list/index.pi#QueueList.placement first.\n\n- The lead column (checkbox or grip) and the status column (spinner, tick,\n  or place number) are narrower, 16 pixels each rather than 20, still wide\n  enough for a place number of two digits.\n- The gap between the lead column, the status column, the lane label, and\n  the text is 4 pixels, not 8. The spec says nothing yet on the spacing\n  between these columns, so state it as new.\n- Everything that lines up with the rows still lines up after the change,\n  because all three sections share these columns: Previous and Running\n  rows, a Running chain's step rows (still set in 16 pixels further), the\n  section headings' titles, and Previous's day dividers.\n- Every row is still 28 pixels tall and one line, and the mode bar keeps\n  its size and inset.\n- A queued row's lane label stays, as QueueList.lanes says. It just sits\n  closer to the place number and the text.",
+      "mode": "chain",
+      "target": "Story_0be6fafba82c61b2",
+      "rewrite": true,
+      "about": "Story_0be6fafba82c61b2",
+      "spec": [
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows",
+          "note": "the shared columns before a row's text, which the Queued rows use too:",
+          "kind": "Section",
+          "quote": "then a lead column 20 pixels wide, holding a Previous row's checkbox, a Queued row's drag grip ... then a status column 20 pixels wide"
+        },
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows",
+          "note": "the alignment that must still hold:",
+          "kind": "Section",
+          "quote": "So a row's status and its text start at the same place whether it has a checkbox, a grip, or neither"
+        },
+        {
+          "link": "spec/scope/prompt-mode/queue-list/index.pi#QueueList.lanes",
+          "note": "the lane label before a queued row's text, also on the left:",
+          "kind": "Section",
+          "quote": "a small label just before its text reading its mode"
+        },
+        {
+          "link": "spec/scope/prompt-mode/queue-list/index.pi#QueueList.placement",
+          "note": "the queued row's one-line layout:",
+          "kind": "Section",
+          "quote": "Every row is one line, 28 pixels tall"
+        },
+        {
+          "note": "the gaps between a row's bar, lead column, status column, and label (the spec gives the column widths but nothing on the spacing between them)"
+        }
+      ]
+    },
+    {
+      "id": "Proposal_612c7e5b575da1ed",
+      "title": "Settle the task rows' left spacing",
+      "prompt": "Update spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows and\nspec/scope/prompt-mode/queue-list/index.pi#QueueList.lanes to match what\nthe code now does: the widths the lead and status columns ended up with,\nthe gap between them, the lane label and the text, and the fact that\nsection headings, day dividers, and step rows still line up with the\nrows' text.",
+      "mode": "spec",
+      "target": "Story_0be6fafba82c61b2",
+      "about": "Story_0be6fafba82c61b2",
+      "spec": [
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows",
+          "note": "the column widths and gaps as built:",
+          "kind": "Section",
+          "quote": "then a lead column 20 pixels wide"
+        },
+        {
+          "link": "spec/scope/prompt-mode/queue-list/index.pi#QueueList.lanes",
+          "note": "the lane label's place before the text:",
+          "kind": "Section",
+          "quote": "a small label just before its text reading its mode"
+        }
+      ]
+    },
+    {
+      "id": "Proposal_0e7c3ab9b46daf48",
+      "title": "Tighten the left of the Tasks tab's rows",
+      "prompt": "In the right sidebar's Tasks tab, the queued prompts' rows are set in far too much on the left. Their lane label and text start about 66 pixels from the row's edge, a quarter of the sidebar at its default 260 pixels. Once this is done, a queued row's grip sits just to the right of its mode bar. Its number follows close after the grip, and its lane label and text follow close after the number. No column or gap leaves noticeably empty room.\n\nRead spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows, spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.days, spec/scope/prompt-mode/queue-list/index.pi#QueueList.placement and spec/scope/prompt-mode/queue-list/index.pi#QueueList.lanes first. TasksTab.rows requires every row in every section to use the same columns, and the section headings' titles and the day dividers' labels to line up with the rows' text. So tighten the layout for all of them together, not for Queued alone. Previous, Running and Queued rows, the chain step rows (still set in 16 pixels further), the headings and the day dividers must all still line up after the change. The mode bar and the chain's joined bar stay 4 pixels from the left and must not be covered or crowded by the grip or checkbox.\n\nThe spec doesn't yet say how much padding a row has on its left or how wide the gaps between its columns are; that part is new. Add the row's left padding and the gaps between its columns to TasksTab.rows in pixels, along with any narrower lead and status column widths. Then make spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.days match, and make the code in src/prompt_mode/tasks_tab.rs match. Its row padding, gaps, `LEAD_COLUMN`, `STATUS_COLUMN` and `HEADING_FIXED` all depend on this layout.",
+      "mode": "chain",
+      "target": "Story_0be6fafba82c61b2",
+      "rewrite": true,
+      "about": "Story_0be6fafba82c61b2",
+      "spec": [
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows",
+          "note": "the shared columns every row is laid out in, which set how far in a queued row's text starts:",
+          "kind": "Section",
+          "quote": "a lead column 20 pixels wide … then a status column 20 pixels wide … then the first line of its prompt"
+        },
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows",
+          "note": "the mode bar's place at the row's left, which the tighter layout must still clear:",
+          "kind": "Behaviour",
+          "quote": "4 pixels wide with corners rounded 2 pixels, inset from the row's edges, 4 pixels from its left"
+        },
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows",
+          "note": "alignment across sections and headings, so the change can't be made to Queued alone:",
+          "kind": "Requirement",
+          "quote": "So a row's status and its text start at the same place whether it has a checkbox, a grip, or neither, and so do the section headings' titles"
+        },
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.days",
+          "note": "day dividers' labels follow the rows' text in:",
+          "kind": "Behaviour",
+          "quote": "its label in small muted text set in to line up with the rows' text"
+        },
+        {
+          "link": "spec/scope/prompt-mode/queue-list/index.pi#QueueList.placement",
+          "note": "the queued row whose left is too deep:",
+          "kind": "Section",
+          "quote": "Each prompt in the list is numbered, with its number, text, and cancel button vertically centred in its row"
+        },
+        {
+          "link": "spec/scope/prompt-mode/queue-list/index.pi#QueueList.lanes",
+          "note": "the lane label that comes before the text:",
+          "kind": "Behaviour",
+          "quote": "a small label just before its text reading its mode"
+        },
+        {
+          "note": "how much padding a row has on its left, and how wide the gaps between its columns are. The spec doesn't give either; the code uses 10px padding and 8px gaps"
+        }
+      ]
+    },
+    {
+      "id": "Proposal_f6cbd1cf48a57b96",
+      "title": "Settle the Tasks tab rows' left layout",
+      "prompt": "Make spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows say what the code now does at a row's left. That covers the row's left padding, the lead and status columns' widths, the gaps between columns, and where the text starts relative to the mode bar, all in pixels. Make sure spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.days and spec/scope/prompt-mode/queue-list/index.pi#QueueList.placement agree with it, and that no figure left anywhere in the spec still describes the old, wider layout.",
+      "mode": "spec",
+      "target": "Story_0be6fafba82c61b2",
+      "about": "Story_0be6fafba82c61b2",
+      "spec": [
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.rows",
+          "note": "the pixel figures for the row's left padding, column widths and gaps:",
+          "kind": "Section",
+          "quote": "every row in every section is laid out in the same columns"
+        },
+        {
+          "link": "spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.days",
+          "note": "day dividers lining up with the rows' text:",
+          "kind": "Behaviour",
+          "quote": "set in to line up with the rows' text"
+        },
+        {
+          "link": "spec/scope/prompt-mode/queue-list/index.pi#QueueList.placement",
+          "note": "the queued row's layout:",
+          "kind": "Section",
+          "quote": "with its number, text, and cancel button vertically centred in its row"
+        }
+      ]
+    }
+  ]
+}

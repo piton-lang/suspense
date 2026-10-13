@@ -1,0 +1,7 @@
+- [A story is a title, a prompt, and how it will be sent; clicking its row opens it in place](.claude/reference/scope/planning/index.md#stories)
+- [Stories are saved in .suspense/planning/, a file per story holding its hidden anchor, with order.json](.claude/reference/scope/planning/index.md#saving)
+- [A sprint sends its stories in order, each as a task, as one block in the queue](.claude/reference/scope/planning/index.md#sprint)
+- [A proposal can add to a named story; one naming a story that no longer exists is shown as a new story](.claude/reference/scope/planning/index.md#proposals)
+- [An open Chain task lists its steps and can be given added steps](.claude/reference/ui/components/right-sidebar/tasks/index.md#chain-steps)
+- [Errors show in plain words in the theme's error colour](.claude/reference/scope/planning/index.md#states)
+- [Stories have ordered steps saved in their own file, shown everywhere, sent as a chain; adding to a missing story fails and changes nothing](.claude/reference/scope/planning/index.md#steps)

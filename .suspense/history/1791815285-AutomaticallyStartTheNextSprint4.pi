@@ -1,0 +1,61 @@
+
+export anchor AutomaticallyStartTheNextSprint4:
+    userPrompt:
+        \\\
+        There is an option to start the next sprint automatically. When it is on, the next sprint starts on its own without someone having to start it by hand.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            There is an option to start the next sprint automatically. When it is on, the next sprint starts on its own without someone having to start it by hand.
+            \\\
+        result:
+            \\\
+            The automatic-start option was already in the spec from your earlier request, so I only filled the gaps around it. `piton check` reports no problems and `piton build` wrote 86 files.
+
+            **Already in place:** a "Start automatically" switch on Next sprint, off by default and saved with the plan. When it's on and the current sprint finishes with every story done, the next sprint is sent with no one starting it. It never starts after a failure or while planning is paused, and each automatic start shows a notification.
+
+            **What I added** (`.claude/reference/scope/planning/index.md#auto-start`):
+            - **Turning it on:** if no sprint is running and Next sprint has stories, they start straight away, unless planning is paused.
+            - **Planning closed:** the switch still works while Planning isn't open.
+            - **Opening the project or app:** a waiting sprint does not start by itself on open. Instead the switch shows "Waiting to start" with a "Start now" button, so nothing begins unseen. A sprint cut off by quitting never triggers the next one.
+            - **Visible state:** while the switch is on, Next sprint's heading shows "Auto", and the ribbon's Send Sprint tooltip says the next sprint starts automatically.
+
+            **Anchors the code should follow:** `Planning` `#auto-start`, `#sprint` and `#paused`, plus `RibbonPlanningTab` `#commands` for the tooltip.
+            \\\
+
+    sentFrom: AutomaticallyStartTheNextSprint3
+
+    model: opus

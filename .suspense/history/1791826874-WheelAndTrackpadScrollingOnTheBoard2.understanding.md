@@ -1,0 +1,7 @@
+- [A vertical wheel turn or two-finger swipe over a column, heading included, scrolls only that column](.claude/reference/scope/planning/index.md#layout)
+- [Scrolling over a column never passes on to the board, even at its top or end or with nothing to scroll](.claude/reference/scope/planning/index.md#layout)
+- [Shift+wheel or a sideways swipe anywhere on the board, columns included, scrolls the board sideways](.claude/reference/scope/planning/index.md#layout)
+- [The board scrolls sideways only while its columns are wider than the tab; while they fit, sideways scrolling does nothing](.claude/reference/scope/planning/index.md#layout)
+- [A vertical wheel turn outside every column (padding, 16 pixel gaps, beside the last column) scrolls the board sideways, down moving it right and up left](.claude/reference/scope/planning/index.md#layout)
+- [A diagonal swipe over a column gives its up-and-down share to the column and its sideways share to the board, together](.claude/reference/scope/planning/index.md#layout)
+- [Scrolling over the side panel, the pause bar, or the bulk bar never moves the board or any column](.claude/reference/scope/planning/index.md#layout)

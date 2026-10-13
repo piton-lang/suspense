@@ -79,11 +79,13 @@ use crate::measured_list::{MeasuredList, RenderRow};
 use crate::mode_guard;
 use crate::piton_build;
 use crate::piton_lsp::PitonSession;
+use crate::planning::{self, Planning, PlanningHooks, StoryState};
 use crate::project_directory::ProjectDirectory;
 use crate::prompt_history::{self, RunRecord, SavedPrompt};
 use crate::prompt_queue::{self, QueuedPrompt};
 use crate::prompt_title;
 use crate::raw_prompt::{Given, RawPrompt, RawPromptView};
+use crate::redrawing::{self, Part};
 use crate::referenced_spec;
 use crate::scrollbar::{self, SetLock};
 use crate::selection_popover::{SelectionAction, selection_popover};
@@ -252,6 +254,16 @@ fn mark_label(marked_done: bool) -> &'static str {
     } else {
         "Mark as done"
     }
+}
+
+/// A story's next step, held while the plan is paused for review, as the
+/// PlanningScope's paused says: what would have gone on after the task at
+/// `after`, and the lanes it waits in.
+struct HeldStep {
+    after: usize,
+    lanes: Lanes,
+    next: Option<(String, Sending, Option<u128>)>,
+    added_next: Option<(usize, usize)>,
 }
 
 /// A prompt on its way to the harness.
@@ -582,28 +594,58 @@ impl TaskStatus {
         )
     }
 
+    /// The theme's hue for the status.
+    fn hue(self) -> Hue {
+        match self {
+            Self::Building => Hue::Blue,
+            Self::Compiling => Hue::Cyan,
+            Self::Preparing => Hue::Blue,
+            Self::Running => Hue::Amber,
+            Self::Done => Hue::Green,
+            Self::Failed => Hue::Red,
+            Self::Cancelled => Hue::Orange,
+            Self::Unrecorded | Self::Stopped => Hue::Grey,
+            // The theme's warning colour.
+            Self::Paused => Hue::Amber,
+        }
+    }
+
     /// A label in the theme's hue for the status, with the status spelled
-    /// out.
+    /// out: a pill 20 pixels tall, 6 pixels each side of its text, rounded
+    /// 4 pixels, its text the same small size as the times beside it.
     fn tag(self, cx: &App) -> Tag {
-        crate::theme::tag(
-            match self {
-                Self::Building => Hue::Blue,
-                Self::Compiling => Hue::Cyan,
-                Self::Preparing => Hue::Blue,
-                Self::Running => Hue::Amber,
-                Self::Done => Hue::Green,
-                Self::Failed => Hue::Red,
-                Self::Cancelled => Hue::Orange,
-                Self::Unrecorded | Self::Stopped => Hue::Grey,
-                // The theme's warning colour.
-                Self::Paused => Hue::Amber,
-            },
-            cx,
-        )
-        .text_sm()
-        .child(self.label())
+        crate::theme::tag(self.hue(), cx)
+            .h(STATUS_LABEL_HEIGHT)
+            .px(STATUS_GAP)
+            .py_0()
+            .rounded(px(4.))
+            .text_sm()
+            .child(self.label())
+    }
+
+    /// The spinner beside the status while it is under way: 12 pixels
+    /// square, in the status label's colour.
+    fn spinner(self, cx: &App) -> Spinner {
+        Spinner::new()
+            .with_size(px(12.))
+            .color(self.hue().of(crate::theme::palette(cx)))
     }
 }
+
+/// How tall a task's status label is.
+const STATUS_LABEL_HEIGHT: Pixels = px(20.);
+
+/// The gap between a task's spinner, status label, time, and rate, the
+/// same on each side.
+const STATUS_GAP: Pixels = px(6.);
+
+/// A task's spinner, status label, elapsed time, and output rate as one
+/// line: each centred on its middle, 6 pixels apart.
+fn status_line() -> Div {
+    h_flex().flex_none().items_center().gap(STATUS_GAP)
+}
+
+impl TaskStatus {}
 
 impl PromptTask {
     fn new(text: SharedString) -> Self {
@@ -851,6 +893,17 @@ impl PromptTask {
         self.subagents.apply(&event);
         match self.reply.apply(event) {
             Some(error) => self.fail(error),
+            // A task whose reply's verdict says it couldn't do the work
+            // fails, though the harness reported success.
+            None if self.reply.done
+                && self.status == TaskStatus::Running
+                && self.mode.is_some_and(crate::hidden_anchor::gives_verdict)
+                && self.reply.verdict() == Some(crate::task_table::Verdict::Failed) =>
+            {
+                self.reply.head_reply(crate::task_table::VERDICT_FAILED);
+                self.status = TaskStatus::Failed;
+                self.stamp_end();
+            }
             None if self.reply.done && self.status == TaskStatus::Running => {
                 self.status = TaskStatus::Done
             }
@@ -1226,6 +1279,48 @@ impl Session {
     }
 }
 
+/// The views the body is drawn in, as the Application's Redrawing says:
+/// each drawn again only when its own state changes, so a spinner turning, a
+/// running task's time ticking, or a reply streaming in redraws only the one
+/// that shows it.
+struct BodyViews {
+    /// The layout around the others, and what is drawn every frame anyway:
+    /// the questions running beneath the body, the right sidebar's slide,
+    /// and the Tasks tab's running rows, updating in place.
+    shell: Entity<Part<PromptMode>>,
+    /// The tab bar, where the Chat tab and task tabs show their spinners.
+    tabs: Entity<Part<PromptMode>>,
+    /// The message list, or the Ask conversation in its place.
+    history: Entity<Part<PromptMode>>,
+    /// The output of the task whose tab is selected.
+    task: Entity<Part<PromptMode>>,
+    /// The Planning board, a findings report, or a file, whose tab is
+    /// selected.
+    board: Entity<Part<PromptMode>>,
+    /// The right sidebar, around the Tasks tab.
+    sidebar: Entity<Part<PromptMode>>,
+    tasks_tab: Entity<Part<PromptMode>>,
+    chat_input: Entity<Part<PromptMode>>,
+}
+
+impl BodyViews {
+    fn new(cx: &mut Context<PromptMode>) -> Self {
+        BodyViews {
+            shell: Part::new(cx, |this, window, cx| this.render_shell(window, cx).into_any_element()),
+            tabs: Part::fitted(cx, |this, _, cx| this.render_tabs(cx).into_any_element()),
+            history: Part::new(cx, |this, _, cx| this.render_history(cx)),
+            task: Part::new(cx, |this, _, cx| {
+                this.render_task_tab_view(cx)
+                    .unwrap_or_else(|| Empty.into_any_element())
+            }),
+            board: Part::new(cx, |this, _, _| this.render_board()),
+            sidebar: Part::new(cx, |this, window, cx| this.render_sidebar(window, cx)),
+            tasks_tab: Part::new(cx, |this, window, cx| this.render_tasks_tab(window, cx)),
+            chat_input: Part::fitted(cx, |this, _, _| this.chat_input.clone().into_any_element()),
+        }
+    }
+}
+
 /// A file pane sliding closed.
 /// The referenced spec sidebar, just closed, sliding back behind the task
 /// view's right edge.
@@ -1245,6 +1340,17 @@ struct PendingStep {
     added: (String, usize),
     model: Option<String>,
     effort: Option<String>,
+}
+
+/// A story from the plan, as it is sent: the name the plan knows its task
+/// by, and its own model and effort, which the anchor sent takes.
+#[derive(Clone, Debug)]
+struct PendingStory {
+    name: String,
+    model: Option<String>,
+    effort: Option<String>,
+    /// Its steps, run after it as a chain's added steps are.
+    steps: Vec<AddedStep>,
 }
 
 /// What was chosen for a file edited on disk while it had unsaved changes.
@@ -1276,10 +1382,13 @@ struct TaskTab {
     locked: bool,
 }
 
-/// A tab of the body after Chat: a file's, or a task's.
+/// A tab of the body after Chat: a file's, a task's, the plan's, or a
+/// piece of research's findings.
 enum BodyTab {
     File(FileTab),
     Task(TaskTab),
+    Planning(Entity<Planning>),
+    Findings(Entity<planning::FindingsView>),
 }
 
 impl BodyTab {
@@ -1288,6 +1397,8 @@ impl BodyTab {
         match self {
             Self::File(tab) => tab.view.entity_id(),
             Self::Task(tab) => tab.key.entity_id(),
+            Self::Planning(view) => view.entity_id(),
+            Self::Findings(view) => view.entity_id(),
         }
     }
 
@@ -1295,7 +1406,7 @@ impl BodyTab {
     fn file(&self) -> Option<&Entity<FileView>> {
         match self {
             Self::File(tab) => Some(&tab.view),
-            Self::Task(_) => None,
+            Self::Task(_) | Self::Planning(_) | Self::Findings(_) => None,
         }
     }
 
@@ -1303,7 +1414,7 @@ impl BodyTab {
     fn task(&self) -> Option<&TaskTab> {
         match self {
             Self::Task(tab) => Some(tab),
-            Self::File(_) => None,
+            Self::File(_) | Self::Planning(_) | Self::Findings(_) => None,
         }
     }
 }
@@ -1423,6 +1534,27 @@ impl ChainLayout {
 /// mode. A spec fix is listed beneath the task it fixes, as a step after it,
 /// and so a Spec task with one heads steps of its own. A task sent or resent
 /// from a step by hand, later, is a task of its own.
+/// Whether the task heads steps of its own beyond a chain's, as a story
+/// from the plan sent with steps does, as the PlanningScope's steps say.
+fn heads_steps(task: &PromptTask) -> bool {
+    !task.added_steps.is_empty() && task.sent.added_step.is_none()
+}
+
+/// How a story's task, or one of its steps', stands, as Planning shows it,
+/// and how long it has run.
+fn task_story_state(task: &PromptTask) -> (StoryState, Option<Duration>) {
+    let state = match task.status {
+        TaskStatus::Done => StoryState::Done,
+        // Never recorded, it can't be told how it ended: missing.
+        TaskStatus::Unrecorded => StoryState::Missing,
+        TaskStatus::Failed => StoryState::Failed,
+        TaskStatus::Cancelled | TaskStatus::Stopped => StoryState::Cancelled,
+        TaskStatus::Paused => StoryState::Paused,
+        _ => StoryState::Running,
+    };
+    (state, task.took().map(|took| took.time))
+}
+
 fn chain_layout(tasks: &[PromptTask]) -> ChainLayout {
     let count = tasks.len();
     // The tasks told what another did, by the name of the one they were sent
@@ -1464,12 +1596,18 @@ fn chain_layout(tasks: &[PromptTask]) -> ChainLayout {
     };
     let mut chains: Vec<Option<Vec<(usize, StepKind)>>> = vec![None; count];
     for ix in 0..count {
-        if tasks[ix].sent.mode != Some(SendMode::Both) {
+        let chained = tasks[ix].sent.mode == Some(SendMode::Both);
+        if !chained && !heads_steps(&tasks[ix]) {
             continue;
         }
         let mut chain = Vec::new();
-        take(&mut claimed, &mut chain, ix, StepKind::Spec);
-        if let Some(code) = next(&claimed, ix, SendMode::Code) {
+        // A story sent with steps heads them, as a chain heads its own.
+        let kind = match tasks[ix].sent.mode {
+            Some(SendMode::Both) | Some(SendMode::Spec) => StepKind::Spec,
+            _ => StepKind::Code,
+        };
+        take(&mut claimed, &mut chain, ix, kind);
+        if chained && let Some(code) = next(&claimed, ix, SendMode::Code) {
             take(&mut claimed, &mut chain, code, StepKind::Code);
             if tasks[code].sent.post_build_update
                 && let Some(update) = next(&claimed, code, SendMode::Spec)
@@ -1895,7 +2033,7 @@ impl DragScroll {
 /// the gap, drawn over the items, with a small open circle at its leading
 /// end, taking no mouse. `vertical` for a line between tabs side by side;
 /// `after` for one along the item's far edge rather than its near one.
-fn drop_indicator(vertical: bool, after: bool, cx: &App) -> AnyElement {
+pub(crate) fn drop_indicator(vertical: bool, after: bool, cx: &App) -> AnyElement {
     let accent = cx.theme().accent;
     let (line, dot) = (px(2.), px(6.));
     let circle = div()
@@ -2047,6 +2185,10 @@ struct ProjectSession {
     latest_settled: Option<(usize, SharedString)>,
     selected_task: Option<usize>,
     parked_outputs: HashMap<usize, (TaskTable, bool)>,
+    planning: Option<Entity<Planning>>,
+    review_hold: Option<HashSet<String>>,
+    held_for_review: Vec<HeldStep>,
+    story_tasks: HashSet<String>,
     mode_tab: SendMode,
 }
 
@@ -2100,6 +2242,10 @@ impl ProjectSession {
             latest_settled: None,
             selected_task: None,
             parked_outputs: HashMap::new(),
+            planning: None,
+            review_hold: None,
+            held_for_review: Vec::new(),
+            story_tasks: HashSet::new(),
             // A project opened for the first time starts on Chain.
             mode_tab: SendMode::Both,
         }
@@ -2144,6 +2290,13 @@ pub struct PromptMode {
     output_locked: bool,
     queue_scroll: ScrollHandle,
     chat_input: Entity<ChatInput>,
+    /// Whether the chat input has the keyboard, as it last changed.
+    chat_input_keyboard: bool,
+    /// While Planning's tab hides the chat input: whether it had the
+    /// keyboard when Planning was selected, to have it again when it shows.
+    chat_input_hidden: Option<bool>,
+    /// The chat input is shown again and takes back the keyboard it had.
+    refocus_chat_input: bool,
     /// The queued prompt being edited in the chat input, by its id.
     editing_queued: Option<usize>,
     /// The queue's list was expanded by <Up> editing a queued prompt, to
@@ -2183,6 +2336,13 @@ pub struct PromptMode {
     /// A step added to a chain, as it is sent: its place in the chain, and
     /// its model and effort, which the anchor sent takes.
     pending_step: Option<PendingStep>,
+    /// A story from the plan, as it is sent: the name its task takes, and
+    /// its own model and effort.
+    pending_story: Option<PendingStory>,
+    /// The plan's stories sent and not yet found as a task or a saved
+    /// queued prompt, by the names they were sent as: still to come, never
+    /// missing.
+    stories_on_the_way: Rc<RefCell<HashSet<String>>>,
     /// Prompts waiting for the harness, in the order they were sent.
     queue: Vec<QueueItem>,
     next_queue_id: usize,
@@ -2199,6 +2359,17 @@ pub struct PromptMode {
     files: Vec<BodyTab>,
     /// The file whose tab is selected, or none while Chat is.
     selected_file: Option<usize>,
+    /// The project's plan, as the PlanningScope says, shown in a tab of its
+    /// own while open.
+    planning: Option<Entity<Planning>>,
+    /// While the plan is paused for review, its Current sprint stories, by
+    /// the names they were sent as: none of them goes on until it ends.
+    review_hold: Option<HashSet<String>>,
+    /// Those stories' next steps, held in the order they came due.
+    held_for_review: Vec<HeldStep>,
+    /// The names the plan's stories were sent as: a story's task is never
+    /// sent again by any route but the sprint, as the PlanningScope says.
+    story_tasks: HashSet<String>,
     /// The task last seen heading the view while under way, by its index and
     /// name: once nothing is under way, the one that finished most recently,
     /// which heads it then.
@@ -2236,8 +2407,12 @@ pub struct PromptMode {
     /// The heights the referenced spec sidebar's panels were dragged to,
     /// kept while the application runs, as its width is.
     refs_panels: referenced_spec::PanelHeights,
-    /// Draws the view again every second while a task or a background task
-    /// is under way, so their running times count up; whether it is going.
+    /// The views it is drawn in, each drawn again only when its own state
+    /// changes, as the Application's Redrawing says.
+    views: BodyViews,
+    /// Draws the views showing running times again every second while a
+    /// task or a background task is under way, so they count up; whether it
+    /// is going.
     _elapsed_tick: Task<()>,
     elapsed_ticking: bool,
     refs_split: Entity<ResizableState>,
@@ -2297,6 +2472,8 @@ pub struct PromptMode {
     /// When each prompt card's Edit and send buttons were last pressed, by
     /// the card and the button, so each reads as done a while after.
     sent_to_prompt: HashMap<String, Instant>,
+    /// Where each story card in an answer stands, by its question and card.
+    story_cards: HashMap<String, ask_pane::StoryCard>,
     /// The prompt cards expanded, by their question and card, kept while the
     /// application runs; every other card is collapsed.
     expanded_cards: HashSet<(usize, String)>,
@@ -2324,6 +2501,12 @@ pub struct PromptMode {
     /// Asks the harness for a prompt's title, to name it by:
     /// [`prompt_title::ask`], replaced in tests.
     titler: prompt_title::Titler,
+    /// Asks the harness to break what is wanted into stories, for the
+    /// plan: [`crate::divergence::run_agent`], replaced in tests.
+    drafter: crate::divergence::RunAgent,
+    /// Researches a topic for the plan, reading the project and the web:
+    /// [`crate::divergence::run_researcher`], replaced in tests.
+    researcher: crate::divergence::RunAgent,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -2422,12 +2605,31 @@ impl PromptMode {
                 window,
                 |this, _, _: &FocusActiveEditor, window, cx| this.focus_open_file(window, cx),
             ),
-            // A row whose markdown finished parsing is measured again.
-            cx.observe_global::<MarkdownStates>(|_, cx| cx.notify()),
+            // A row whose markdown finished parsing is measured again, in
+            // the views that show markdown.
+            cx.observe_global::<MarkdownStates>(|this, cx| this.redraw_markdown(cx)),
             cx.observe_global::<ProjectDirectory>(|this, cx| this.project_changed(cx)),
+            // Changed, the Tasks tab works out its rows again; a running
+            // task's time ticking or its reply streaming in, which redraw
+            // only the views showing them, never makes it.
+            cx.observe(&cx.entity(), |this, _, _| this.tasks_tab.forget_rows()),
         ];
+        // Whether the chat input has the keyboard, kept for when Planning
+        // hides it, as the Body's tabs say.
+        let mut subscriptions = subscriptions;
+        let handles = chat_input.read(cx).keyboard_handles(cx);
+        for handle in handles {
+            subscriptions.push(cx.on_focus_in(&handle, window, |this, window, cx| {
+                this.chat_input_keyboard = this.chat_input.read(cx).has_keyboard(window, cx);
+            }));
+            subscriptions.push(cx.on_focus_out(&handle, window, |this, _, window, cx| {
+                this.chat_input_keyboard = this.chat_input.read(cx).has_keyboard(window, cx);
+            }));
+        }
 
+        let views = BodyViews::new(cx);
         let mut this = Self {
+            views,
             project_dir: None,
             background: HashMap::new(),
             in_background: false,
@@ -2440,6 +2642,9 @@ impl PromptMode {
             output_locked: false,
             queue_scroll: ScrollHandle::new(),
             chat_input,
+            chat_input_keyboard: false,
+            chat_input_hidden: None,
+            refocus_chat_input: false,
             editing_queued: None,
             queue_expanded_by_up: false,
             recalled: None,
@@ -2460,6 +2665,10 @@ impl PromptMode {
             selected_task: None,
             next_chain_stamp: None,
             parked_outputs: HashMap::new(),
+            planning: None,
+            review_hold: None,
+            held_for_review: Vec::new(),
+            story_tasks: HashSet::new(),
             mode_tab: SendMode::Both,
             disk_conflicts: Vec::new(),
             conflict_asked: None,
@@ -2472,6 +2681,8 @@ impl PromptMode {
             #[cfg(test)]
             run_view_in_sidebar: false,
             pending_step: None,
+            pending_story: None,
+            stories_on_the_way: Rc::default(),
             refs_shown: false,
             refs_opened: None,
             refs_closing: None,
@@ -2503,6 +2714,7 @@ impl PromptMode {
             ask_new_pending: false,
             on_ask_tab: false,
             sent_to_prompt: HashMap::new(),
+            story_cards: HashMap::new(),
             expanded_cards: HashSet::new(),
             selected_mode: SendMode::Both,
             ask_session: None,
@@ -2517,6 +2729,14 @@ impl PromptMode {
             // Tests name their prompts at random, unless they say otherwise.
             #[cfg(test)]
             titler: prompt_title::never,
+            #[cfg(not(test))]
+            drafter: crate::divergence::run_agent,
+            #[cfg(not(test))]
+            researcher: crate::divergence::run_researcher,
+            #[cfg(test)]
+            researcher: |_, _, _, _| anyhow::bail!("no harness in tests"),
+            #[cfg(test)]
+            drafter: |_, _, _, _| anyhow::bail!("no harness in tests"),
             _subscriptions: subscriptions,
         };
         this.project_changed(cx);
@@ -2566,6 +2786,10 @@ impl PromptMode {
         swap(&mut self.latest_settled, &mut other.latest_settled);
         swap(&mut self.selected_task, &mut other.selected_task);
         swap(&mut self.parked_outputs, &mut other.parked_outputs);
+        swap(&mut self.planning, &mut other.planning);
+        swap(&mut self.review_hold, &mut other.review_hold);
+        swap(&mut self.held_for_review, &mut other.held_for_review);
+        swap(&mut self.story_tasks, &mut other.story_tasks);
         swap(&mut self.mode_tab, &mut other.mode_tab);
         swap(&mut self.tasks_tab, &mut other.tasks_tab);
     }
@@ -2582,6 +2806,9 @@ impl PromptMode {
         self.mode_tab = self.chat_input.read(cx).project_mode();
         let mut left = ProjectSession::new(None, cx);
         self.swap_session(&mut left);
+        if let Some(planning) = &left.planning {
+            planning.update(cx, |planning, cx| planning.set_shown(false, cx));
+        }
         if let Some(left_dir) = left.project_dir.clone() {
             self.background.insert(left_dir, left);
         }
@@ -2594,11 +2821,18 @@ impl PromptMode {
                 self.load_answers(cx);
             }
         }
+        self.planning_shown(cx);
         // The project switched to shows just as it was left, sliding nothing
         // in: its tabs as they were, and the referenced spec sidebar as it
         // has it.
         self.refs_shown = false;
         self.refs_shown = self.refs_wanted();
+        // The ribbon's Send Sprint follows the plan of the project on screen.
+        let pending = self
+            .planning(cx)
+            .map(|planning| planning.read(cx).pending())
+            .unwrap_or_default();
+        cx.set_global(pending);
         self.refs_opened = None;
         self.refs_closing = None;
         self.selection_popover = None;
@@ -2781,6 +3015,44 @@ impl PromptMode {
         self.working = if working { Lanes::ALL } else { Lanes::NONE };
     }
 
+    /// Starts a Code task running, as sending one does once it runs, for
+    /// tests of the window around it: its index.
+    #[cfg(test)]
+    pub(crate) fn run_task_for_test(&mut self, text: &str, cx: &mut Context<Self>) -> usize {
+        let ix = self.push_task(text.to_string().into(), cx);
+        let task = &mut self.tasks[ix];
+        task.mode = Some(SendMode::Code);
+        task.status = TaskStatus::Running;
+        task.started = Some(std::time::SystemTime::now());
+        self.set_working(true);
+        cx.notify();
+        ix
+    }
+
+    /// Streams `text` into the reply of the task at `ix`, as its harness
+    /// writes it.
+    #[cfg(test)]
+    pub(crate) fn stream_for_test(&mut self, ix: usize, text: &str, cx: &mut Context<Self>) {
+        self.apply_event(ix, HarnessEvent::TextDelta(text.to_string()), cx);
+    }
+
+    /// The body's view named `name`, for tests of how often it is drawn.
+    #[cfg(test)]
+    pub(crate) fn view_for_test(&self, name: &str) -> Entity<Part<PromptMode>> {
+        let views = &self.views;
+        match name {
+            "tabs" => &views.tabs,
+            "history" => &views.history,
+            "task" => &views.task,
+            "board" => &views.board,
+            "sidebar" => &views.sidebar,
+            "tasks-tab" => &views.tasks_tab,
+            "chat-input" => &views.chat_input,
+            _ => panic!("no view {name}"),
+        }
+        .clone()
+    }
+
     /// Moves keyboard focus into the chat input.
     pub fn focus_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.chat_input
@@ -2853,7 +3125,7 @@ impl PromptMode {
             }
             return self.select_tab(Some(ix), cx);
         }
-        let ix = self.selected_file.map_or(0, |ix| ix + 1);
+        let ix = self.new_tab_index();
         let tab = self.file_tab(path, position, window, cx);
         self.files.insert(ix, BodyTab::File(tab));
         self.select_tab(Some(ix), cx);
@@ -3017,10 +3289,54 @@ impl PromptMode {
     /// Selects the tab of the file at `ix`, or Chat for none.
     fn select_tab(&mut self, file: Option<usize>, cx: &mut Context<Self>) {
         self.selected_file = file.filter(|ix| *ix < self.files.len());
+        self.planning_shown(cx);
         // Scrolled to, should it be past the edge of the tab bar.
         self.tabs_scroll
             .scroll_to_item(self.selected_file.map_or(0, |ix| ix + 1));
         cx.notify();
+    }
+
+    /// Tells the plan whether its tab is the one shown, so it comes back as
+    /// it was left, as the PlanningScope's layout says.
+    fn planning_shown(&mut self, cx: &mut Context<Self>) {
+        if let Some(planning) = self.planning.clone() {
+            let shown = self
+                .selected_file
+                .is_some_and(|ix| self.files[ix].id() == planning.entity_id());
+            planning.update(cx, |planning, cx| planning.set_shown(shown, cx));
+        }
+        // Planning is the one tab without the chat input, as the Body's
+        // tabs say: hidden, it keeps all it holds, and the keyboard comes
+        // back to it if it had it.
+        let on_planning = self.on_planning_tab();
+        match self.chat_input_hidden {
+            None if on_planning => self.chat_input_hidden = Some(self.chat_input_keyboard),
+            Some(had_keyboard) if !on_planning => {
+                self.chat_input_hidden = None;
+                self.refocus_chat_input = had_keyboard;
+            }
+            _ => {}
+        }
+    }
+
+    /// Whether Planning's tab is the one selected, which hides the chat
+    /// input and both sidebars, as the Body says.
+    pub fn on_planning_tab(&self) -> bool {
+        self.selected_file
+            .and_then(|ix| self.files.get(ix))
+            .is_some_and(|tab| matches!(tab, BodyTab::Planning(_)))
+    }
+
+    /// How many tabs after Chat are pinned: Planning, while its tab is
+    /// there, which is always first among them.
+    fn pinned_tabs(&self) -> usize {
+        usize::from(matches!(self.files.first(), Some(BodyTab::Planning(_))))
+    }
+
+    /// Where a new file's or task's tab goes: just after the one selected,
+    /// or, while Chat is selected, after Planning's, never between the two.
+    fn new_tab_index(&self) -> usize {
+        self.selected_file.map_or(self.pinned_tabs(), |ix| ix + 1)
     }
 
     /// Where the tab known by `view`, a file's or a task's, is among the
@@ -3036,7 +3352,8 @@ impl PromptMode {
         let Some(from) = self.file_tab_index(view) else {
             return;
         };
-        if from == to || to >= self.files.len() {
+        let pinned = self.pinned_tabs();
+        if from == to || to >= self.files.len() || from < pinned || to < pinned {
             return;
         }
         let selected = self.selected_file.map(|ix| self.files[ix].id());
@@ -3052,6 +3369,10 @@ impl PromptMode {
         let Some(ix) = self.file_tab_index(view) else {
             return;
         };
+        // Planning's tab, once there, stays, as Chat's does.
+        if matches!(self.files[ix], BodyTab::Planning(_)) {
+            return;
+        }
         self.files.remove(ix);
         let selected = match self.selected_file {
             Some(selected) if selected == ix => {
@@ -3160,6 +3481,551 @@ impl PromptMode {
     /// tabs say: a bar in its mode's colour down its left, its status, the
     /// first line of its prompt cut off at 24 characters, and the button
     /// closing it; its tooltip its prompt's first lines and its mode.
+    /// The plan's tab: a checklist icon and "Planning", with no close
+    /// button, since nothing closes it.
+    fn planning_tab_contents(
+        &self,
+        ix: usize,
+        cx: &mut Context<Self>,
+    ) -> (SharedString, SharedString, AnyElement) {
+        // Paused for review, it says so beside its name.
+        let paused = self
+            .planning
+            .as_ref()
+            .is_some_and(|planning| planning.read(cx).is_paused());
+        let warning = cx.theme().warning;
+        let contents = gpui_kit::TestSupportExt::test_support(h_flex().id(("planning-tab", ix)))
+            .flex_none()
+            .gap_1p5()
+            .child(Icon::new(IconName::ListChecks).xsmall())
+            .child("Planning")
+            .when(paused, |tab| {
+                tab.child(
+                    gpui_kit::TestSupportExt::test_support(div().id(("planning-tab-paused", ix)))
+                        .child(Icon::new(IconName::Pause).xsmall().text_color(warning)),
+                )
+            })
+            .into_any_element();
+        (
+            "Planning".into(),
+            "The project's stories and sprint".into(),
+            contents,
+        )
+    }
+
+    /// A piece of research's findings' tab: a search icon, its title, and
+    /// its close button.
+    fn findings_tab_contents(
+        &self,
+        ix: usize,
+        key: EntityId,
+        title: SharedString,
+        cx: &mut Context<Self>,
+    ) -> (SharedString, SharedString, AnyElement) {
+        let this = cx.entity().downgrade();
+        let close = close_tab_button(ix, "Close findings", move |_, cx| {
+            this.update(cx, |this, cx| this.close_file_tab(key, cx))
+                .ok();
+        });
+        let contents = gpui_kit::TestSupportExt::test_support(h_flex().id(("findings-tab", ix)))
+            .flex_none()
+            .gap_1p5()
+            .child(Icon::new(IconName::Search).xsmall())
+            .child(title.clone())
+            .child(close)
+            .into_any_element();
+        (title.clone(), title, contents)
+    }
+
+    /// Opens a piece of research's findings, `path`, in a body tab of its
+    /// own, or selects the tab they already have.
+    fn open_findings(&mut self, path: PathBuf, title: String, cx: &mut Context<Self>) {
+        let existing = self.files.iter().position(|tab| match tab {
+            BodyTab::Findings(view) => view.read(cx).path() == path,
+            _ => false,
+        });
+        let at = match existing {
+            Some(at) => at,
+            None => {
+                let open = self.file_opener(cx);
+                let view = cx.new(|_| planning::FindingsView::new(path, title, open));
+                let at = self.new_tab_index();
+                self.files.insert(at, BodyTab::Findings(view));
+                at
+            }
+        };
+        self.select_tab(Some(at), cx);
+    }
+
+    /// The open project's plan, made the first time it is wanted.
+    fn planning(&mut self, cx: &mut Context<Self>) -> Option<Entity<Planning>> {
+        let project_dir = self.project_dir.clone()?;
+        if let Some(planning) = &self.planning {
+            return Some(planning.clone());
+        }
+        let this = cx.entity().downgrade();
+        let hooks = PlanningHooks {
+            state: Rc::new({
+                let this = this.clone();
+                move |name, cx| this.upgrade()?.read(cx).story_state(name)
+            }),
+            step_state: Rc::new({
+                let this = this.clone();
+                move |name, at, cx| this.upgrade()?.read(cx).story_step_state(name, at)
+            }),
+            send: Rc::new({
+                let this = this.clone();
+                let on_the_way = self.stories_on_the_way.clone();
+                move |stories, cx| {
+                    // Still to come from now on, until each is found.
+                    on_the_way
+                        .borrow_mut()
+                        .extend(stories.iter().map(|story| story.name.clone()));
+                    // After whatever is updating the plan now.
+                    let this = this.clone();
+                    cx.defer(move |cx| {
+                        this.update(cx, |this, cx| this.send_stories(stories, cx))
+                            .ok();
+                    });
+                }
+            }),
+            open_task: Rc::new({
+                let this = this.clone();
+                move |name, window, cx| {
+                    let (this, name) = (this.clone(), name.to_string());
+                    window.defer(cx, move |window, cx| {
+                        this.update(cx, |this, cx| this.open_story_task(&name, window, cx))
+                            .ok();
+                    });
+                }
+            }),
+            resume: Rc::new({
+                let this = this.clone();
+                move |name, window, cx| {
+                    let (this, name) = (this.clone(), name.to_string());
+                    window.defer(cx, move |_, cx| {
+                        this.update(cx, |this, cx| this.resume_story(&name, cx))
+                            .ok();
+                    });
+                }
+            }),
+            draft: self.drafter,
+            research: self.researcher,
+            open_findings: Rc::new({
+                let this = this.clone();
+                move |path, title, window, cx| {
+                    let this = this.clone();
+                    window.defer(cx, move |_, cx| {
+                        this.update(cx, |this, cx| this.open_findings(path, title, cx))
+                            .ok();
+                    });
+                }
+            }),
+            open_source: Rc::new({
+                let this = this.clone();
+                move |path, line, window, cx| {
+                    let this = this.clone();
+                    let position = line.map(|line| lsp_types::Position {
+                        line: line as u32,
+                        character: 0,
+                    });
+                    window.defer(cx, move |window, cx| {
+                        this.update(cx, |this, cx| this.open_file_at(path, position, window, cx))
+                            .ok();
+                    });
+                }
+            }),
+            completions: Rc::new(|cx| chat_input::prompt_completions(cx)),
+        };
+        let planning = cx.new(|cx| Planning::new(project_dir.clone(), hooks, cx));
+        // Holds its Current sprint's stories while it is paused for review,
+        // in whichever project it is the plan of.
+        cx.observe(&planning, move |this, planning, cx| {
+            let hold = planning.read(cx).held_for_review();
+            let stories = planning.read(cx).story_tasks();
+            let changed = if this.project_dir.as_deref() == Some(project_dir.as_path()) {
+                this.review_hold != hold || this.story_tasks != stories
+            } else {
+                this.background.get(&project_dir).is_some_and(|session| {
+                    session.review_hold != hold || session.story_tasks != stories
+                })
+            };
+            if changed {
+                this.in_project(&project_dir, cx, |this, cx| {
+                    this.story_tasks = stories;
+                    this.follow_review_hold(hold, cx);
+                });
+            }
+        })
+        .detach();
+        // Follows the tasks its stories were sent as.
+        cx.observe(&cx.entity(), {
+            let planning = planning.downgrade();
+            move |_, _, cx| {
+                // As its tasks end, the next sprint may start by itself.
+                // Deferred: the plan reads this PromptMode for its stories'
+                // states, which it can't while this PromptMode is updating.
+                let planning = planning.clone();
+                cx.defer(move |cx| {
+                    planning
+                        .update(cx, |planning, cx| {
+                            planning.auto_advance(cx);
+                            cx.notify();
+                        })
+                        .ok();
+                });
+            }
+        })
+        .detach();
+        self.planning = Some(planning.clone());
+        Some(planning)
+    }
+
+    /// Opens the plan in a tab of its own, or selects the tab it has.
+    pub fn open_planning(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Entity<Planning>> {
+        let planning = self.planning(cx)?;
+        let id = planning.entity_id();
+        let at = match self.files.iter().position(|tab| tab.id() == id) {
+            Some(at) => at,
+            // Right after Chat, pinned there, as the BodyScope's tabs say.
+            None => {
+                planning.update(cx, |planning, _| planning.forget_scroll());
+                self.files.insert(0, BodyTab::Planning(planning.clone()));
+                0
+            }
+        };
+        self.select_tab(Some(at), cx);
+        planning.update(cx, |planning, cx| {
+            planning.focus_handle(cx).focus(window, cx)
+        });
+        Some(planning)
+    }
+
+    /// Opens the plan and adds a story to its Next sprint, its title
+    /// focused.
+    pub fn new_story(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(planning) = self.open_planning(window, cx) {
+            planning.update(cx, |planning, cx| planning.new_story(window, cx));
+        }
+    }
+
+    /// Opens the plan and its drafting panel, the request box focused, as
+    /// the Backlog heading's Draft stories does.
+    pub fn draft_stories(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(planning) = self.open_planning(window, cx) {
+            planning.update(cx, |planning, cx| planning.draft_stories(window, cx));
+        }
+    }
+
+    /// Opens the plan and its research panel, its box focused, as the
+    /// Backlog heading's Research does.
+    pub fn research(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(planning) = self.open_planning(window, cx) {
+            planning.update(cx, |planning, cx| planning.research(window, cx));
+        }
+    }
+
+    /// Sends the plan's next sprint, as its Send sprint does.
+    pub fn send_sprint(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(planning) = self.planning(cx) {
+            planning.update(cx, |planning, cx| planning.send_sprint(window, cx));
+        }
+    }
+
+    /// Adds `text` as a story of `mode` to the end of the plan's Next
+    /// sprint, as an Ask answer's prompt card's Add to sprint does.
+    pub(super) fn add_to_sprint(&mut self, text: String, mode: SendMode, cx: &mut Context<Self>) {
+        let Some(planning) = self.planning(cx) else {
+            return;
+        };
+        let title = text
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty())
+            .unwrap_or_default();
+        let title: String = match title.char_indices().nth(80) {
+            Some((at, _)) => format!("{}…", &title[..at]),
+            None => title.to_string(),
+        };
+        planning.update(cx, |planning, cx| {
+            planning.add_story(planning::Section::Next, title, text, mode, cx)
+        });
+    }
+
+    /// Accepts `proposal`, from an Ask answer's story card, into the plan,
+    /// as its Accept does there: none when it was recorded, else why not.
+    pub(super) fn accept_proposal(
+        &mut self,
+        proposal: planning::Proposal,
+        cx: &mut Context<Self>,
+    ) -> Result<String, String> {
+        let planning = self.planning(cx).ok_or("Open a project first.")?;
+        planning.update(cx, |planning, cx| planning.accept_outside(proposal, cx))
+    }
+
+    /// Opens Planning at the story named so, where it is, as an Ask card's
+    /// note links to the story it was accepted as.
+    pub(super) fn reveal_story(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(planning) = self.open_planning(window, cx) {
+            planning.update(cx, |planning, cx| planning.reveal_story(name, window, cx));
+        }
+    }
+
+    /// Opens `proposal`, from an Ask answer's story card, in the plan's
+    /// panel, to be edited there before it is accepted.
+    pub(super) fn edit_proposal(
+        &mut self,
+        proposal: planning::Proposal,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(planning) = self.open_planning(window, cx) {
+            planning.update(cx, |planning, cx| {
+                planning.take_proposal(proposal, window, cx)
+            });
+        }
+    }
+
+    /// Drafts `proposal`, from an Ask answer's story card that cited no
+    /// spec, again in the plan's panel, grounded this time.
+    pub(super) fn draft_proposal_again(
+        &mut self,
+        proposal: planning::Proposal,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(planning) = self.open_planning(window, cx) {
+            planning.update(cx, |planning, cx| {
+                planning.draft_again_outside(proposal, window, cx)
+            });
+        }
+    }
+
+    /// Sends `stories` from the plan, in order, as one block: each as
+    /// though written in the chat input on its mode's tab and sent, as the
+    /// PlanningScope's sprint says, its task named as the plan knows it.
+    /// Nothing sent later comes between them: each task queues in its lane
+    /// behind the one before it, and each question runs at once.
+    pub fn send_stories(&mut self, stories: Vec<planning::StorySend>, cx: &mut Context<Self>) {
+        if self.project_dir.is_none() {
+            return;
+        }
+        for story in stories {
+            let mode = story.mode;
+            self.pending_story = Some(PendingStory {
+                name: story.name,
+                model: story.model,
+                effort: story.effort,
+                steps: story.steps,
+            });
+            // Only a chain goes on to a post-build spec update.
+            let post_build_update =
+                mode == SendMode::Both && self.chat_input.read(cx).post_build_update();
+            if mode == SendMode::Ask {
+                self.ask(story.text, story.attached, story.sliced, None, cx);
+            } else if self.working.queues(mode)
+                || self.chain_holds(Lanes::of(Some(mode)), prompt_queue::stamp())
+            {
+                self.enqueue_at(
+                    QueuePlace::End,
+                    story.text,
+                    false,
+                    mode,
+                    story.attached,
+                    story.sliced,
+                    None,
+                    None,
+                    post_build_update,
+                    None,
+                    cx,
+                );
+            } else {
+                self.start(
+                    story.text,
+                    Sending::Now(
+                        mode,
+                        story.attached,
+                        story.sliced,
+                        None,
+                        None,
+                        post_build_update,
+                        None,
+                    ),
+                    cx,
+                );
+            }
+            self.pending_story = None;
+        }
+        cx.notify();
+    }
+
+    /// Resumes the paused task named `name`, a story's, as its Resume
+    /// does wherever a paused task shows.
+    fn resume_story(&mut self, name: &str, cx: &mut Context<Self>) {
+        if let Some(ix) = self
+            .tasks
+            .iter()
+            .rposition(|task| task.name.as_ref() == name)
+        {
+            self.resume_task(ix, cx);
+        }
+    }
+
+    /// How the step at `at` of the story sent as `name` stands, as its
+    /// story's does; none while it isn't yet a task or queued.
+    fn story_step_state(&self, name: &str, at: usize) -> Option<(StoryState, Option<Duration>)> {
+        let is_step = |step: &Option<(String, usize)>| {
+            step.as_ref()
+                .is_some_and(|(chain, place)| chain == name && *place == at)
+        };
+        if let Some(task) = self
+            .tasks
+            .iter()
+            .rev()
+            .find(|task| is_step(&task.sent.added_step))
+        {
+            return Some(task_story_state(task));
+        }
+        self.queue
+            .iter()
+            .any(|item| {
+                item.saved
+                    .as_ref()
+                    .is_some_and(|saved| is_step(&saved.anchor.added_step))
+            })
+            .then_some((StoryState::Queued, None))
+    }
+
+    /// How the task named `name`, a story's, stands, and how long it has
+    /// run while it runs: by its status once it is a task, queued while it
+    /// waits; none while it can't be found.
+    fn story_state(&self, name: &str) -> Option<(StoryState, Option<Duration>)> {
+        let task = self
+            .tasks
+            .iter()
+            .chain(self.answers.iter())
+            .chain(self.asks.iter().map(|ask| &ask.task))
+            .rev()
+            .find(|task| task.name.as_ref() == name);
+        if let Some(task) = task {
+            self.stories_on_the_way.borrow_mut().remove(name);
+            let (state, elapsed) = task_story_state(task);
+            if state != StoryState::Done {
+                return Some((state, elapsed));
+            }
+            // Its own task done, a story runs on through its chain's steps
+            // and the steps added to it: it has ended once they all have.
+            return Some(self.story_chain_state(name).unwrap_or((state, elapsed)));
+        }
+        if self.queue.iter().any(|item| {
+            item.saved
+                .as_ref()
+                .is_some_and(|saved| saved.anchor.name() == name)
+        }) {
+            self.stories_on_the_way.borrow_mut().remove(name);
+            return Some((StoryState::Queued, None));
+        }
+        // Sent, and not yet queued or named: still to come.
+        self.stories_on_the_way
+            .borrow()
+            .contains(name)
+            .then_some((StoryState::Queued, None))
+    }
+
+    /// How the steps after the task named `name` stand, once it is done: the
+    /// first still to come, as still to come; else how the last that ended
+    /// short ended; none where none ran after it.
+    fn story_chain_state(&self, name: &str) -> Option<(StoryState, Option<Duration>)> {
+        let head = self
+            .tasks
+            .iter()
+            .rposition(|task| task.name.as_ref() == name)?;
+        // The steps after it: those sent from it, or from one of them, and
+        // those added to it.
+        let mut names = vec![name.to_string()];
+        let mut steps = Vec::new();
+        for (ix, task) in self.tasks.iter().enumerate().skip(head + 1) {
+            let of_chain = task
+                .sent
+                .added_step
+                .as_ref()
+                .is_some_and(|(chain, _)| chain == name)
+                || task
+                    .sent
+                    .sent_from
+                    .as_ref()
+                    .is_some_and(|from| names.contains(from));
+            if of_chain {
+                names.push(task.name.to_string());
+                steps.push(ix);
+            }
+        }
+        // A step still to come: one going on, held for review, or queued.
+        let coming = std::iter::once(head)
+            .chain(steps.iter().copied())
+            .any(|ix| {
+                self.tasks[ix].goes_on
+                    || self.held_for_review.iter().any(|step| {
+                        step.after == ix || step.added_next.is_some_and(|(of, _)| of == ix)
+                    })
+            })
+            || self.queue.iter().any(|item| {
+                item.sent_from
+                    .as_ref()
+                    .is_some_and(|from| names.contains(from))
+                    || item.saved.as_ref().is_some_and(|saved| {
+                        saved
+                            .anchor
+                            .added_step
+                            .as_ref()
+                            .is_some_and(|(chain, _)| chain == name)
+                    })
+            });
+        let states: Vec<(StoryState, Option<Duration>)> = steps
+            .iter()
+            .map(|&ix| task_story_state(&self.tasks[ix]))
+            .collect();
+        if let Some(active) = states.iter().find(|(state, _)| !state.ended()) {
+            return Some(*active);
+        }
+        if coming {
+            return Some((StoryState::Queued, None));
+        }
+        states
+            .into_iter()
+            .rev()
+            .find(|(state, _)| *state != StoryState::Done)
+    }
+
+    /// Opens the task named `name`, a story's, in the Tasks tab.
+    fn open_story_task(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(ix) = self
+            .tasks
+            .iter()
+            .rposition(|task| task.name.as_ref() == name)
+        {
+            return self.view_all(ix, window, cx);
+        }
+        let queued = self.queue.iter().find(|item| {
+            item.saved
+                .as_ref()
+                .is_some_and(|saved| saved.anchor.name() == name)
+        });
+        if let Some(id) = queued.map(|item| item.id) {
+            if !self.refs_wanted() {
+                self.sidebar_by_hand = true;
+                self.sidebar_closed_by_hand = false;
+            }
+            self.sidebar_tab = SidebarTab::Tasks;
+            self.tasks_picked = true;
+            self.open_in_tab(tasks_tab::Opened::Queued(id), window, cx);
+        }
+    }
+
     fn task_tab_contents(
         &self,
         ix: usize,
@@ -3209,91 +4075,105 @@ impl PromptMode {
             None => (None, None),
         };
         let files_len = self.files.len();
+        let pinned = self.pinned_tabs();
         let views: Rc<Vec<EntityId>> = Rc::new(self.files.iter().map(BodyTab::id).collect());
         let select = this.clone();
-        let file_tabs = self.files.iter().enumerate().map(|(ix, tab)| {
-            let dragged = tab.id();
-            // What differs between a file's tab and a task's: its name, as
-            // dragged, its tooltip, and what it shows.
-            let (name, title, contents) = match tab {
-                BodyTab::File(tab) => self.file_tab_contents(ix, tab, muted, cx),
-                BodyTab::Task(tab) => self.task_tab_contents(ix, tab, dragged, cx),
-            };
-            Tab::new()
-                .tooltip(move |window, cx| {
-                    gpui_kit::component::tooltip::Tooltip::new(title.clone()).build(window, cx)
-                })
-                // Dragged along the bar, it is selected, and dropped on
-                // another file's tab takes its place.
-                .on_drag(
-                    FileTabDrag {
-                        view: dragged,
-                        name: name.clone(),
-                    },
-                    {
-                        let this = this.clone();
-                        move |drag, _, _, cx| {
-                            this.update(cx, |this, cx| {
-                                this.tab_gap.set(Some((drag.view, None)));
-                                if let Some(ix) = this.file_tab_index(drag.view) {
-                                    this.select_tab(Some(ix), cx);
+        let file_tabs = self
+            .files
+            .iter()
+            .enumerate()
+            .map(|(ix, tab)| {
+                let dragged = tab.id();
+                // What differs between a file's tab and a task's: its name, as
+                // dragged, its tooltip, and what it shows.
+                let (name, title, contents) = match tab {
+                    BodyTab::File(tab) => self.file_tab_contents(ix, tab, muted, cx),
+                    BodyTab::Task(tab) => self.task_tab_contents(ix, tab, dragged, cx),
+                    BodyTab::Planning(_) => self.planning_tab_contents(ix, cx),
+                    BodyTab::Findings(view) => {
+                        let title = view.read(cx).title();
+                        self.findings_tab_contents(ix, dragged, title, cx)
+                    }
+                };
+                Tab::new()
+                    .tooltip(move |window, cx| {
+                        gpui_kit::component::tooltip::Tooltip::new(title.clone()).build(window, cx)
+                    })
+                    // Dragged along the bar, it is selected, and dropped on
+                    // another file's tab takes its place. Planning, pinned
+                    // after Chat, is never dragged.
+                    .when(ix >= pinned, |tab| {
+                        tab.on_drag(
+                            FileTabDrag {
+                                view: dragged,
+                                name: name.clone(),
+                            },
+                            {
+                                let this = this.clone();
+                                move |drag, _, _, cx| {
+                                    this.update(cx, |this, cx| {
+                                        this.tab_gap.set(Some((drag.view, None)));
+                                        if let Some(ix) = this.file_tab_index(drag.view) {
+                                            this.select_tab(Some(ix), cx);
+                                        }
+                                    })
+                                    .ok();
+                                    cx.new(|_| drag.clone())
                                 }
+                            },
+                        )
+                    })
+                    // The one dragged stays in its place, dimmed.
+                    .when(tab_dragging == Some(dragged), |tab| tab.opacity(0.5))
+                    // Over its first half, the gap before it; over its second,
+                    // the one after. Chat stays first, and Planning after it:
+                    // no gap before the first file's or task's tab is one.
+                    .on_drag_move({
+                        let (tab_gap_cell, views) = (self.tab_gap.clone(), views.clone());
+                        move |event: &DragMoveEvent<FileTabDrag>, window, cx| {
+                            let Some(at) = drag_gap(ix, event.bounds, event.event.position, false)
+                            else {
+                                return;
+                            };
+                            let view = event.drag(cx).view;
+                            let gap = views
+                                .iter()
+                                .position(|v| *v == view)
+                                .and_then(|from| gap_target(from, at))
+                                .filter(|_| at > pinned)
+                                .map(|_| at);
+                            if tab_gap_cell.get() != Some((view, gap)) {
+                                tab_gap_cell.set(Some((view, gap)));
+                                window.refresh();
+                            }
+                        }
+                    })
+                    .on_drop({
+                        let this = this.clone();
+                        move |drag: &FileTabDrag, _, cx| {
+                            this.update(cx, |this, cx| {
+                                let gap = this.tab_gap.take().and_then(|(_, gap)| gap);
+                                let from = this.file_tab_index(drag.view);
+                                if let Some(to) =
+                                    from.zip(gap).and_then(|(from, gap)| gap_target(from, gap))
+                                {
+                                    this.move_file_tab(drag.view, to, cx);
+                                }
+                                cx.notify();
                             })
                             .ok();
-                            cx.new(|_| drag.clone())
                         }
-                    },
-                )
-                // The one dragged stays in its place, dimmed.
-                .when(tab_dragging == Some(dragged), |tab| tab.opacity(0.5))
-                // Over its first half, the gap before it; over its second,
-                // the one after. Chat stays first: the gap before the first
-                // file's tab is never one.
-                .on_drag_move({
-                    let (tab_gap_cell, views) = (self.tab_gap.clone(), views.clone());
-                    move |event: &DragMoveEvent<FileTabDrag>, window, cx| {
-                        let Some(at) = drag_gap(ix, event.bounds, event.event.position, false)
-                        else {
-                            return;
-                        };
-                        let view = event.drag(cx).view;
-                        let gap = views
-                            .iter()
-                            .position(|v| *v == view)
-                            .and_then(|from| gap_target(from, at))
-                            .filter(|_| at > 0)
-                            .map(|_| at);
-                        if tab_gap_cell.get() != Some((view, gap)) {
-                            tab_gap_cell.set(Some((view, gap)));
-                            window.refresh();
-                        }
-                    }
-                })
-                .on_drop({
-                    let this = this.clone();
-                    move |drag: &FileTabDrag, _, cx| {
-                        this.update(cx, |this, cx| {
-                            let gap = this.tab_gap.take().and_then(|(_, gap)| gap);
-                            let from = this.file_tab_index(drag.view);
-                            if let Some(to) =
-                                from.zip(gap).and_then(|(from, gap)| gap_target(from, gap))
-                            {
-                                this.move_file_tab(drag.view, to, cx);
-                            }
-                            cx.notify();
-                        })
-                        .ok();
-                    }
-                })
-                .relative()
-                .when(tab_gap == Some(ix), |tab| {
-                    tab.child(drop_indicator(true, false, cx))
-                })
-                .when(ix + 1 == files_len && tab_gap == Some(files_len), |tab| {
-                    tab.child(drop_indicator(true, true, cx))
-                })
-                .child(contents)
-        }).collect::<Vec<_>>();
+                    })
+                    .relative()
+                    .when(tab_gap == Some(ix), |tab| {
+                        tab.child(drop_indicator(true, false, cx))
+                    })
+                    .when(ix + 1 == files_len && tab_gap == Some(files_len), |tab| {
+                        tab.child(drop_indicator(true, true, cx))
+                    })
+                    .child(contents)
+            })
+            .collect::<Vec<_>>();
         let bar = TabBar::new("body-tabs")
             .track_scroll(&self.tabs_scroll)
             .selected_index(self.selected_file.map_or(0, |ix| ix + 1))
@@ -3538,6 +4418,9 @@ impl PromptMode {
                 in_selected_tab |= self.selected_file == Some(at);
             }
         }
+        // What only streams in redraws only what shows it, the output and
+        // its rate, as the Application's Redrawing says.
+        let streamed = streams(&event);
         // A raw output line only changes the raw tail at the end of the
         // output, so there is nothing to redraw while that is out of sight.
         // The Freeform chat's status line shows the latest raw line too.
@@ -3556,7 +4439,11 @@ impl PromptMode {
         if (following || self.output_locked) && latest {
             self.output_table.scroll_to_end();
         }
-        cx.notify();
+        if streamed {
+            self.redraw_running(cx);
+        } else {
+            cx.notify();
+        }
     }
 
     fn scroll_output_to_top(&self) {
@@ -3826,6 +4713,22 @@ impl PromptMode {
         Some(self.task_named(named_after?)?.effort.clone())
     }
 
+    /// Whether `task` is a story of the plan, or a step of one, sent with
+    /// its sprint: never sent again but with the next sprint.
+    fn is_story_task(&self, task: &PromptTask) -> bool {
+        self.story_tasks.contains(task.name.as_ref())
+            || task
+                .sent
+                .added_step
+                .as_ref()
+                .is_some_and(|(chain, _)| self.story_tasks.contains(chain))
+            || task
+                .sent
+                .sent_from
+                .as_ref()
+                .is_some_and(|from| self.story_tasks.contains(from))
+    }
+
     /// Sends the task at `ix` of `tasks_of` again, as it was sent. One of
     /// unknown mode goes from the selected tab.
     fn resend(
@@ -3972,6 +4875,10 @@ impl PromptMode {
     /// complete, before anything else; then a task sent there that finished
     /// as Done, then one on its way, then the task's own mark.
     fn other_mode_state(&self, task: &PromptTask) -> Option<(SendMode, OtherModeState)> {
+        // A story's task goes nowhere but through the sprint.
+        if self.is_story_task(task) {
+            return None;
+        }
         let to = other_mode(task)?;
         let state = match self.sent_to_other_mode(task) {
             _ if task.sent.sent_from.is_some() => OtherModeState::Complete,
@@ -4254,7 +5161,10 @@ impl PromptMode {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(task) = tasks_of(self).get(ix) else {
+        let Some(task) = tasks_of(self)
+            .get(ix)
+            .filter(|task| !self.is_story_task(task))
+        else {
             return;
         };
         let (text, sent) = (task.text.to_string(), task.sent.clone());
@@ -4558,17 +5468,30 @@ impl PromptMode {
         let Some(project_dir) = self.project_dir.clone() else {
             return;
         };
-        // Named as it is queued, and known by that name from then on.
-        let naming = prompt_title::start(&project_dir, &text, named_after.as_deref(), self.titler);
+        // Named as it is queued, and known by that name from then on; a
+        // story from the plan by the name the plan knows it by.
+        let story = self.pending_story.take();
+        let naming = match &story {
+            Some(story) => prompt_title::named(&project_dir, story.name.clone()),
+            None => prompt_title::start(&project_dir, &text, named_after.as_deref(), self.titler),
+        };
         self.next_queue_id += 1;
         let id = self.next_queue_id;
-        // The first task of its lane after New conversation, pressed with
+        // A story from the plan, or a later step of a story's chain, starts
+        // a conversation of its own, as the PlanningScope's sprint says,
+        // leaving New conversation to the next prompt written. Otherwise the
+        // first task of its lane after New conversation, pressed with
         // nothing of that lane queued, is the one to start the new
         // conversation.
-        let new_conversation = std::mem::take(
-            self.new_conversation_pending
-                .of_mut(conversation_lane(Some(mode))),
-        );
+        let of_story = story.is_some()
+            || sent_from
+                .as_ref()
+                .is_some_and(|from| self.story_tasks.contains(from));
+        let new_conversation = of_story
+            || std::mem::take(
+                self.new_conversation_pending
+                    .of_mut(conversation_lane(Some(mode))),
+            );
         // Its place on disk is taken now, not once it has compiled, so prompts
         // queued in a row, as a batch sent to the other mode is, come back in
         // the order they were queued; at the head, before the first; and a
@@ -4612,8 +5535,17 @@ impl PromptMode {
         cx.notify();
 
         let lsp = self.chat_input.read(cx).lsp();
-        let model_after = self.model_after(named_after.as_deref());
-        let effort_after = self.effort_after(named_after.as_deref());
+        let mut story_steps = Vec::new();
+        let (model_after, effort_after) = match story {
+            Some(story) => {
+                story_steps = story.steps;
+                (Some(story.model), Some(story.effort))
+            }
+            None => (
+                self.model_after(named_after.as_deref()),
+                self.effort_after(named_after.as_deref()),
+            ),
+        };
         let pending_step = self.pending_step.take();
         let save = cx.background_spawn({
             let project_dir = project_dir.clone();
@@ -4630,6 +5562,10 @@ impl PromptMode {
                     anchor.added_step = Some(step.added);
                     anchor.model = step.model;
                     anchor.effort = step.effort;
+                }
+                // A story's steps, run after it.
+                if !story_steps.is_empty() {
+                    anchor.added_steps = story_steps;
                 }
                 anchor.rename(naming.wait());
                 anchor.sent_from = sent_from;
@@ -4978,7 +5914,7 @@ impl PromptMode {
     /// between its steps.
     fn chain_holds(&self, lanes: Lanes, stamp: u128) -> bool {
         self.tasks.iter().enumerate().any(|(ix, task)| {
-            (task.status.is_active() || task.held_for_fix)
+            (task.status.is_active() || self.awaiting_fix(ix))
                 && task.chain_stamp.is_some_and(|chain| chain < stamp)
                 && (matches!(
                     chain_next(task),
@@ -4987,6 +5923,73 @@ impl PromptMode {
                     Lanes::of(Some(self.tasks[head].added_steps[place].mode)).overlaps(lanes)
                 }))
         })
+    }
+
+    /// Whether the queued `item` is a story of the plan's Current sprint, or
+    /// one of its steps, while the plan is paused for review.
+    fn queued_held_for_review(&self, item: &QueueItem) -> bool {
+        let (Some(hold), Some(saved)) = (&self.review_hold, &item.saved) else {
+            return false;
+        };
+        hold.contains(saved.anchor.name())
+            || saved
+                .anchor
+                .added_step
+                .as_ref()
+                .is_some_and(|(chain, _)| hold.contains(chain))
+    }
+
+    /// Whether the task at `ix` is, or is a step of, a story of the plan's
+    /// Current sprint while the plan is paused for review.
+    fn story_held_for_review(&self, ix: usize) -> bool {
+        let Some(hold) = &self.review_hold else {
+            return false;
+        };
+        let mut at = Some(ix);
+        // Up through the chain it is a step of, to its head.
+        for _ in 0..8 {
+            let Some(task) = at.and_then(|ix| self.tasks.get(ix)) else {
+                return false;
+            };
+            if hold.contains(task.name.as_ref()) {
+                return true;
+            }
+            let up = task
+                .sent
+                .added_step
+                .as_ref()
+                .map(|(chain, _)| chain.as_str())
+                .or(task.sent.sent_from.as_deref());
+            at = up.and_then(|name| {
+                self.tasks
+                    .iter()
+                    .rposition(|task| task.name.as_ref() == name)
+            });
+        }
+        false
+    }
+
+    /// Follows the plan's pause for review: while it lasts, its Current
+    /// sprint's stories are held; once it ends, what was held goes on, in
+    /// its order, as though nothing had stopped it.
+    fn follow_review_hold(&mut self, hold: Option<HashSet<String>>, cx: &mut Context<Self>) {
+        if hold == self.review_hold {
+            return;
+        }
+        let ended = hold.is_none();
+        self.review_hold = hold;
+        if ended {
+            for step in std::mem::take(&mut self.held_for_review) {
+                if let Some((text, sending, chain_stamp)) = step.next {
+                    self.chain_on(text, sending, chain_stamp, cx);
+                }
+                if let Some((head, place)) = step.added_next {
+                    self.send_added_step(head, place, step.after, cx);
+                }
+            }
+            self.auto_send_next(cx);
+        }
+        cx.notify();
     }
 
     fn next_sendable(&self) -> Option<usize> {
@@ -4999,10 +6002,16 @@ impl PromptMode {
                 held = held.with(Lanes::of(task.mode), true);
             }
         }
+        // So does a story's step held for review: its lane waits on it.
+        for step in &self.held_for_review {
+            held = held.with(step.lanes, true);
+        }
         for (ix, item) in self.queue.iter().enumerate() {
             let lanes = Lanes::of(item.mode);
             let ready = item.saved.is_some()
                 && (self.in_background || Some(item.id) != self.editing_queued)
+                // A story of a sprint paused for review is held where it is.
+                && !self.queued_held_for_review(item)
                 // Open in the Tasks tab, or waiting for its Send there.
                 && !self.tasks_tab.holds(item.id)
                 // Sent after a chain whose next step is still to come in its
@@ -5125,6 +6134,16 @@ impl PromptMode {
             self.collapse_queue_up_expanded();
         }
         let item = self.queue.remove(ix);
+        // A spec fix cancelled holds its chain no longer: it is over.
+        if item.mode == Some(SendMode::Spec)
+            && let Some(from) = item.sent_from.as_deref()
+            && let Some(held) = self
+                .tasks
+                .iter_mut()
+                .find(|task| task.name.as_ref() == from && task.held_for_fix)
+        {
+            held.held_for_fix = false;
+        }
         if let Some(saved) = &item.saved
             && let Err(err) = prompt_queue::remove(&saved.file)
         {
@@ -5288,7 +6307,7 @@ impl PromptMode {
     /// referenced files, understanding, and subagents of the task the Chat
     /// tab has selected, or of the last task once it is over; with no task
     /// run since the project was opened, "No task running".
-    pub fn render_run_view(&self, _: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub fn render_run_view(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let ran = self.tasks.iter().any(|task| task.ran_here || task.status.is_active());
         if !ran {
             return gpui_kit::TestSupportExt::test_support(div().id("run-view-empty"))
@@ -5302,6 +6321,10 @@ impl PromptMode {
                 .into_any_element();
         }
         let over = !self.sidebar_task_running();
+        // A row added or changed fades out, frame by frame, in this view.
+        if self.running_understanding().fading() {
+            window.request_animation_frame();
+        }
         let panels = referenced_spec::render(
             &self.referenced_files(),
             &self.running_subagents(cx),
@@ -5336,6 +6359,11 @@ impl PromptMode {
     /// Opens the sidebar by hand, on its Tasks tab, or closes it, from its
     /// button or Ctrl+Alt+B.
     pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        // Doing nothing while Planning hides the sidebar, as the
+        // RightSidebar's showing says.
+        if self.on_planning_tab() {
+            return;
+        }
         if self.refs_wanted() {
             self.sidebar_by_hand = false;
             self.sidebar_closed_by_hand = true;
@@ -5445,7 +6473,8 @@ impl PromptMode {
                     .update(cx, |this, cx| {
                         let going = this.counting();
                         this.elapsed_ticking = going;
-                        cx.notify();
+                        // Only what shows the times is drawn again.
+                        this.redraw_running(cx);
                         going
                     })
                     .unwrap_or(false);
@@ -5541,6 +6570,22 @@ impl PromptMode {
         cx: &mut Context<Self>,
     ) -> Div {
         let shown = self.refs_wanted();
+        // While Planning's tab is selected the sidebar isn't there at all,
+        // as the Body says, but follows what starts and ends meanwhile, so
+        // it comes back at once, with no slide, as that leaves it.
+        if self.on_planning_tab() {
+            if shown != self.refs_shown {
+                self.refs_shown = shown;
+                if shown {
+                    self.refs_split = cx.new(|_| ResizableState::default());
+                } else {
+                    self.tasks_picked = false;
+                }
+            }
+            self.refs_opened = None;
+            self.refs_closing = None;
+            return div().relative().size_full().child(history);
+        }
         if shown != self.refs_shown {
             self.refs_shown = shown;
             let slide = self.refs_opened.map_or(0, |(n, _)| n);
@@ -5572,12 +6617,8 @@ impl PromptMode {
             .filter(|(_, opened)| opened.elapsed() < PANE_SLIDE_TIME)
             .map(|(n, _)| n);
         if shown {
-            let understanding_fading = self.running_understanding().fading();
-            if understanding_fading {
-                window.request_animation_frame();
-            }
             let width = self.refs_width.get();
-            let contents = self.render_sidebar(None, window, cx);
+            let contents = self.render_sidebar_views(cx);
             if let Some(n) = sliding {
                 window.request_animation_frame();
                 let grow = SpringAnimation::new(PANE_SPRING).to(width).from(px(0.));
@@ -5611,7 +6652,7 @@ impl PromptMode {
                 .as_ref()
                 .map_or((px(0.), 0), |closing| (closing.width, closing.slide));
             let shrink = SpringAnimation::new(PANE_SPRING).to(px(0.)).from(width);
-            let contents = self.render_sidebar(closing.as_ref(), window, cx);
+            let contents = self.render_sidebar_views(cx);
             self.refs_closing = closing;
             let pane = slide_pane(("refs-slide-out", n), ("refs-shrink", n), shrink, width, contents);
             return host.child(pushed_by(history, pane, cx));
@@ -5619,15 +6660,26 @@ impl PromptMode {
         host.child(history)
     }
 
-    /// The right sidebar: its Run and Tasks tabs along its top, and the one
-    /// shown beneath them, as it was as it closed while `closing`.
-    fn render_sidebar(
-        &self,
-        closing: Option<&RefsClosing>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let _ = closing;
+    /// The right sidebar's view, with the Tasks tab's running rows drawn
+    /// over it in their places, so their times and spinners update in place
+    /// without drawing the sidebar or the Tasks tab again.
+    fn render_sidebar_views(&self, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .relative()
+            .size_full()
+            .child(redrawing::cached(&self.views.sidebar, cx))
+            .child(tasks_tab::RunningRows::new(
+                cx.entity().downgrade(),
+                self.tasks_tab.running.clone(),
+            ))
+            .into_any_element()
+    }
+
+    /// The right sidebar: the Tasks tab, filling it.
+    fn render_sidebar(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        // The Run view in its place is only for tests.
+        #[cfg(not(test))]
+        let _ = window;
         // The Tasks list alone, with no tab row along its top.
         #[cfg(test)]
         if self.run_view_in_sidebar {
@@ -5637,7 +6689,7 @@ impl PromptMode {
                 .child(div().flex_1().min_h_0().relative().child(div().absolute().inset_0().child(body)))
                 .into_any_element();
         }
-        let body = self.render_tasks_tab(window, cx);
+        let body = redrawing::cached(&self.views.tasks_tab, cx);
         // Lets UI tests find the sidebar; inert in normal builds.
         gpui_kit::TestSupportExt::test_support(v_flex().id("right-sidebar"))
             .size_full()
@@ -5824,7 +6876,7 @@ impl PromptMode {
             table,
             locked: false,
         };
-        let at = self.selected_file.map_or(0, |ix| ix + 1);
+        let at = self.new_tab_index();
         self.files.insert(at, BodyTab::Task(tab));
         self.select_tab(Some(at), cx);
     }
@@ -5937,6 +6989,14 @@ impl PromptMode {
         };
         self.sidebar_closed_by_hand = false;
         self.runs_started += 1;
+        // A story sent with its sprint, or a later step of a story's chain,
+        // starts a conversation of its own, as the PlanningScope's sprint
+        // says, never carrying on whatever its lane last ran.
+        let of_story = self.pending_story.is_some()
+            || matches!(
+                &sending,
+                Sending::Now(_, _, _, _, Some(from), ..) if self.story_tasks.contains(from)
+            );
         // Resumed, it is the same task, its time counting on from where it
         // stopped, its output going on beneath what it had.
         let resuming = match &sending {
@@ -6018,16 +7078,34 @@ impl PromptMode {
         // the task it follows.
         let mut model_after = None;
         let mut effort_after = None;
+        let mut story_steps = Vec::new();
         let naming = match &sending {
             Sending::Queued(queued) => {
                 self.tasks[task_ix].name = queued.anchor.name().to_string().into();
                 None
             }
             Sending::Now(.., named_after) => {
-                model_after = self.model_after(named_after.as_deref());
-                effort_after = self.effort_after(named_after.as_deref());
-                let naming =
-                    prompt_title::start(&project_dir, &text, named_after.as_deref(), self.titler);
+                let naming = match self.pending_story.take() {
+                    // A story from the plan, known by its name at once.
+                    Some(story) => {
+                        model_after = Some(story.model);
+                        effort_after = Some(story.effort);
+                        self.tasks[task_ix].name = story.name.clone().into();
+                        self.tasks[task_ix].added_steps = story.steps.clone();
+                        story_steps = story.steps;
+                        prompt_title::named(&project_dir, story.name)
+                    }
+                    None => {
+                        model_after = self.model_after(named_after.as_deref());
+                        effort_after = self.effort_after(named_after.as_deref());
+                        prompt_title::start(
+                            &project_dir,
+                            &text,
+                            named_after.as_deref(),
+                            self.titler,
+                        )
+                    }
+                };
                 Some(cx.background_spawn(async move { naming.wait() }))
             }
             Sending::Resume(_) => None,
@@ -6052,7 +7130,10 @@ impl PromptMode {
         // conversation, if nothing else has been since.
         let new_conversation = match &sending {
             Sending::Queued(queued) => queued.anchor.new_conversation == Some(true),
-            Sending::Now(..) => std::mem::take(self.new_conversation_pending.of_mut(lane)),
+            // A story's leaves New conversation to the next prompt written.
+            Sending::Now(..) => {
+                of_story || std::mem::take(self.new_conversation_pending.of_mut(lane))
+            }
             Sending::Resume(_) => false,
         };
         // Every task runs natively under the sandbox of its mode's profile,
@@ -6225,6 +7306,10 @@ impl PromptMode {
                             anchor.added_step = Some(step.added);
                             anchor.model = step.model;
                             anchor.effort = step.effort;
+                        }
+                        // A story's steps, run after it.
+                        if !story_steps.is_empty() {
+                            anchor.added_steps = story_steps;
                         }
                         anchor
                     }
@@ -7079,11 +8164,36 @@ impl PromptMode {
                 cx.defer(move |cx| {
                     prompt_mode.update(cx, |this, cx| {
                         this.in_project(&dir, cx, |this, cx| {
-                            if let Some((text, sending, chain_stamp)) = next {
-                                this.chain_on(text, sending, chain_stamp, cx);
-                            }
-                            if let Some((head, place)) = added_next {
-                                this.send_added_step(head, place, task_ix, cx);
+                            // A story's next step waits while the plan is
+                            // paused for review, its lane with it.
+                            if (next.is_some() || added_next.is_some())
+                                && this.story_held_for_review(task_ix)
+                            {
+                                let mut lanes = Lanes::default();
+                                if let Some((_, Sending::Now(mode, ..), _)) = &next {
+                                    lanes = lanes.with(Lanes::of(Some(*mode)), true);
+                                }
+                                if let Some((head, place)) = added_next
+                                    && let Some(step) = this
+                                        .tasks
+                                        .get(head)
+                                        .and_then(|task| task.added_steps.get(place))
+                                {
+                                    lanes = lanes.with(Lanes::of(Some(step.mode)), true);
+                                }
+                                this.held_for_review.push(HeldStep {
+                                    after: task_ix,
+                                    lanes,
+                                    next,
+                                    added_next,
+                                });
+                            } else {
+                                if let Some((text, sending, chain_stamp)) = next {
+                                    this.chain_on(text, sending, chain_stamp, cx);
+                                }
+                                if let Some((head, place)) = added_next {
+                                    this.send_added_step(head, place, task_ix, cx);
+                                }
                             }
                             // Its next step sent or queued, or none to send.
                             if let Some(task) = this.tasks.get_mut(task_ix) {
@@ -7104,6 +8214,26 @@ impl PromptMode {
     /// The chain step the spec fix at `fix_ix` held back, once that fix is
     /// over: its next step, where the fix was `done`, and none otherwise, as
     /// a chain stops at a step that failed or was cancelled.
+    /// Whether the chain step at `ix` still waits on the spec fix sent
+    /// after it: held for one, and that fix under way or waiting in the
+    /// queue. A fix cancelled from the queue, or never queued, holds
+    /// nothing, so the chain is over rather than running for good.
+    pub(super) fn awaiting_fix(&self, ix: usize) -> bool {
+        let Some(task) = self.tasks.get(ix).filter(|task| task.held_for_fix) else {
+            return false;
+        };
+        let from = task.name.as_ref();
+        let fixing = self.tasks.iter().any(|fix| {
+            is_spec_fix(&fix.sent)
+                && fix.sent.sent_from.as_deref() == Some(from)
+                && fix.status.is_active()
+        });
+        let queued = self.queue.iter().any(|item| {
+            item.sent_from.as_deref() == Some(from) && item.mode == Some(SendMode::Spec)
+        });
+        fixing || queued
+    }
+
     fn release_held_chain(
         &mut self,
         fix_ix: usize,
@@ -7198,8 +8328,13 @@ impl PromptMode {
         let Some(project_dir) = self.project_dir.clone() else {
             return;
         };
-        // Titled while its anchor is resolved.
-        let naming = prompt_title::start(&project_dir, &text, named_after.as_deref(), self.titler);
+        // Titled while its anchor is resolved; a story from the plan is
+        // known by the name the plan gave it.
+        let story = self.pending_story.take();
+        let naming = match &story {
+            Some(story) => prompt_title::named(&project_dir, story.name.clone()),
+            None => prompt_title::start(&project_dir, &text, named_after.as_deref(), self.titler),
+        };
         let run = self.push_ask(text.clone().into(), cx);
         if let Some(ask) = self.asks.iter_mut().find(|ask| ask.id == run) {
             ask.task.sent = SentAs {
@@ -7250,9 +8385,14 @@ impl PromptMode {
             .unwrap_or_default();
         let lsp = self.chat_input.read(cx).lsp();
         // Asked again, it goes to the model and effort it was first asked
-        // with.
-        let model_after = self.model_after(named_after.as_deref());
-        let effort_after = self.effort_after(named_after.as_deref());
+        // with; a story from the plan, to its own.
+        let (model_after, effort_after) = match story {
+            Some(story) => (Some(story.model), Some(story.effort)),
+            None => (
+                self.model_after(named_after.as_deref()),
+                self.effort_after(named_after.as_deref()),
+            ),
+        };
         let compile = cx.background_spawn({
             let project_dir = project_dir.clone();
             async move {
@@ -7460,7 +8600,16 @@ impl PromptMode {
                                             cx,
                                         );
                                     }
-                                    this.update_ask(run, |ask| ask.apply(event), cx)
+                                    // What only streams in redraws only
+                                    // what shows it.
+                                    if streams(&event) {
+                                        if let Some(ask) = this.asks.iter_mut().find(|ask| ask.id == run) {
+                                            ask.task.apply(event);
+                                            this.redraw_running(cx);
+                                        }
+                                    } else {
+                                        this.update_ask(run, |ask| ask.apply(event), cx)
+                                    }
                                 });
                             })
                             .is_err()
@@ -7846,9 +8995,15 @@ impl PromptMode {
                     .gap_2()
                     .cursor_pointer()
                     .hover(move |row| row.bg(hover))
-                    .child(div().flex_none().child(task.status.tag(cx)))
-                    .children(elapsed)
-                    .children(rate_label(("compact-rate", ix), task, None, cx).filter(|_| task.status.is_active()))
+                    .child(
+                        status_line()
+                            .child(div().flex_none().child(task.status.tag(cx)))
+                            .children(elapsed)
+                            .children(
+                                rate_label(("compact-rate", ix), task, None, cx)
+                                    .filter(|_| task.status.is_active()),
+                            ),
+                    )
                     .child(
                         div()
                             .flex_1()
@@ -7977,13 +9132,24 @@ impl PromptMode {
             .border_b_1()
             .border_color(theme.border)
             .children(bar)
-            .when(task.status.is_active(), |row| {
-                row.child(div().flex_none().child(Spinner::new().small()))
-            })
-            // Lets UI tests find the status; inert in normal builds.
-            .child(gpui_kit::TestSupportExt::test_support(status))
-            .children(task.took().map(|took| took_label(("task-elapsed", ix), took, cx)))
-            .children(rate_label(("task-rate", ix), task, self.usage.rate_of(&task.name), cx))
+            .child(
+                status_line()
+                    .when(task.status.is_active(), |line| {
+                        line.child(div().flex_none().child(task.status.spinner(cx)))
+                    })
+                    // Lets UI tests find the status; inert in normal builds.
+                    .child(gpui_kit::TestSupportExt::test_support(status))
+                    .children(
+                        task.took()
+                            .map(|took| took_label(("task-elapsed", ix), took, cx)),
+                    )
+                    .children(rate_label(
+                        ("task-rate", ix),
+                        task,
+                        self.usage.rate_of(&task.name),
+                        cx,
+                    )),
+            )
             // Lets UI tests find the summary; inert in normal builds.
             .child(gpui_kit::TestSupportExt::test_support(summary))
             .child(
@@ -8607,38 +9773,123 @@ fn render_changed_files(
 }
 
 impl Render for PromptMode {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // A task cancelled or failed may leave another heading the view.
-        self.settle_latest();
-        self.tick_elapsed(cx);
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        // Drawn in a view of its own, so what is drawn every frame anyway
+        // redraws that, never notifying whatever follows this PromptMode.
+        self.views.shell.clone()
+    }
+}
+
+impl PromptMode {
+    /// Brings what the chat input shows of the tasks up to date: whether
+    /// any of it changed.
+    fn sync_chat_input(&mut self, cx: &mut Context<Self>) -> bool {
+        let mut changed = false;
         // The chat input shows how much context its next prompt carries on.
         let context = self.context();
         if self.chat_input.read(cx).context() != context {
+            changed = true;
             self.chat_input
                 .update(cx, |input, cx| input.set_context(context, cx));
         }
         // And the agent's usage, as its runs report it.
         let usage = self.usage_report();
         if *self.chat_input.read(cx).usage() != usage {
+            changed = true;
             self.chat_input
                 .update(cx, |input, cx| input.set_usage(usage, cx));
         }
         // New conversation waits for a run of the conversation to finish.
         let running = self.conversation_running();
         if self.chat_input.read(cx).conversation_running() != running {
+            changed = true;
             self.chat_input
                 .update(cx, |input, cx| input.set_conversation_running(running, cx));
         }
         // The task running can be sent more while its output shows.
         let can_send_to_task = self.can_send_to_task();
         if self.chat_input.read(cx).can_send_to_task() != can_send_to_task {
+            changed = true;
             self.chat_input.update(cx, |input, cx| {
                 input.set_can_send_to_task(can_send_to_task, cx)
             });
         }
-        // The popover for text selected in the Ask conversation goes with it.
-        if !self.on_ask_tab {
-            self.selection_popover = None;
+        // And whether it is a Code task, which the Code tab sends to.
+        let code_task_running = can_send_to_task
+            && self
+                .latest_task()
+                .is_some_and(|task| task.mode == Some(SendMode::Code));
+        if self.chat_input.read(cx).code_task_running() != code_task_running {
+            changed = true;
+            self.chat_input.update(cx, |input, cx| {
+                input.set_code_task_running(code_task_running, cx)
+            });
+        }
+        changed
+    }
+
+    /// Draws again what shows how the running tasks are going, as their
+    /// times tick and their replies stream in: the message list, the
+    /// selected task tab's output, and what is drawn every frame anyway, the
+    /// Tasks tab's running rows among it; never the tab bar, the sidebars,
+    /// the Tasks tab, the chat input, or the Planning board.
+    fn redraw_running(&self, cx: &mut App) {
+        for part in [&self.views.shell, &self.views.history, &self.views.task] {
+            redrawing::redraw(part, cx);
+        }
+    }
+
+    /// Draws again the views showing markdown, as what it parses to comes
+    /// in: the message list, the selected task tab's output, the Planning
+    /// board or a file while one shows, and the Tasks tab while a task is
+    /// open in it.
+    fn redraw_markdown(&self, cx: &mut App) {
+        redrawing::redraw(&self.views.history, cx);
+        redrawing::redraw(&self.views.task, cx);
+        if self.shows_board() {
+            redrawing::redraw(&self.views.board, cx);
+        }
+        if self.tasks_tab.open.is_some() {
+            redrawing::redraw(&self.views.tasks_tab, cx);
+        }
+    }
+
+    /// Whether the selected tab shows the Planning board, a findings
+    /// report, or a file.
+    fn shows_board(&self) -> bool {
+        let selected = self.selected_file.and_then(|ix| self.files.get(ix));
+        matches!(selected, Some(BodyTab::Planning(_) | BodyTab::Findings(_)))
+            || self.open_file_view().is_some()
+    }
+
+    /// Whether the selected tab is a task's, which shows its output.
+    fn shows_task_tab(&self) -> bool {
+        self.selected_file
+            .and_then(|ix| self.files.get(ix))
+            .and_then(BodyTab::task)
+            .is_some_and(|tab| self.tasks.iter().any(|task| task.name == tab.name))
+    }
+
+    /// The Planning board, a findings report, or a file, as its tab is
+    /// selected.
+    fn render_board(&self) -> AnyElement {
+        let view = match self.selected_file.and_then(|ix| self.files.get(ix)) {
+            Some(BodyTab::Planning(view)) => Some(view.clone().into_any_element()),
+            Some(BodyTab::Findings(view)) => Some(view.clone().into_any_element()),
+            _ => self.open_file_view().map(IntoElement::into_any_element),
+        };
+        div()
+            .size_full()
+            .overflow_hidden()
+            .children(view)
+            .into_any_element()
+    }
+
+    /// The Chat tab's contents: the message list, or, on Ask, the Ask
+    /// conversation in its place, as it does for every other mode.
+    fn render_history(&self, cx: &mut Context<Self>) -> AnyElement {
+        if self.on_ask_tab {
+            return self.render_ask_pane(cx);
         }
         let hint = if ProjectDirectory::get(cx).is_some() {
             "Write a prompt below. Enter adds a line; Ctrl/Cmd+Enter sends it."
@@ -8680,22 +9931,33 @@ impl Render for PromptMode {
         let history = v_flex().id("history").size_full().child(content);
         // Lets UI tests find the history; inert in normal builds.
         let history = gpui_kit::TestSupportExt::test_support(history);
-        let history = div().relative().size_full().child(history);
+        div().relative().size_full().child(history).into_any_element()
+    }
 
-        // The selected tab's contents: the task view, a file, or a task of
-        // its own.
-        let shown = match (self.open_file_view(), self.render_task_tab_view(cx)) {
-            (Some(file), _) => div()
-                .size_full()
-                .overflow_hidden()
-                .child(file)
-                .into_any_element(),
-            (None, Some(task)) => task,
-            // On Ask, the Ask conversation fills the Chat tab's place, as the
-            // message list does for every other mode.
-            (None, None) if self.on_ask_tab => self.render_ask_pane(cx),
-            (None, None) => history.into_any_element(),
+    /// The body around its views: the tab bar along the top, the selected
+    /// tab's contents beneath it, the chat input beneath them, and the right
+    /// sidebar beside them all.
+    fn render_shell(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        // A task cancelled or failed may leave another heading the view.
+        self.settle_latest();
+        self.tick_elapsed(cx);
+        // Changed since its view was last drawn, it is drawn afresh.
+        let chat_input_changed = self.sync_chat_input(cx);
+        // The popover for text selected in the Ask conversation goes with it.
+        if !self.on_ask_tab {
+            self.selection_popover = None;
+        }
+
+        // The selected tab's contents: the Chat tab's, a file, or a task of
+        // its own, each its own view.
+        let shown = if self.shows_board() {
+            &self.views.board
+        } else if self.shows_task_tab() {
+            &self.views.task
+        } else {
+            &self.views.history
         };
+        let shown = redrawing::cached(shown, cx);
         let body = div().relative().flex_1().min_h_0().child(shown);
         // Above the chat input: the task view, pushed up by the stack of
         // questions still running beneath it.
@@ -8719,7 +9981,7 @@ impl Render for PromptMode {
             .flex_1()
             .min_w_0()
             .h_full()
-            .child(self.render_tabs(cx))
+            .child(redrawing::cached(&self.views.tabs, cx))
             .child(body);
         // The body never splits: on Ask, the conversation is in the Chat
         // tab's place.
@@ -8733,13 +9995,24 @@ impl Render for PromptMode {
             .children(self.render_selection_popover(cx))
             .into_any_element();
 
-        // The chat input along the bottom, beneath them,
-        // with the referenced spec sidebar beside them all, never reaching
-        // over the chat input.
+        // The chat input along the bottom, beneath them, but on Planning,
+        // which fills the body to its bottom instead, with the referenced
+        // spec sidebar beside them all, never reaching over the chat input.
+        let hidden = self.on_planning_tab();
+        if !hidden && std::mem::take(&mut self.refocus_chat_input) {
+            cx.defer_in(window, |this, window, cx| {
+                this.chat_input.update(cx, |input, cx| input.focus(window, cx));
+            });
+        }
+        let chat_input = if chat_input_changed {
+            self.views.chat_input.clone().into_any_element()
+        } else {
+            redrawing::cached(&self.views.chat_input, cx)
+        };
         let column = v_flex()
             .size_full()
             .child(top)
-            .child(self.chat_input.clone());
+            .when(!hidden, |column| column.child(chat_input));
         self.with_referenced_spec(column, window, cx)
     }
 }
@@ -8792,6 +10065,20 @@ fn resolve_anchor(
     anchor.system_prompt =
         hidden_anchor::instructions_for(mode, anchor.code_task.is_some(), project_dir)?;
     Ok(anchor)
+}
+
+/// Whether `event` only streams in more of a reply, its raw output, or a
+/// tool's input, which only the views showing the run's output and rate
+/// show, as the Application's Redrawing says.
+fn streams(event: &HarnessEvent) -> bool {
+    matches!(
+        event,
+        HarnessEvent::Output(_)
+            | HarnessEvent::TextStarted
+            | HarnessEvent::TextDelta(_)
+            | HarnessEvent::ThinkingDelta(_)
+            | HarnessEvent::ToolInput { .. }
+    )
 }
 
 /// Which of `tasks` heads the view as the latest task: the one sent most
@@ -10124,6 +11411,87 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// The Tasks tab works out its rows, and where its headings and day
+    /// dividers lie, once, and keeps them until what they show changes, as
+    /// the TasksTab's virtualized rows say: opened with ten thousand previous
+    /// tasks and one running, a running task's time ticking, its spinner
+    /// turning, and the list scrolling never work them out again.
+    #[gpui_kit::test]
+    async fn the_tasks_tab_keeps_its_rows_while_a_task_runs(cx: &mut TestAppContext) {
+        let (prompt_mode, handle) = open(cx);
+        prompt_mode.update(cx, |this, cx| {
+            for n in 0..10_000 {
+                this.tasks.push(PromptTask {
+                    status: TaskStatus::Done,
+                    ..PromptTask::new(format!("Task {n}").into())
+                });
+            }
+            this.tasks_tab.previous_expanded = true;
+            this.run_task_for_test("Still going", cx);
+        });
+        // A frame as the platform draws one: the animation frames asked for
+        // delivered, then only what changed drawn again.
+        let frame = |cx: &mut TestAppContext| {
+            cx.update_window(handle, |_, window, cx| {
+                window.simulate_next_frame(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+            cx.update_window(handle, |_, window, cx| window.draw(cx).clear(cx))
+                .unwrap();
+        };
+        // The sidebar slides out, and settles.
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_millis(600) {
+            frame(cx);
+            std::thread::sleep(Duration::from_millis(8));
+        }
+        frame(cx);
+        let tasks_tab = prompt_mode.read_with(cx, |this, _| this.view_for_test("tasks-tab"));
+        let (built, rows) = prompt_mode.read_with(cx, |this, _| {
+            (this.tasks_tab.timelines_built.get(), this.timeline().len())
+        });
+        assert!(built > 0, "the Tasks tab never worked out its rows");
+        assert!(rows > 10_000, "the list has {rows} rows");
+        cx.update_window(handle, |_, window, _| {
+            assert!(window.try_find("tasks-tab-list").is_some(), "the Tasks tab isn't open");
+        })
+        .unwrap();
+        let drawn = tasks_tab.read_with(cx, |part, _| part.draws());
+
+        // The task's time ticks, and its spinner turns, second by second.
+        for _ in 0..3 {
+            cx.executor().advance_clock(Duration::from_secs(1));
+            frame(cx);
+            frame(cx);
+        }
+        assert_eq!(
+            prompt_mode.read_with(cx, |this, _| this.tasks_tab.timelines_built.get()),
+            built,
+            "a running task's time ticking worked out the Tasks tab's rows again"
+        );
+        assert_eq!(
+            tasks_tab.read_with(cx, |part, _| part.draws()),
+            drawn,
+            "a running task's time ticking drew the Tasks tab again"
+        );
+
+        // Scrolled, the list is drawn again from the rows it kept.
+        prompt_mode.update(cx, |this, cx| {
+            this.tasks_tab
+                .scroll
+                .set_offset(gpui_kit::point(gpui_kit::px(0.), -(super::QUEUED_ROW_HEIGHT * 5000.)));
+            crate::redrawing::redraw(&this.views.tasks_tab, cx);
+        });
+        frame(cx);
+        assert!(tasks_tab.read_with(cx, |part, _| part.draws()) > drawn);
+        assert_eq!(
+            prompt_mode.read_with(cx, |this, _| this.tasks_tab.timelines_built.get()),
+            built,
+            "scrolling worked out the Tasks tab's rows again"
+        );
+    }
+
     #[gpui_kit::test]
     async fn referenced_spec_slides_out_while_a_task_runs(cx: &mut TestAppContext) {
         let dir = std::env::temp_dir().join(format!("suspense-refs-{}", std::process::id()));
@@ -10946,6 +12314,49 @@ mod tests {
         ));
     }
 
+    /// A task whose run succeeded but whose reply's verdict says it
+    /// couldn't do the work is Failed, its reply beneath a heading saying
+    /// so, the verdict line never shown; a done verdict, or none, leaves it
+    /// Done, and a question is never failed by one.
+    #[test]
+    fn a_failed_verdict_fails_the_task() {
+        use crate::chat_input::SendMode;
+
+        let run = |mode: SendMode, reply: &str| {
+            let mut task = PromptTask::new("Do it".into());
+            task.mode = Some(mode);
+            task.set_compiled(super::Compiled::new("Prompt_0".into(), "Do it".into()));
+            task.apply(HarnessEvent::Finished {
+                is_error: false,
+                result: reply.into(),
+            });
+            task.end();
+            task
+        };
+        let failed = run(SendMode::Code, "The sandbox blocked the write.\n\nSUSPENSE-VERDICT: failed\n");
+        assert_eq!(failed.status, TaskStatus::Failed);
+        assert_eq!(
+            failed.reply.final_output().as_deref(),
+            Some(
+                format!("**{}**\n\nThe sandbox blocked the write.", crate::task_table::VERDICT_FAILED)
+                    .as_str()
+            )
+        );
+        let chained = run(SendMode::Both, "Gave up.\n  suspense-verdict: FAILED  ");
+        assert_eq!(chained.status, TaskStatus::Failed);
+
+        let done = run(SendMode::Spec, "Changed it.\nSUSPENSE-VERDICT: done");
+        assert_eq!(done.status, TaskStatus::Done);
+        assert_eq!(done.reply.final_output().as_deref(), Some("Changed it."));
+        let none = run(SendMode::Code, "I couldn't write the file.");
+        assert_eq!(none.status, TaskStatus::Done);
+        // Only the last line counts.
+        let earlier = run(SendMode::Code, "SUSPENSE-VERDICT: failed\nThen it worked.");
+        assert_eq!(earlier.status, TaskStatus::Done);
+        assert_eq!(run(SendMode::Ask, "SUSPENSE-VERDICT: failed").status, TaskStatus::Done);
+        assert_eq!(run(SendMode::Freeform, "SUSPENSE-VERDICT: failed").status, TaskStatus::Done);
+    }
+
     /// A task opened from the Tasks tab opens in a tab of its own, after
     /// the one selected, leaving Chat's output just as it was; opened
     /// again, its tab is selected. A task Chat shows selects Chat instead.
@@ -11665,6 +13076,31 @@ mod tests {
             assert!(window.try_find(("queued-prompt", 0usize)).is_none(), "its step is among the queued");
         })
         .unwrap();
+    }
+
+    /// A story from the plan sent with steps heads them as a chain heads
+    /// its own: its steps, sent after it, are grouped beneath it, as the
+    /// PlanningScope's steps say, whatever its mode.
+    #[test]
+    fn a_story_sent_with_steps_heads_them_as_a_chain() {
+        let mut head = PromptTask::new("Change it".into());
+        head.name = "ChangeIt".into();
+        head.sent.mode = Some(crate::chat_input::SendMode::Code);
+        head.added_steps = vec![crate::hidden_anchor::AddedStep {
+            mode: crate::chat_input::SendMode::Spec,
+            prompt: "Describe it".into(),
+            model: None,
+            effort: None,
+        }];
+        let mut step = PromptTask::new("Describe it".into());
+        step.sent.mode = Some(crate::chat_input::SendMode::Spec);
+        step.sent.added_step = Some(("ChangeIt".into(), 0));
+        let other = PromptTask::new("Something else".into());
+        let tasks = vec![head, other, step];
+        let layout = super::chain_layout(&tasks);
+        let first = layout.step_of(0).expect("the story heads no chain");
+        assert_eq!(layout.members(first), [0, 2]);
+        assert!(layout.step_of(1).is_none_or(|step| step.len == 1));
     }
 
     #[gpui_kit::test]
@@ -13061,6 +14497,21 @@ mod tests {
             this.tasks[fix].sent.mode = Some(SendMode::Spec);
             this.tasks[fix].sent.sent_from = Some(this.tasks[chain].name.to_string());
             assert!(super::is_spec_fix(&this.tasks[fix].sent));
+            // Held while its fix is under way, the chain is running.
+            assert!(this.awaiting_fix(chain));
+            assert_eq!(
+                this.chain_state(&[chain]),
+                super::tasks_tab::ChainState::Running
+            );
+            // Its fix cancelled before it ran, nothing holds it: it is over,
+            // never left running for good.
+            this.tasks[fix].status = TaskStatus::Cancelled;
+            assert!(!this.awaiting_fix(chain));
+            assert_eq!(
+                this.chain_state(&[chain]),
+                super::tasks_tab::ChainState::Over
+            );
+            this.tasks[fix].status = TaskStatus::Running;
             let next = this.release_held_chain(fix, true);
             assert!(matches!(next, Some((_, super::Sending::Now(SendMode::Code, ..), _))));
             assert!(!this.tasks[chain].held_for_fix);
@@ -14097,6 +15548,85 @@ mod tests {
                 .map(|item| item.new_conversation)
                 .collect();
             assert_eq!(marked, [true, false]);
+        });
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Each story sent with its sprint, and each later step of a story's
+    /// chain, starts a conversation of its own, never carrying on its
+    /// lane's, and leaves New conversation for the next prompt written, as
+    /// the PlanningScope's sprint says.
+    #[gpui_kit::test]
+    async fn sprint_stories_start_conversations_of_their_own(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-story-conv-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = dunce::canonicalize(&dir).unwrap();
+        let (prompt_mode, _handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        cx.run_until_parked();
+        // A conversation of the code lane runs, so the stories queue, and
+        // New conversation was pressed before the sprint was sent.
+        prompt_mode.update(cx, |this, _| {
+            this.session.code = Some(Session {
+                project_dir: dir.clone(),
+                in_container: None,
+                id: "s1".into(),
+                context: Some(1_000),
+                system_prompt: None,
+            });
+            this.working = crate::chat_input::Lanes::ALL;
+            this.new_conversation_pending.code = true;
+        });
+        let story = |name: &str| crate::planning::StorySend {
+            name: name.into(),
+            text: format!("{name} prompt"),
+            mode: crate::chat_input::SendMode::Code,
+            attached: crate::hidden_anchor::Attached::default(),
+            sliced: false,
+            model: None,
+            effort: None,
+            steps: Vec::new(),
+        };
+        prompt_mode.update(cx, |this, cx| {
+            this.send_stories(vec![story("StoryA"), story("StoryB")], cx);
+            assert_eq!(
+                this.queue
+                    .iter()
+                    .map(|item| item.new_conversation)
+                    .collect::<Vec<_>>(),
+                [true, true],
+                "a story carried on its lane's conversation"
+            );
+            assert!(
+                this.new_conversation_pending.code,
+                "a story took New conversation from the next prompt written"
+            );
+            // A story's chain going on to its code step starts afresh too.
+            this.story_tasks.insert("StoryC".into());
+            this.chain_on(
+                "StoryC prompt".into(),
+                super::Sending::Now(
+                    crate::chat_input::SendMode::Code,
+                    crate::hidden_anchor::Attached::default(),
+                    false,
+                    None,
+                    Some("StoryC".into()),
+                    false,
+                    Some("StoryC".into()),
+                ),
+                Some(prompt_queue::stamp()),
+                cx,
+            );
+            let step = this
+                .queue
+                .iter()
+                .find(|item| item.sent_from.as_deref() == Some("StoryC"))
+                .expect("the code step wasn't queued");
+            assert!(
+                step.new_conversation,
+                "a story's code step carried on its lane's conversation"
+            );
         });
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -15425,6 +16955,100 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// The plan opens in a tab of the body; stories added to its Next
+    /// sprint, as an Ask card's Add to sprint does, are sent, by Send sprint, in order, as one
+    /// block, each task named as the plan knows it and followed by its row,
+    /// and the ribbon's count of what waits goes to nothing.
+    #[gpui_kit::test]
+    async fn a_sprint_is_sent_in_order_as_one_block(cx: &mut TestAppContext) {
+        let dir = std::env::temp_dir().join(format!("suspense-sprint-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (prompt_mode, handle) = open(cx);
+        cx.update(|cx| ProjectDirectory::set(dir.clone(), cx));
+        let planning = cx
+            .update_window(handle, |_, window, cx| {
+                prompt_mode.update(cx, |this, cx| {
+                    // Busy, so the stories queue rather than run; Freeform,
+                    // so they queue with no spec to resolve them against.
+                    this.working = crate::chat_input::Lanes::ALL;
+                    this.add_to_sprint(
+                        "Add the first thing\n\nMore about it".into(),
+                        crate::chat_input::SendMode::Freeform,
+                        cx,
+                    );
+                    this.add_to_sprint(
+                        "Ask about the second".into(),
+                        crate::chat_input::SendMode::Freeform,
+                        cx,
+                    );
+                    this.open_planning(window, cx).unwrap()
+                })
+            })
+            .unwrap();
+        cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+            .unwrap();
+        cx.update_window(handle, |_, window, _| {
+            window.find(("planning-tab", 0usize));
+            window.find("planning");
+        })
+        .unwrap();
+        let names: Vec<String> = cx.update(|cx| {
+            planning
+                .read(cx)
+                .stories(crate::planning::Section::Next)
+                .iter()
+                .map(|story| story.name.clone())
+                .collect()
+        });
+        assert_eq!(names.len(), 2);
+        assert_eq!(
+            cx.update(|cx| crate::planning::SprintPending::get(cx))
+                .waiting,
+            2
+        );
+        cx.update_window(handle, |_, window, cx| {
+            prompt_mode.update(cx, |this, cx| this.send_sprint(window, cx))
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let tasks: Vec<String> = cx.update(|cx| {
+            planning
+                .read(cx)
+                .stories(crate::planning::Section::Current)
+                .iter()
+                .map(|story| story.task.clone().unwrap_or_default())
+                .collect()
+        });
+        assert_eq!(tasks, ["AddTheFirstThing", "AskAboutTheSecond"]);
+        let pending = cx.update(|cx| crate::planning::SprintPending::get(cx));
+        assert_eq!((pending.waiting, pending.under_way), (0, true));
+        let queued: Vec<(String, String)> = prompt_queue::load(&dir)
+            .into_iter()
+            .map(|queued| (queued.anchor.name().to_string(), queued.text))
+            .collect();
+        assert_eq!(
+            queued,
+            [
+                (
+                    "AddTheFirstThing".to_string(),
+                    "Add the first thing\n\nMore about it".to_string()
+                ),
+                (
+                    "AskAboutTheSecond".to_string(),
+                    "Ask about the second".to_string()
+                ),
+            ]
+        );
+        prompt_mode.read_with(cx, |this, _| {
+            assert_eq!(
+                this.story_state("AddTheFirstThing"),
+                Some((crate::planning::StoryState::Queued, None))
+            );
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// Opening a project restores its queue, listed along the bottom under
     /// the task's output; it expands to list each queued prompt, and
     /// cancelling one removes its file. Once the harness is free with
@@ -15647,10 +17271,12 @@ mod tests {
         })
         .unwrap();
 
+        // The message list's view, which a raw line redraws, alone.
         let notified = std::rc::Rc::new(std::cell::Cell::new(0usize));
+        let history = prompt_mode.read_with(cx, |this, _| this.views.history.clone());
         let _observe = cx.update(|cx| {
             let notified = notified.clone();
-            cx.observe(&prompt_mode, move |_, _| notified.set(notified.get() + 1))
+            cx.observe(&history, move |_, _| notified.set(notified.get() + 1))
         });
         cx.update_window(handle, |_, _, cx| {
             prompt_mode.update(cx, |this, cx| {
@@ -17989,9 +19615,10 @@ mod tests {
             prompt: asked.to_string(),
             result: Some(answer.trim_end().to_string()),
         };
+        // The handoff, then the verdict, last.
         let handoff = |result: &str| {
             format!(
-                "\n\n{}",
+                "\n\n{}\n\n{}",
                 system_prompts::fill_code_task(
                     // Filled in for a spec run, which sees no code.
                     &system_prompts::fill_instructions(
@@ -18002,7 +19629,8 @@ mod tests {
                     ),
                     asked,
                     Some(result),
-                )
+                ),
+                system_prompts::task_verdict()
             )
         };
         let told_spec = |sent: &str, result: &str| {

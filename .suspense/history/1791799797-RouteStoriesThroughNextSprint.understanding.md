@@ -1,0 +1,8 @@
+- [A story row has no Send of its own, only a menu button](.claude/reference/scope/planning/index.md#stories)
+- [New story, Ctrl+N, duplicates, accepted proposals, and Ask cards all add to the end of Next sprint](.claude/reference/scope/planning/index.md#creating)
+- [Send sprint sends Next sprint's stories in order as one block in the queue](.claude/reference/scope/planning/index.md#sprint)
+- [No single story can be sent; the only route to work is the sprint](.claude/reference/scope/planning/index.md#sprint)
+- [While paused, sending the sprint is disabled until Resume or Approve](.claude/reference/scope/planning/index.md#paused)
+- [Ctrl+Enter moves the focused story between Next sprint and the Backlog](.claude/reference/scope/planning/index.md#keyboard)
+- [The ribbon's New Story adds a story to Next sprint](.claude/reference/ui/components/ribbon/planning-tab/index.md#commands)
+- [Ask prompt cards offer Add to sprint](.claude/reference/scope/prompt-mode/ask-conversation/index.md#suggested-prompts)

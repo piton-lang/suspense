@@ -1,0 +1,91 @@
+
+export anchor MoveCardsBetweenColumnsByDragAndKeyboard2:
+    userPrompt:
+        \\\
+        On the board, a story card is dragged from one column into a gap in another, as well as within its own column. The insertion line is drawn across the target column, as the [Drag Reorder indicator](.claude/reference/ui/behaviours/drag-reorder/index.md#indicator) and [Choosing The Gap](.claude/reference/ui/behaviours/drag-reorder/index.md#choosing-the-gap) say. An empty column takes a drop at its top. A drag held near the board's left or right edge scrolls the board sideways, and one held near a column's top or bottom scrolls that column, as [Scrolling While Dragging](.claude/reference/ui/behaviours/drag-reorder/index.md#scrolling-while-dragging) says.
+
+        Only the Backlog and Next sprint take drops. As the [Sprint](.claude/reference/scope/planning/index.md#sprint) says, Current sprint and Done show no indicator and don't move a story dropped on them, and their cards can't be picked up. The card menu's "Move to next sprint" and "Move to backlog" still work.
+
+        The [Keyboard](.claude/reference/scope/planning/index.md#keyboard) section is updated for columns. Up and Down move between the cards in a column. Left and Right move focus to the nearest card in the next column. Alt+Up and Alt+Down reorder within a column. Alt+Left and Alt+Right move the focused story into the next column where that column takes it. F6 moves between the pause bar, each column and an open panel.
+
+        The spec has nothing yet on moving between columns sideways, or on the board scrolling sideways during a drag, so that part is new.
+        \\\
+
+    mode: code
+
+    newConversation: true
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            On the board, a story card is dragged from one column into a gap in another, as well as within its own column. The insertion line is drawn across the target column, as the [Drag Reorder indicator](.claude/reference/ui/behaviours/drag-reorder/index.md#indicator) and [Choosing The Gap](.claude/reference/ui/behaviours/drag-reorder/index.md#choosing-the-gap) say. An empty column takes a drop at its top. A drag held near the board's left or right edge scrolls the board sideways, and one held near a column's top or bottom scrolls that column, as [Scrolling While Dragging](.claude/reference/ui/behaviours/drag-reorder/index.md#scrolling-while-dragging) says.
+
+            Only the Backlog and Next sprint take drops. As the [Sprint](.claude/reference/scope/planning/index.md#sprint) says, Current sprint and Done show no indicator and don't move a story dropped on them, and their cards can't be picked up. The card menu's "Move to next sprint" and "Move to backlog" still work.
+
+            The [Keyboard](.claude/reference/scope/planning/index.md#keyboard) section is updated for columns. Up and Down move between the cards in a column. Left and Right move focus to the nearest card in the next column. Alt+Up and Alt+Down reorder within a column. Alt+Left and Alt+Right move the focused story into the next column where that column takes it. F6 moves between the pause bar, each column and an open panel.
+
+            The spec has nothing yet on moving between columns sideways, or on the board scrolling sideways during a drag, so that part is new.
+            \\\
+        result:
+            \\\
+            I've updated the spec for moving cards between columns. `piton check` reports no problems and `piton build` succeeded.
+
+            **`spec/ui/behaviours/drag-reorder/index.pi`**
+            - **New [Between Lists](.claude/reference/ui/behaviours/drag-reorder/index.md#between-lists) section:**
+              - A dragged item can go into a gap in another list, with the gap chosen in the list under the pointer.
+              - The insertion line is drawn across that target list, never across the list the item came from.
+              - An empty list has one gap, at its top.
+              - A list that takes no drops shows no line, ignores a drop, and its own items can't be picked up.
+            - **[Scrolling While Dragging](.claude/reference/ui/behaviours/drag-reorder/index.md#scrolling-while-dragging):**
+              - A new paragraph covers lists side by side in an area that scrolls the other way.
+              - Within 32px of the outer area's left or right edge, that area scrolls sideways.
+              - Within 32px of a list's own top or bottom, only that list scrolls.
+              - Near a corner, both scroll at once.
+
+            **`spec/scope/planning/index.pi`**
+            - **[Sprint](.claude/reference/scope/planning/index.md#sprint):**
+              - A card is dragged by its grip, the line is drawn across the column under the pointer, and an empty column takes a drop at its top.
+              - The board scrolls sideways near its edges, and a column scrolls near its top or bottom.
+              - Only the Backlog and Next sprint take drops. Current sprint and Done show no line, leave a dropped story where it was, and their cards can't be picked up.
+              - Findings can't be picked up either; I added that myself, since the prompt didn't cover them.
+              - The menu's "Move to next sprint" and "Move to backlog" are unchanged.
+            - **[Keyboard](.claude/reference/scope/planning/index.md#keyboard):**
+              - Up and Down move between the cards in a column.
+              - Left and Right move focus to the card in the column beside it that sits nearest the focused card's height. They skip an empty column and scroll the board sideways to show the new column.
+              - Alt+Up and Alt+Down reorder within the column.
+              - Alt+Right moves a Backlog story to the end of Next sprint, and Alt+Left moves a Next sprint story to the end of the Backlog, with focus following it. Anywhere else they do nothing.
+              - F6 cycling between the pause bar, each column and an open panel was already in the spec, so I left it as it was.
+
+            The code should follow these anchors: `DragReorderBehaviour.betweenLists`, `DragReorderBehaviour.scrollingWhileDragging`, `Planning.sprint` and `Planning.keyboard`.
+            \\\
+
+    sentFrom: MoveCardsBetweenColumnsByDragAndKeyboard
+
+    model: opus

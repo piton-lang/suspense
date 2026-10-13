@@ -736,7 +736,6 @@ pub const BEVEL: Pixels = px(1.);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bevel {
     Raised,
-    #[cfg_attr(not(test), allow(dead_code))]
     Pressed,
 }
 
@@ -808,6 +807,24 @@ pub fn bevel(bevel: Bevel, cx: &App) -> impl IntoElement {
     .top_0()
     .left_0()
     .size_full()
+}
+
+/// The bevel, laid inside a surface rounded `radius`, following its corners:
+/// its top and left edges in one colour, its bottom and right in the other,
+/// filling the positioned element it is put in and taking no room or mouse.
+pub fn rounded_bevel(bevel: Bevel, radius: Pixels, cx: &App) -> impl IntoElement {
+    let (light, shade) = match (bevel, bevel_colors(palette(cx))) {
+        (Bevel::Raised, (light, shade)) => (light, shade),
+        (Bevel::Pressed, (light, shade)) => (shade, light),
+    };
+    let edge = || div().absolute().top_0().left_0().size_full().rounded(radius);
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
+        .child(edge().border_t(BEVEL).border_l(BEVEL).border_color(light))
+        .child(edge().border_b(BEVEL).border_r(BEVEL).border_color(shade))
 }
 
 /// The black laid over the window behind a modal surface.

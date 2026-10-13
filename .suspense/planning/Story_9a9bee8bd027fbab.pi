@@ -1,0 +1,37 @@
+
+export anchor Story_9a9bee8bd027fbab:
+    userPrompt:
+        \\\
+        The board's five columns are easy to tell apart at a glance, from each
+        other and from the board behind them. Today every column is the same list,
+        as spec/scope/planning/index.pi#Planning.parts draws it: the recessed
+        surface, no border, and a status icon that "only repeats the column's
+        name". spec/scope/planning/index.pi#Planning.layout says the surface and
+        the gaps alone set a column apart. In practice that's too faint. The spec
+        says nothing yet about giving each column a look of its own, so this is
+        new.
+
+        Change the spec first. In spec/scope/planning/index.pi#Planning.parts and
+        spec/scope/planning/index.pi#Planning.layout, say how a list stands apart
+        from the board's base, and how each column differs from its neighbours.
+        For example, a column's edge or heading could carry the colour its status
+        icon already uses: tertiary text for Backlog, secondary for Next sprint,
+        the accent for Current sprint, the success colour for Done, secondary for
+        Findings. Only use the theme's roles, in both dark and light mode, as
+        spec/scope/planning/index.pi#Planning.theme and
+        spec/ui/theme/index.pi#Theme.surfaces require. Keep it below state, as
+        spec/ui/theme/index.pi#Theme.hierarchy orders it. A column's treatment must
+        never be as strong as a card's hover, selection, focus, or the open story's
+        accent line, and it must not hide the drag placeholder's well surface.
+        Also update the line that says the status icon never stands for the
+        column, if it no longer holds.
+
+        Then make the code match. The lists are drawn in render_column and
+        column_icon in src/planning.rs. Keep the 320 pixel width, the 16 pixel
+        gaps, and the 8 pixel corners. Add tests that each column's treatment
+        matches the spec in both modes.
+        \\\
+
+    mode: combined
+
+    model: opus

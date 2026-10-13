@@ -1,5 +1,10 @@
 use /lib
+from ./Body import Body
 from ./MainWindow import MainWindow
+from /scope/prompt-mode/message-list import MessageList
+from /ui/components/right-sidebar import TasksTab
+from /ui/components/table import Table
+from /ui/components/task-table import TaskTable
 from /scope/sandbox import Sandbox
 from /scope/debug-log import DebugLog
 from /scope/edge-releases import EdgeReleases
@@ -107,6 +112,36 @@ export feature Application:
         Welcome check's row, muted, and what is found is looked for again
         each time the Welcome checks or Check again run, so a program
         installed while Suspense runs is found without restarting it.
+
+    redrawing:
+        The window stays fast while something animates or updates. It is
+        split into views that are each drawn again only when their own state
+        changes, never rebuilt whole from the main window down on every
+        frame. The views are the body's tab bar, where the Chat tab and task
+        tabs show their spinners; the message list; each task's output; the
+        Tasks tab; the chat input; each sidebar; and the Planning board. A
+        spinner turning, a running task's time counting up every second, as
+        the @{MessageList.status} says, or a reply streaming in redraws only
+        the view that shows it, never the rest of the body, the tab bar, the
+        sidebars, the Tasks tab, the chat input, or an open Planning board.
+
+        This holds for the window as a whole what each part already holds on
+        its own: a table's rows, as @{Table.drawing} says, a task's streamed
+        output, as @{TaskTable.scrolling} says, the message list, as
+        @{MessageList.scrolling} says, and the Tasks tab's running rows, as
+        @{TasksTab.virtualized} says. Within a view drawn again, those rules
+        still decide what is laid out anew.
+
+        A slide still moves every part of the body together, frame by frame,
+        as @{Body.sliding} says. A view whose width changes is laid out anew
+        at each width as the slide goes, so being drawn only on a change of
+        its own never leaves one at its old width until the slide settles.
+
+        A test shows it: while a task runs and nothing else changes, the
+        Tasks tab, the chat input, and the sidebars are not drawn again from
+        one frame to the next; and while a right sidebar slides out, the tab
+        bar, the message list, and the chat input are laid out at each width
+        as it goes.
 
     debugLog: @{DebugLog}
 

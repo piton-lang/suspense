@@ -1,0 +1,63 @@
+
+export anchor ResearchModeAskCanInvestigateAndPause4:
+    userPrompt:
+        \\\
+        In planning mode, the user can ask the agent to research a topic. Research runs as a read-only investigation that produces findings the user can read. After research, planning pauses and nothing is implemented until the user explicitly resumes or approves. The pause state is visible in the UI and persists across reloads.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            In planning mode, the user can ask the agent to research a topic. Research runs as a read-only investigation that produces findings the user can read. After research, planning pauses and nothing is implemented until the user explicitly resumes or approves. The pause state is visible in the UI and persists across reloads.
+            \\\
+        result:
+            \\\
+            Most of this was already in the spec from your earlier request, so I only closed one gap. `piton check` reports no problems and `piton build` wrote 86 files.
+
+            **Already in place:**
+            - **Research:** a read-only run whose findings are saved and can be read (`#research`).
+            - **Pause:** once research ends, planning pauses and sending the sprint is disabled. It also stops the next sprint from starting automatically. Only Resume or "Approve and send sprint" ends it.
+            - **Visible and lasting:** a "Paused for review" bar and tab markers show the pause, and it's saved so it survives reloads and restarts (`#paused`).
+
+            **What I added** (`.claude/reference/scope/planning/index.md#paused`): "nothing is implemented" now also covers a sprint that's already underway.
+            - **Held:** current-sprint stories still waiting in the queue are held in place, marked "Held for review", with their lane waiting. A story's next step is held the same way.
+            - **Not held:** a story already running when the pause began finishes, since stopping it would leave work half done. The bar says how many are still running.
+            - **After the pause:** once you resume or approve, everything held carries on in its original order.
+
+            **Anchors the code should follow:** `Planning` `#paused`, `#research`, `#auto-start` and `#steps`, and `QueueList` `#editing` for how held prompts behave.
+            \\\
+
+    sentFrom: ResearchModeAskCanInvestigateAndPause3
+
+    model: opus

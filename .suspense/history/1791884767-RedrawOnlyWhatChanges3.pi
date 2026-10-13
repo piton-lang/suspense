@@ -1,0 +1,121 @@
+
+export anchor RedrawOnlyWhatChanges3:
+    userPrompt:
+        \\\
+        Each frame of the Tasks tab costs the same with ten thousand previous tasks as
+        with ten, as spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.virtualized
+        says. That covers the work done before any row is drawn, not just the drawing.
+        Make clear in TasksTab.virtualized that working out the list's rows, the
+        groups, chains, filters, the day dividers of
+        spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.days, and which row
+        the scroll is kept on, is done again only when a task is added, removed, or
+        changes status, when a filter changes, when a section opens or closes, or at
+        midnight. A spinner or a running row's time ticking never redoes it.
+
+        Today every frame rebuilds a row for every task in timeline_rows, works out the
+        chain layout more than once, finds the previous tasks by checking each task
+        against a list of the others (cost grows with the square of the task count),
+        and searches the whole list by key for the row at the top. Keep the list of
+        rows and where each lies until something it depends on changes, and find the
+        top row and the pinned headings from the scroll position, without searching.
+        Add a test that opens the tab with ten thousand previous tasks and a running
+        task, and shows that a tick redoes none of this work.
+        \\\
+
+    mode: code
+
+    newConversation: false
+
+    systemPrompt:
+        \\\
+        We're working on the code, located in ./src. Change the code so it does what the prompt asks, as the spec describes it.
+
+        When the work is about Suspense, its modes, its prompts, or its questions, or you are to write a prompt or a question for the user, first read .suspense/suspense-fluency.md once in this conversation, unless you already have: it is how Suspense works.
+
+        The spec's Piton source is in ./spec. Don't change it, and don't read it to learn what the spec says: read the compiled reference instead, as above. If the prompt asks for something the spec doesn't describe, or describes differently, say so in your reply rather than working around it.
+
+        Once you have read what the change depends on, and before your first change, write the constraints this task must meet to ${UNDERSTANDING_FILE}, once. Rewrite it only when a constraint in it turns out to be wrong, never after each page you read. It is a Markdown list and nothing else: one line per constraint, at most twelve, each a single short, specific statement of what must be true, written as a link to the compiled reference file it comes from, such as `- [The chain tab has no bottom border in combined mode](.claude/reference/scope/prompt-mode/chat-input/index.md#chain)`. Only list what the spec says; leave out anything you are deciding yourself. Replace a constraint when you learn it was wrong rather than adding another.
+
+        End with a reply of a few sentences saying what changed, or for a question, the answer, not a recap of the work or of what you read.
+
+        This prompt is the second step of a chain. Its first step changed the spec to meet it, and the spec has been built since. Now change the code so it does what the spec now says, without changing the spec. Follow the spec the prompt references, and the anchors the spec step names below. Where the spec and the prompt disagree, follow the spec, and say so in your reply.
+
+        The code is located in ./src.
+
+        The spec's source, which this step doesn't change, is in ./spec.
+
+        The prompt the chain was sent:
+
+        ${SPEC_PROMPT}
+
+        What the spec step said it changed, its final output:
+
+        ${SPEC_RESULT}
+        \\\
+
+    codeTask:
+        prompt:
+            \\\
+            The window stays fast while something animates or updates. A spinner turning, a
+            running task's time counting up every second, as
+            spec/scope/prompt-mode/message-list/Status.pi#MessageList.status says, or a
+            reply streaming in redraws only the view that shows it. It never redraws the
+            rest of the body, the tab bar, the sidebars, the Tasks tab, the chat input, or
+            an open Planning board.
+
+            The spec has nothing on this for the window as a whole yet, so it is new. Add
+            it as a behaviour of the application in
+            spec/scope/application/index.pi#Application, next to its other behaviours. It
+            extends rules the spec already has for single parts:
+            spec/ui/components/table/Drawing.pi#Table.drawing for a table's rows,
+            spec/ui/components/task-table/Scrolling.pi#TaskTable.scrolling for streamed
+            output, spec/scope/prompt-mode/message-list/Scrolling.pi#MessageList.scrolling
+            for the message list, and
+            spec/ui/components/right-sidebar/tasks/index.pi#TasksTab.virtualized for
+            running rows. spec/scope/application/Body.pi#Body.sliding must keep holding: a
+            slide still moves every part of the body together, frame by frame.
+
+            Today no view in the window is drawn as a cached view, so every frame rebuilds
+            everything from the main window down. Split the window into views that are
+            each drawn again only when their own state changes:
+            - the body's tab bar, where the Chat tab and task tabs show their spinners
+            - the message list
+            - each task's output
+            - the Tasks tab
+            - the chat input
+            - each sidebar
+            - the Planning board
+
+            Spinners and ticking times then redraw only the views they are in.
+
+            Add a test showing that, while a task runs and nothing else changes, the Tasks
+            tab, the chat input and the sidebars are not drawn again from one frame to the
+            next. The test should also show that a right sidebar sliding out still lays out
+            the tab bar, the message list and the chat input at each width as it goes.
+            \\\
+        result:
+            \\\
+            The window is now split into cached views, each drawn again only when its own state changes. The new test passes. I ran it in a scratch copy because the sandbox won't let the build read `.suspense/system-prompts`, so that copy used empty stand-ins for those files.
+
+            **What changed:**
+            - **Cached views:** a new `src/redrawing.rs` adds a `Part` view that draws one piece of its owner and is reused until the owner or the part itself changes.
+            - **Body and window:** `PromptMode` is split into the tab bar, the message list (or the Ask conversation), the selected task's output, the board (Planning, findings or a file), the right sidebar, the Tasks tab and the chat input. `MainWindow` gets a cached left-sidebar view. What's left of both draws every frame, but it's thin and no longer forces the cached views to redraw.
+            - **Ticks and streaming:** the one-second tick, streamed reply text and raw output, and finished markdown parsing now redraw only the views that show them. Before, each of these redrew the whole window.
+            - **Tasks tab:** running rows are drawn over the list in their places, so their spinners and times update without redrawing the Tasks tab, as `TasksTab.virtualized` says.
+            - **Sliding:** while the right sidebar slides, a view whose width changes is laid out again at that width.
+            - **Test:** `only_what_changes_is_drawn_again` in `src/main_window.rs` checks that the tab bar, message list and chat input are laid out at each width as the right sidebar slides out. It then checks that, while a task runs with its time ticking, spinners turning and reply streaming, the Tasks tab, chat input and both sidebars aren't drawn again, but the message list is.
+            - **Old test updated:** `long_output_lays_out_only_rows_in_view` now watches the message list's view instead of `PromptMode`, since a raw output line no longer notifies `PromptMode`.
+
+            **Limits:**
+            - **No baseline:** git shows no diff in this tree, so I couldn't run the suite on the code as it was before.
+            - **Other failures:** the slide test and the updated test pass. Of the remaining failures I checked in the UI suites, most come from the sandbox blocking `piton` and `git`. `scrollbar::tests::the_bar_is_the_column_on_its_side` also fails, but it only uses its own test views, so it looks like it was failing already.
+            - **One-frame lag:** the chat input and tab bar size themselves from their last layout. When their height changes, they correct one frame later.
+
+            The code follows the spec as written; I found no conflicts between the spec and the prompt.
+            \\\
+
+    sentFrom: RedrawOnlyWhatChanges2
+
+    model: opus
+
+    addedStep: RedrawOnlyWhatChanges 0

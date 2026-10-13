@@ -1,0 +1,8 @@
+- [However a story is added it goes to the end of Next sprint, except an accepted new-story proposal, which goes to the end of the Backlog](.claude/reference/scope/planning/index.md#creating)
+- [Accepting a new-story proposal, on its card or with Accept all, from drafting, research, or an Ask answer, puts it at the Backlog's end](.claude/reference/scope/planning/index.md#proposal-cards)
+- [An accepted story keeps its mode, is marked "From agent" with a sparkle until first opened, and keeps its spec citations](.claude/reference/scope/planning/index.md#proposal-cards)
+- [Accepting never adds anything to Next sprint, so it never starts a sprint](.claude/reference/scope/planning/index.md#proposal-cards)
+- [An accepted card leaves a muted note "Added to Backlog" or "Added to <story>", with a link that opens the story where it is](.claude/reference/scope/planning/index.md#proposal-cards)
+- [An "Add to" proposal is added to its story as a new step at its end](.claude/reference/scope/planning/index.md#proposal-cards)
+- [New story, Ctrl+N, Duplicate, and an Ask card's "Add to sprint" still add to the end of Next sprint](.claude/reference/scope/planning/index.md#creating)
+- [An Ask card's "Add to sprint" adds its prompt as a story to Next sprint](.claude/reference/scope/prompt-mode/ask-conversation/index.md#narrow)

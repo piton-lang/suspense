@@ -721,9 +721,48 @@ pub fn run_agent(
     cancel: &Cancel,
     on_line: &dyn Fn(String),
 ) -> Result<String> {
+    run_agent_with(
+        crate::harness::one_off_command(project_dir),
+        project_dir,
+        prompt,
+        cancel,
+        on_line,
+    )
+}
+
+/// Runs the harness once as [`run_agent`] does, able to read the web too,
+/// as the PlanningScope's research does: reading, never changing anything.
+#[cfg_attr(test, allow(dead_code))]
+pub fn run_researcher(
+    project_dir: &Path,
+    prompt: &str,
+    cancel: &Cancel,
+    on_line: &dyn Fn(String),
+) -> Result<String> {
+    run_agent_with(
+        crate::harness::research_command(project_dir),
+        project_dir,
+        prompt,
+        cancel,
+        on_line,
+    )
+}
+
+/// Runs `command`, a one-off run of the harness, in `project_dir` with
+/// `prompt`, under the Question profile, as [`run_agent`] says.
+fn run_agent_with(
+    mut command: std::process::Command,
+    project_dir: &Path,
+    prompt: &str,
+    cancel: &Cancel,
+    on_line: &dyn Fn(String),
+) -> Result<String> {
     // Reading the project, never changing it, as a question does.
-    let mut command = crate::harness::one_off_command(project_dir);
-    let _sandbox = crate::harness::sandboxed(crate::sandbox::ProfileKind::Question, project_dir, &mut command)?;
+    let _sandbox = crate::harness::sandboxed(
+        crate::sandbox::ProfileKind::Question,
+        project_dir,
+        &mut command,
+    )?;
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

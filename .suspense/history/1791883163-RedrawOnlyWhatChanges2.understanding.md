@@ -1,0 +1,8 @@
+- [The window is split into views each drawn again only when its own state changes, never rebuilt whole from the main window down each frame](.claude/reference/scope/application/index.md#redrawing)
+- [The views are the body's tab bar, the message list, each task's output, the Tasks tab, the chat input, each sidebar, and the Planning board](.claude/reference/scope/application/index.md#redrawing)
+- [A spinner turning, a running task's time ticking, or a reply streaming redraws only the view showing it, never the tab bar, sidebars, Tasks tab, chat input, or Planning board otherwise](.claude/reference/scope/application/index.md#redrawing)
+- [Within a view drawn again, the per-part rules still decide what is laid out anew](.claude/reference/scope/application/index.md#redrawing)
+- [A running task's time counts up every second while building, compiling, or running](.claude/reference/scope/prompt-mode/message-list/Status.md#elapsed)
+- [The Tasks tab's running rows update their time and spinner in place, redrawing only what is in view](.claude/reference/ui/components/right-sidebar/tasks/index.md#virtualized)
+- [A slide moves the tab bar, selected tab's contents, and chat input together frame by frame, each laid out anew at each width](.claude/reference/scope/application/Body.md#sliding)
+- [A test shows a running task alone redraws neither the Tasks tab, chat input, nor sidebars, and a right sidebar sliding out lays out the tab bar, message list, and chat input at each width](.claude/reference/scope/application/index.md#redrawing)

@@ -26,6 +26,11 @@ export feature DragReorderBehaviour:
         taking no room of its own, so nothing moves to make space while the
         drag is under way, and it never takes the mouse.
 
+        A user may open the gap instead, as its user says: the items either
+        side slide apart to make room where the item would land, and what
+        that user says of the gap, the dragged copy, and the drop holds there
+        in place of what is said here.
+
     choosingTheGap:
         Which gap is shown follows the pointer: over the first half of an
         item, the gap before it; over the second half, the gap after it,
@@ -39,6 +44,18 @@ export feature DragReorderBehaviour:
         The indicator moves from gap to gap at once as the pointer crosses the
         middle of an item, with no animation, so it is always exactly where a
         drop would land.
+
+    betweenLists:
+        Where its user lets items move between lists, as the columns of a
+        board, an item is dragged from one list into a gap of another as it
+        is within its own. The gap is chosen, as above, among the items of
+        the list the pointer is over, and the indicator is drawn across that
+        list, running its width less its padding, never across the list the
+        item came from. A list with no items has one gap, at its top, so an
+        empty list takes a drop there, the indicator drawn across its top
+        beneath its heading. A list its user says takes no drops shows no
+        indicator anywhere over it, and an item dropped on it goes nowhere;
+        its own items can't be picked up to be dragged.
 
     dragging:
         The item dragged follows the pointer as a small floating copy, the
@@ -64,6 +81,13 @@ export feature DragReorderBehaviour:
         over the items now there, so the indicator is always exactly where a
         drop would land. An area that doesn't scroll, or holds every item in
         view, doesn't scroll on its own.
+
+        Where lists sit side by side in an area that scrolls the other way,
+        as the columns of a board, each scrolls as above: held within 32
+        pixels of the outer area's left or right edge, the area scrolls
+        sideways, bringing the lists beyond into view, and held within 32
+        pixels of a list's own top or bottom, that list scrolls, and only
+        it. Held near a corner, both scroll at once, each at its own pace.
 
     dropping:
         Released over a gap that shows the indicator, the item moves into that

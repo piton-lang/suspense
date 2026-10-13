@@ -1,0 +1,6 @@
+- [An addition targeting the story the research or draft was started from reads "Add to this story"](.claude/reference/scope/planning/index.md#proposal-cards)
+- [Other additions read "Add to" and the story's title, in the story's mode colour; new ones read "New story" in the accent](.claude/reference/scope/planning/index.md#proposal-cards)
+- [Accepting a new-story proposal puts it at the Backlog's end, never in Next sprint](.claude/reference/scope/planning/index.md#proposal-cards)
+- [An accepted new story leaves the note "Added to Backlog"; an addition "Added to <story>"](.claude/reference/scope/planning/index.md#proposal-cards)
+- [Accepted proposals from drafting, research, or an Ask answer are the one exception to stories going to Next sprint](.claude/reference/scope/planning/index.md#creating)
+- [Ask answers' suspense-story blocks get the same proposal cards, Accept, Edit, Reject](.claude/reference/scope/planning/index.md#proposal-cards)
